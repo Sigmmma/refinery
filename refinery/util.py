@@ -1,5 +1,7 @@
 from .hashcacher_window import RESERVED_WINDOWS_FILENAME_MAP,\
      INVALID_PATH_CHARS
+from os.path import sep as PATHDIV
+from supyr_struct.defs.util import *
 
 
 def is_protected(tagpath):
