@@ -2,7 +2,6 @@ import tkinter as tk
 
 from os.path import dirname, basename, splitext
 from supyr_struct.defs.constants import *
-from supyr_struct.defs.util import *
 from tkinter import messagebox
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
@@ -192,7 +191,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 continue
 
             # when renaming only one tag, the basenames COULD BE the full names
-            old_name = index_ref.tag.tag_path.lower().replace('/', '\\')
+            old_name = sanitize_path(index_ref.tag.tag_path.lower())
             if renaming_multiple:
                 new_name = old_name.split(old_basename)
                 if len(new_name) <= 1:
@@ -285,25 +284,27 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 else:
                     ext = ".INVALID"
 
-                index_refs_by_path[b.tag.tag_path.replace\
-                                   ("/", "\\").lower() + ext] = b
+                tag_path = b.tag.tag_path.lower()
+                if PATHDIV == "/":
+                    tag_path = sanitize_path(tag_path)
+                index_refs_by_path[tag_path + ext] = b
 
         # add all the directories before files
         for tag_path in sorted(index_refs_by_path):
             dir_path = dirname(tag_path)
             if dir_path:
-                dir_path += '\\'
+                dir_path += PATHDIV
 
             try:
                 if not tags_tree.exists(dir_path):
-                    self.add_folder_path(dir_path.split("\\"))
+                    self.add_folder_path(dir_path.split(PATHDIV))
             except Exception:
                 print(format_exc())
 
         for tag_path in sorted(index_refs_by_path):
             dir_path = dirname(tag_path)
             if dir_path:
-                dir_path += '\\'
+                dir_path += PATHDIV
 
             tag_name = basename(tag_path)
             b = index_refs_by_path[tag_path]
@@ -348,7 +349,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         abs_dir_path = parent_dir + this_dir
         if abs_dir_path:
-            abs_dir_path += '\\'
+            abs_dir_path += PATHDIV
 
         if not self.tags_tree.exists(abs_dir_path):
             # add the directory to the treeview
@@ -390,12 +391,15 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                 else:
                     tag_cls = "INVALID"
                     ext = ".INVALID"
-                sortable_index_refs[tag_cls + '\\' + b.tag.tag_path.replace\
-                                   ("/", "\\").lower() + ext] = b
+
+                tag_path = b.tag.tag_path.lower()
+                if PATHDIV == "/":
+                    tag_path = sanitize_path(tag_path)
+                sortable_index_refs[tag_cls + PATHDIV + tag_path + ext] = b
 
         for tag_path in sorted(sortable_index_refs):
             b = sortable_index_refs[tag_path]
-            tag_path = tag_path.split('\\', 1)[1]
+            tag_path = tag_path.split(PATHDIV, 1)[1]
             tag_id = b.id.tag_table_index
             map_magic = self.map_magic
             tag_cls = "INVALID"
@@ -414,7 +418,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                 tag_id += (b.id.table_index << 16)
 
             try:
-                if not tags_tree.exists(tag_cls + '\\'):
+                if not tags_tree.exists(tag_cls + PATHDIV):
                     self.add_folder_path([tag_cls])
 
                 cls1 = cls2 = cls3 = ""
@@ -426,7 +430,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     cls3 = fourcc(b.class_3.data)
 
                 tags_tree.insert(
-                    tag_cls + '\\', 'end', iid=str(tag_id), text=tag_path,
+                    tag_cls + PATHDIV, 'end', iid=str(tag_id), text=tag_path,
                     values=(cls1, cls2, cls3, b.meta_offset, pointer, tag_id))
 
                 tree_id_to_index_ref[tag_id] = b
@@ -461,7 +465,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                 tag_index_ref  = None
                 tag_index_refs = self._compile_list_of_selected(iid)
 
-            title, path_string = item_name.split('\\', 1)
+            title, path_string = item_name.split(PATHDIV, 1)
             if path_string:
                 title = None
             def_settings_vars['rename_string'] = path_string
@@ -503,8 +507,10 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
             if b.class_1.enum_name not in ("<INVALID>", "NONE"):
                 tag_cls = fourcc(b.class_1.data)
 
-            index_refs_by_tag_cls[tag_cls + "\\" + b.tag.tag_path.replace\
-                                  ("/", "\\").lower() + ext] = b
+            tag_path = b.tag.tag_path.lower()
+            if PATHDIV == "/":
+                tag_path = sanitize_path(tag_path)
+            index_refs_by_tag_cls[tag_cls + PATHDIV + tag_path + ext] = b
 
         ExplorerHierarchyTree.add_tag_index_refs(self, index_refs_by_tag_cls, 1)
 
@@ -864,12 +870,12 @@ class RefineryActionsWindow(tk.Toplevel):
 
     def rename(self, e=None):
         new_name = self.rename_string.get()
-        new_name = new_name.replace('/', '\\').lower().strip("\\").strip('.')
+        new_name = sanitize_path(new_name).lower().strip(PATHDIV).strip('.')
         if self.tag_index_ref is not None:
-            new_name.rstrip('\\')
-        elif new_name and not new_name.endswith('\\'):
+            new_name.rstrip(PATHDIV)
+        elif new_name and not new_name.endswith(PATHDIV):
             # directory of tags
-            new_name += "\\"
+            new_name += PATHDIV
 
         self.rename_string.set(new_name)
         new_name = splitext(new_name)[0]

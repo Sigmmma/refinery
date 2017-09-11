@@ -239,7 +239,7 @@ class Refinery(tk.Tk):
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self, *args, **kwargs)
 
-        self.title("Refinery v1.2.3")
+        self.title("Refinery v1.2.4")
         self.minsize(width=640, height=450)
         self.geometry("640x480")
 
@@ -1481,7 +1481,7 @@ class Refinery(tk.Tk):
             return
 
         save_dir  = dirname(save_path)
-        save_path = splitext(save_path)[0] + ".map"
+        save_path = sanitize_path(splitext(save_path)[0] + ".map")
         if not exists(save_dir):
             os.makedirs(save_dir)
 
@@ -1577,7 +1577,7 @@ class Refinery(tk.Tk):
         print("Starting extraction...")
 
         if self.extract_cheape and self.engine == "halo1yelo":
-            abs_tag_path = join(self.out_dir.get(), "cheape.map")
+            abs_tag_path = sanitize_path(join(self.out_dir.get(), "cheape.map"))
 
             print(abs_tag_path)
 
@@ -1663,7 +1663,8 @@ class Refinery(tk.Tk):
                     if tag_index_ref.class_1.enum_name not in ("<INVALID>", "NONE"):
                         tag_cls = fourcc(tag_index_ref.class_1.data)
                     tag_ext  = ".%s" % tag_index_ref.class_1.enum_name
-                    tag_path = tag_index_ref.tag.tag_path + tag_ext
+                    tag_path = sanitize_path(
+                        tag_index_ref.tag.tag_path + tag_ext)
                     abs_tag_path = join(out_dir, tag_path)
                     if tag_cls is None:
                         print(("Unknown tag class for '%s'\n" +
