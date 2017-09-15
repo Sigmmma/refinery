@@ -1,0 +1,68 @@
+from supyr_struct.defs.tag_def import TagDef
+from supyr_struct.defs.constants import *
+from supyr_struct.field_types import *
+
+def get():
+    return config_def
+
+config_header = Struct("header",
+    LUEnum32("id", ('rppr', 'rppr'), VISIBLE=False, DEFAULT='rppr'),
+    UInt32("version", DEFAULT=1, VISIBLE=False, EDITABLE=False),
+    Bool32("flags",
+        "debug_mode",
+        "show_output",
+        ),
+    Bool32("extraction_flags",
+        "use_old_gelo",
+        "extract_cheape",
+        "extract_from_ce_resources",
+        "rename_duplicates_in_scnr",
+        "overwrite",
+        "recursive",
+        ),
+    Bool32("deprotection_flags",
+        "fix_tag_classes",
+        "fix_tag_index_offset",
+        "use_hashcaches",
+        "use_heuristics",
+        ),
+
+    Pad(128 - 5*4 - 2*4),
+
+    Timestamp("data_created", EDITABLE=False),
+    Timestamp("data_modified", EDITABLE=False),
+
+    SIZE=128
+    )
+
+path = Container("path",
+    UInt16("length", VISIBLE=False),
+    StrUtf8("path", SIZE=".length")
+    )
+
+array_sizes = Struct("array_sizes",
+    UInt32("paths_count"),
+    SIZE=64, VISIBLE=False,
+    )
+
+app_window = Struct("app_window",
+    UInt16("app_width", DEFAULT=640),
+    UInt16("app_height", DEFAULT=450),
+    SInt16("app_offset_x"),
+    SInt16("app_offset_y"),
+    SIZE=64
+    )
+
+paths = Array("paths",
+    SUB_STRUCT=path, SIZE=".array_sizes.paths_count",
+    NAME_MAP=("last_dir", "tags_list", "tags_dir", "data_dir"),
+    VISIBLE=False
+    )
+
+config_def = TagDef("refinery_config",
+    config_header,
+    array_sizes,
+    app_window,
+    paths,
+    ENDIAN='<', ext=".cfg",
+    )

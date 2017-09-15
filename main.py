@@ -37,6 +37,7 @@ from .widgets import QueueTree, RefinerySettingsWindow,\
      ExplorerHybridTree, is_protected
 from .util import *
 from . import halo1_functions, halo2_functions
+from .defs.config_def import config_def
 
 
 if print_startup:
@@ -96,6 +97,7 @@ if print_startup:
     print("    Initializing Refinery")
 
 this_dir = dirname(__file__)
+default_config_path = join(this_dir, 'refinery.cfg')
 
 def run():
     return Refinery()
@@ -178,8 +180,16 @@ def halo3_tag_index_to_halo1_tag_index(map_header, tag_index):
 class Refinery(tk.Tk):
     map_path = None
     out_dir  = None
-    handler  = None
+    data_dir = None
+    last_dir = this_dir
 
+    config_path = default_config_path
+    config_file = None
+
+    config_version = 1
+    version = (1, 3, 0)
+
+    handler = None
     halo1_handler = None
     halo2_handler = None
 
@@ -189,9 +199,8 @@ class Refinery(tk.Tk):
 
     _map_loaded = False
     _running = False
+    _initialized = False
     _display_mode = "hierarchy"
-
-    last_load_dir = this_dir
 
     map_is_resource = False
     map_is_compressed = False
@@ -239,30 +248,28 @@ class Refinery(tk.Tk):
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self, *args, **kwargs)
 
-        self.title("Refinery v1.2.4")
-        self.minsize(width=640, height=450)
-        self.geometry("640x480")
+        self.title("Refinery v%s.%s.%s" % self.version)
+        self.minsize(width=500, height=300)
 
         # make the tkinter variables
         self.map_path = tk.StringVar(self)
-        self.out_dir = tk.StringVar(self)
-        self.tags_list_path = tk.StringVar(self)
-
-        self.fix_tag_classes = tk.IntVar(self)
+        self.data_dir = tk.StringVar(
+            self, join(this_dir, "data", ""))
+        self.out_dir = tk.StringVar(
+            self, join(this_dir, "tags", ""))
+        self.tags_list_path = tk.StringVar(
+            self, join(this_dir, "tags", "tagslist.txt"))
+        self.fix_tag_classes = tk.IntVar(self, 1)
         self.fix_tag_index_offset = tk.IntVar(self)
         self.use_hashcaches = tk.IntVar(self)
         self.use_heuristics = tk.IntVar(self)
         self.use_old_gelo = tk.IntVar(self)
         self.extract_cheape = tk.IntVar(self)
-        self.extract_from_ce_resources = tk.IntVar(self)
+        self.extract_from_ce_resources = tk.IntVar(self, 1)
         self.rename_duplicates_in_scnr = tk.IntVar(self)
         self.overwrite = tk.IntVar(self)
-
         self.recursive = tk.IntVar(self)
-        self.show_output = tk.IntVar(self)
-
-        self.out_dir.set(join(this_dir, "tags", ""))
-        self.tags_list_path.set(join(self.out_dir.get(), "tagslist.txt"))
+        self.show_output = tk.IntVar(self, 1)
 
         self.tk_vars = dict(
             fix_tag_classes=self.fix_tag_classes,
@@ -280,7 +287,18 @@ class Refinery(tk.Tk):
             tags_list_path=self.tags_list_path
             )
 
-        self.show_output.set(1)
+        if self.config_file is not None:
+            pass
+        elif exists(self.config_path):
+            # load the config file
+            try:
+                self.load_config()
+            except Exception:
+                print(format_exc())
+                self.make_config()
+        else:
+            # make a config file
+            self.make_config()
 
         # menubar
         self.menubar = tk.Menu(self)
@@ -311,9 +329,6 @@ class Refinery(tk.Tk):
         self.container_title_font = Font(
             family="Courier", size=10, weight='bold')
         self.comment_font = Font(family="Courier", size=9)
-
-        self.fix_tag_classes.set(1)
-        self.extract_from_ce_resources.set(1)
 
         # make the window pane
         self.panes = tk.PanedWindow(self, sashwidth=6,
@@ -424,7 +439,6 @@ class Refinery(tk.Tk):
         self.handler = self.halo1_handler
 
         self.halo1_handler.add_def(gelc_def)
-        self.halo1_handler.add_def(gelc_def)
         #self.halo1_handler.add_def(imef_def)
         #self.halo1_handler.add_def(terr_def)
         #self.halo1_handler.add_def(vege_def)
@@ -447,35 +461,15 @@ class Refinery(tk.Tk):
             h1_tag_headers[def_id] = bytes(b_buffer)
             del b_buffer[:]
 
-
-        h_block = [None]
-        h_desc = stubbs_antr_def.descriptor[0]
-        h_desc['TYPE'].parser(h_desc, parent=h_block, attr_index=0)
-        h1_tag_headers["antr_halo"]   = h1_tag_headers["antr"]
-        h1_tag_headers["antr_stubbs"] = bytes(
-            h_block[0].serialize(buffer=BytearrayBuffer(), calc_pointers=0))
-
-        h_block = [None]
-        h_desc = stubbs_coll_def.descriptor[0]
-        h_desc['TYPE'].parser(h_desc, parent=h_block, attr_index=0)
-        h1_tag_headers["coll_halo"]   = h1_tag_headers["coll"]
-        h1_tag_headers["coll_stubbs"] = bytes(
-            h_block[0].serialize(buffer=BytearrayBuffer(), calc_pointers=0))
-
-        h_block = [None]
-        h_desc = stubbs_mode_def.descriptor[0]
-        h_desc['TYPE'].parser(h_desc, parent=h_block, attr_index=0)
-        h1_tag_headers["mode_halo"]   = h1_tag_headers["mode"]
-        h1_tag_headers["mode_stubbs"] = bytes(
-            h_block[0].serialize(buffer=BytearrayBuffer(), calc_pointers=0))
-
-        h_block = [None]
-        h_desc = stubbs_soso_def.descriptor[0]
-        h_desc['TYPE'].parser(h_desc, parent=h_block, attr_index=0)
-        h1_tag_headers["soso_halo"]   = h1_tag_headers["soso"]
-        h1_tag_headers["soso_stubbs"] = bytes(
-            h_block[0].serialize(buffer=BytearrayBuffer(), calc_pointers=0))
-
+        for block_def in (stubbs_antr_def, stubbs_coll_def, stubbs_mode_def,
+                          stubbs_soso_def):
+            h_block = [None]
+            def_id = block_def.def_id
+            h_desc = block_def.descriptor[0]
+            h_desc['TYPE'].parser(h_desc, parent=h_block, attr_index=0)
+            h1_tag_headers[def_id + "_halo"]   = h1_tag_headers[def_id]
+            h1_tag_headers[def_id + "_stubbs"] = bytes(
+                h_block[0].serialize(buffer=BytearrayBuffer(), calc_pointers=0))
 
         # create a bunch of tag headers for each type of halo 2 tag
         defs = self.halo2_handler.defs
@@ -492,6 +486,8 @@ class Refinery(tk.Tk):
             h2_tag_headers[def_id] = bytes(b_buffer)
             del b_buffer[:]
 
+        self._initialized = True
+
     @property
     def running(self):
         return self._running
@@ -500,8 +496,104 @@ class Refinery(tk.Tk):
     def tags_dir(self):
         return self.out_dir.get()
 
+    def load_config(self, filepath=None):
+        if filepath is None:
+            filepath = self.config_path
+        assert exists(filepath)
+
+        # load the config file
+        self.config_file = config_def.build(filepath=filepath)
+        if self.config_file.data.header.version != self.config_version:
+            raise ValueError(
+                "Config version is not what this application is expecting.")
+
+        self.apply_config()
+
+    def make_config(self, filepath=None):
+        if filepath is None:
+            filepath = self.config_path
+
+        # create the config file from scratch
+        self.config_file = config_def.build()
+        self.config_file.filepath = filepath
+
+        self.update_config()
+
+    def apply_config(self):
+        if self.config_file is None:
+            return
+
+        header     = self.config_file.data.header
+        app_window = self.config_file.data.app_window
+        paths      = self.config_file.data.paths
+        self.geometry("%sx%s+%s+%s" % tuple(app_window[:4]))
+
+        self.tags_list_path.set(paths.tags_list.path)
+        self.out_dir.set(paths.tags_dir.path)
+        self.data_dir.set(paths.data_dir.path)
+        self.last_dir = paths.last_dir.path
+
+        flags = header.flags
+        for attr_name in ("show_output", ):
+            getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
+
+        flags = header.extraction_flags
+        for attr_name in ("use_old_gelo", "extract_cheape", "overwrite",
+                          "extract_from_ce_resources", "recursive",
+                          "rename_duplicates_in_scnr", ):
+            getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
+
+        flags = header.deprotection_flags
+        for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
+                          "use_hashcaches", "use_heuristics", ):
+            getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
+
+    def update_config(self, config_file=None):
+        if config_file is None:
+            config_file = self.config_file
+        config_data = config_file.data
+
+        header     = config_data.header
+        paths      = config_data.paths
+        app_window = config_data.app_window
+
+        header.version = self.config_version
+
+        if self._initialized:
+            app_window.app_width    = self.winfo_width()
+            app_window.app_height   = self.winfo_height()
+            app_window.app_offset_x = self.winfo_x()
+            app_window.app_offset_y = self.winfo_y()
+
+        # make sure there are enough entries in the paths
+        if len(paths.NAME_MAP) > len(paths):
+            paths.extend(len(paths.NAME_MAP) - len(paths))
+
+        paths.tags_list.path = self.tags_list_path.get()
+        paths.tags_dir.path  = self.out_dir.get()
+        paths.data_dir.path  = self.data_dir.get()
+        paths.last_dir.path  = self.last_dir
+        
+        flags = header.flags
+        for attr_name in ("show_output", ):
+            setattr(flags, attr_name, getattr(self, attr_name).get())
+
+        flags = header.extraction_flags
+        for attr_name in ("use_old_gelo", "extract_cheape", "overwrite",
+                          "extract_from_ce_resources", "recursive",
+                          "rename_duplicates_in_scnr", ):
+            setattr(flags, attr_name, getattr(self, attr_name).get())
+
+        flags = header.deprotection_flags
+        for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
+                          "use_hashcaches", "use_heuristics", ):
+            setattr(flags, attr_name, getattr(self, attr_name).get())
+
+    def save_config(self, e=None):
+        self.config_file.serialize(temp=0, backup=0, calc_pointers=0)
+        self.apply_config()
+
     def get_meta_descriptor(self, tag_cls):
-        # as if these will ever be valid engines lmfao
         desc = None
         if self.engine == "halo_reach":
             pass
@@ -598,6 +690,12 @@ class Refinery(tk.Tk):
     def destroy(self, e=None):
         self.unload_maps()
         FieldType.force_normal()
+        try:
+            self.update_config()
+            self.save_config()
+        except Exception:
+            print(format_exc())
+
         tk.Tk.destroy(self)
 
         # I really didn't want to have to call this, but for some
@@ -1920,7 +2018,7 @@ class Refinery(tk.Tk):
         if self.running:
             return
         fp = askopenfilename(
-            initialdir=self.last_load_dir,
+            initialdir=self.last_dir,
             title="Select map to load", parent=self,
             filetypes=(("Halo mapfile", "*.map"),
                        ("Halo mapfile(extra sauce)", "*.yelo"),
@@ -1930,7 +2028,7 @@ class Refinery(tk.Tk):
             return
 
         fp = sanitize_path(fp)
-        self.last_load_dir = dirname(fp)
+        self.last_dir = dirname(fp)
         self.map_path.set(fp)
         self.unload_maps()
         self.load_map()
