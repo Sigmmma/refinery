@@ -34,6 +34,7 @@ def ask_extract_settings(parent, def_vars=None, tag_index_ref=None, title=None):
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
         show_output=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
+        extract_mode=tk.StringVar(parent, "tags"),
         rename_string=tk.StringVar(parent), tags_list_path=tk.StringVar(parent)
         )
 
@@ -42,6 +43,9 @@ def ask_extract_settings(parent, def_vars=None, tag_index_ref=None, title=None):
     for k in def_vars:
         if k in settings_vars:
             settings_vars[k].set(def_vars[k].get())
+
+    settings_vars["out_dir"] = def_vars.pop(
+        def_vars.get("extract_mode").get() + "_dir")
 
     w = RefineryActionsWindow(parent, tk_vars=settings_vars,
                               tag_index_ref=tag_index_ref, title=title)
@@ -56,6 +60,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
     map_magic = None
     tags_tree = None
     tag_index = None
+    valid_classes = None
 
     tree_id_to_index_ref = None
 
@@ -163,7 +168,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 self.rename_tag_index_refs(tag_index_refs, item_name, new_name)
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
-                self.queue_tree.add_to_queue(item_name, settings)
+                self.queue_tree.add_to_queue(
+                    "%s: %s" % (settings['extract_mode'].get(),
+                                item_name), settings)
 
     def rename_tag_index_refs(self, index_refs, old_basename, new_basename,
                               rename_in_other_trees=True):
@@ -278,7 +285,12 @@ class ExplorerHierarchyTree(HierarchyFrame):
             if isinstance(index_refs, dict):
                 index_refs = index_refs.keys()
 
+            check_classes = hasattr(self.valid_classes, "__iter__")
             for b in index_refs:
+                if check_classes:
+                    if fourcc(b.class_1.data) not in self.valid_classes:
+                        continue
+
                 if b.class_1.enum_name != "<INVALID>":
                     ext = ".%s" % b.class_1.enum_name
                 else:
@@ -384,7 +396,12 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             if isinstance(index_refs, dict):
                 index_refs = index_refs.keys()
 
+            check_classes = hasattr(self.valid_classes, "__iter__")
             for b in index_refs:
+                if check_classes:
+                    if fourcc(b.class_1.data) not in self.valid_classes:
+                        continue
+
                 if b.class_1.enum_name not in ("<INVALID>", "NONE"):
                     tag_cls = fourcc(b.class_1.data)
                     ext = ".%s" % b.class_1.enum_name
@@ -484,7 +501,9 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     tag_index_refs, path_string, new_name)
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
-                self.queue_tree.add_to_queue(item_name, settings)
+                self.queue_tree.add_to_queue(
+                    "%s: %s" % (settings['extract_mode'].get(),
+                                item_name), settings)
 
 
 class ExplorerHybridTree(ExplorerHierarchyTree):
@@ -497,7 +516,12 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
         if isinstance(index_refs, dict):
             index_refs = index_refs.keys()
 
+        check_classes = hasattr(self.valid_classes, "__iter__")
         for b in index_refs:
+            if check_classes:
+                if fourcc(b.class_1.data) not in self.valid_classes:
+                    continue
+
             if b.class_1.enum_name != "<INVALID>":
                 ext = ".%s" % b.class_1.enum_name
             else:
@@ -581,16 +605,18 @@ class RefinerySettingsWindow(tk.Toplevel):
     def __init__(self, *args, **kwargs):
         self.tk_vars = tk_vars = kwargs.pop('tk_vars', {})
         tk.Toplevel.__init__(self, *args, **kwargs)
-        self.geometry("340x450")
-        self.minsize(width=340, height=450)
+        self.geometry("340x512")
+        self.minsize(width=340, height=512)
         self.resizable(1, 0)
         self.title("Settings")
 
         self.extract_frame   = tk.LabelFrame(self, text="Extraction settings")
         self.deprotect_frame = tk.LabelFrame(self, text="Deprotection settings")
         self.yelo_frame      = tk.LabelFrame(self, text="Open Sauce settings")
-        self.out_dir_frame = tk.LabelFrame(
-            self, text="Default extraction folder")
+        self.tags_dir_frame = tk.LabelFrame(
+            self, text="Default tags extraction folder")
+        self.data_dir_frame = tk.LabelFrame(
+            self, text="Default data extraction folder")
         self.tags_list_frame = tk.LabelFrame(
             self, text="Tags list log(erase to disable logging)")
 
@@ -600,7 +626,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "extract_cheape", "show_output", "fix_tag_index_offset"):
             object.__setattr__(self, attr, tk_vars.get(attr, tk.IntVar(self)))
 
-        for attr in ("out_dir", "tags_list_path"):
+        for attr in ("tags_dir", "data_dir", "tags_list_path"):
             object.__setattr__(self, attr, tk_vars.get(attr, tk.StringVar(self)))
 
         self.extract_from_ce_resources_checkbutton = tk.Checkbutton(
@@ -640,12 +666,20 @@ class RefinerySettingsWindow(tk.Toplevel):
             variable=self.extract_cheape)
 
         # tags directory
-        self.out_dir_entry = tk.Entry(
-            self.out_dir_frame, state='disabled',
-            textvariable=self.out_dir)
-        self.out_dir_browse_button = tk.Button(
-            self.out_dir_frame, text="Browse",
-            command=self.out_dir_browse, width=6)
+        self.tags_dir_entry = tk.Entry(
+            self.tags_dir_frame, state='disabled',
+            textvariable=self.tags_dir)
+        self.tags_dir_browse_button = tk.Button(
+            self.tags_dir_frame, text="Browse",
+            command=self.tags_dir_browse, width=6)
+
+        # data directory
+        self.data_dir_entry = tk.Entry(
+            self.data_dir_frame, state='disabled',
+            textvariable=self.data_dir)
+        self.data_dir_browse_button = tk.Button(
+            self.data_dir_frame, text="Browse",
+            command=self.data_dir_browse, width=6)
 
         # tags list
         self.tags_list_entry = tk.Entry(
@@ -655,7 +689,8 @@ class RefinerySettingsWindow(tk.Toplevel):
             command=self.tags_list_browse, width=6)
 
         # pack everything
-        self.out_dir_frame.pack(padx=4, pady=2, expand=True, fill="x")
+        self.tags_dir_frame.pack(padx=4, pady=2, expand=True, fill="x")
+        self.data_dir_frame.pack(padx=4, pady=2, expand=True, fill="x")
         self.tags_list_frame.pack(padx=4, pady=2, expand=True, fill="x")
         self.extract_frame.pack(padx=4, pady=2, expand=True, fill="x")
         self.deprotect_frame.pack(padx=4, pady=2, expand=True, fill="x")
@@ -674,9 +709,12 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.extract_cheape_checkbutton.pack(padx=4, anchor='w')
         self.use_old_gelo_checkbutton.pack(padx=4, anchor='w')
 
-        self.out_dir_entry.pack(
+        self.tags_dir_entry.pack(
             padx=(4, 0), pady=2, side='left', expand=True, fill='x')
-        self.out_dir_browse_button.pack(padx=(0, 4), pady=2, side='left')
+        self.tags_dir_browse_button.pack(padx=(0, 4), pady=2, side='left')
+        self.data_dir_entry.pack(
+            padx=(4, 0), pady=2, side='left', expand=True, fill='x')
+        self.data_dir_browse_button.pack(padx=(0, 4), pady=2, side='left')
         self.tags_list_entry.pack(
             padx=(4, 0), pady=2, side='left', expand=True, fill='x')
         self.browse_tags_list_button.pack(padx=(0, 4), pady=2, side='left')
@@ -689,9 +727,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         except AttributeError: pass
         tk.Toplevel.destroy(self)
 
-    def out_dir_browse(self):
-        dirpath = askdirectory(initialdir=self.out_dir.get(), parent=self,
-                               title="Select the extraction directory")
+    def tags_dir_browse(self):
+        dirpath = askdirectory(initialdir=self.tags_dir.get(), parent=self,
+                               title="Select the tags extraction directory")
 
         if not dirpath:
             return
@@ -700,7 +738,20 @@ class RefinerySettingsWindow(tk.Toplevel):
         if not dirpath.endswith(PATHDIV):
             dirpath += PATHDIV
 
-        self.out_dir.set(dirpath)
+        self.tags_dir.set(dirpath)
+
+    def data_dir_browse(self):
+        dirpath = askdirectory(initialdir=self.data_dir.get(), parent=self,
+                               title="Select the data extraction directory")
+
+        if not dirpath:
+            return
+
+        dirpath = sanitize_path(dirpath)
+        if not dirpath.endswith(PATHDIV):
+            dirpath += PATHDIV
+
+        self.data_dir.set(dirpath)
 
     def tags_list_browse(self):
         try:
@@ -749,6 +800,7 @@ class RefineryActionsWindow(tk.Toplevel):
         self.rename_string   = tk_vars.get('rename_string', tk.StringVar(self))
         self.extract_to_dir  = tk_vars.get('out_dir', tk.StringVar(self))
         self.tags_list_path  = tk_vars.get('tags_list_path', tk.StringVar(self))
+        self.extract_mode    = tk_vars.get('extract_mode', tk.StringVar(self))
         self.recursive_rename = tk.IntVar(self)
         self.resizable(1, 0)
 
@@ -767,7 +819,7 @@ class RefineryActionsWindow(tk.Toplevel):
         self.rename_frame     = tk.LabelFrame(self, text="Rename to")
         self.tags_list_frame  = tk.LabelFrame(
             self, text="Tags list log(erase to disable logging)")
-        self.extract_to_frame = tk.LabelFrame(self, text="Tags directory to extract to")
+        self.extract_to_frame = tk.LabelFrame(self, text="Directory to extract to")
         self.settings_frame   = tk.LabelFrame(self, text="Extract settings")
 
         self.button_frame = tk.Frame(self)
