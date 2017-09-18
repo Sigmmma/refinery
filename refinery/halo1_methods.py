@@ -1,41 +1,65 @@
 from math import pi, sqrt
+from os.path import dirname, exists, join
 from struct import unpack, pack_into
+from tkinter.filedialog import askopenfilename
 from traceback import format_exc
 
-from supyr_struct.buffer import BytearrayBuffer
+from .resource_cache_extensions import bitmap_tag_extensions,\
+     sound_tag_extensions, loc_tag_extensions
+from reclaimer.meta.resource import resource_def
+from reclaimer.meta.halo_map import map_header_demo_def, tag_index_pc_def
+from supyr_struct.buffer import BytearrayBuffer, PeekableMmap
 from supyr_struct.defs.constants import *
 from supyr_struct.defs.util import *
 from supyr_struct.field_types import FieldType
 
+from .loaded_map import *
 from .byteswapping import raw_block_def, byteswap_animation,\
      byteswap_uncomp_verts, byteswap_comp_verts, byteswap_tris,\
      byteswap_coll_bsp, byteswap_sbsp_meta, byteswap_scnr_script_syntax_data,\
      byteswap_pcm16_samples
 
 
-def inject_rawdata(self, meta, tag_cls, tag_index_ref):
-    magic  = self.map_magic
-    engine = self.engine
+__all__ = (
+    "inject_rawdata", "meta_to_tag_data", "load_all_resource_maps",
+    "load_resource_map"
+    )
 
-    map_data    = self.map_data
-    bitmap_data = self.bitmap_data
-    sound_data  = self.sound_data
-    loc_data    = self.loc_data
+
+def inject_rawdata(self, meta, tag_cls, tag_index_ref):
+    active_map = self.active_map
+    bitmaps = self.maps.get("bitmaps")
+    sounds  = self.maps.get("sounds")
+    loc     = self.maps.get("loc")
+
+    magic  = active_map.map_magic
+    engine = active_map.engine
+
+    map_data = active_map.map_data
+
+    try:   bitmap_data = bitmaps.map_data
+    except Exception: bitmap_data = None
+    try:   sound_data = sounds.map_data
+    except Exception: sound_data = None
+    try:   loc_data = loc.map_data
+    except Exception: loc_data = None
+
     is_not_indexed = not self.is_indexed(tag_index_ref)
+    might_be_in_rsrc = engine in ("halo1pc", "halo1pcdemo",
+                                  "halo1ce", "halo1yelo")
+    might_be_in_rsrc &= not active_map.is_resource
 
     # get some rawdata that would be pretty annoying to do in the parser
     if tag_cls == "bitm":
-        # grab bitmap data correctly from map
+        # grab bitmap data from map
         new_pixels = BytearrayBuffer()
-        pixel_data = map_data
-        can_be_indexed = engine not in ("stubbs", "stubbspc", "halo1xbox")
 
-        # uncheck the prefer_low_detail flag, get the pixel data
-        # from the map, and set up the pixels_offset correctly.
         for bitmap in meta.bitmaps.STEPTREE:
             pixel_data = map_data
-            if can_be_indexed and bitmap.flags.data_in_resource_map:
+            if might_be_in_rsrc and bitmap.flags.data_in_resource_map:
                 pixel_data = bitmap_data
+
+            if pixel_data is None: return
 
             # grab the bitmap data from this map(no magic used)
             pixel_data.seek(bitmap.pixels_offset)
@@ -44,27 +68,29 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
         meta.processed_pixel_data.STEPTREE = new_pixels
 
     elif tag_cls == "font":
-        # might need to grab pixel data correctly from resource map
+        # might need to grab pixel data from resource map
         meta_offset = tag_index_ref.meta_offset
 
         if is_not_indexed:
             return meta
-        elif not self.map_is_resource:
-            meta_offset = self.loc_rsrc_header.tag_headers\
-                          [meta_offset].offset
+        elif not active_map.is_resource:
+            if loc is None or loc.map_header is None: return
+            meta_offset = loc.rsrc_header.tag_headers[meta_offset].offset
+
+        if loc_data is None: return
 
         loc_data.seek(meta.pixels.pointer + meta_offset)
         meta.pixels.data = loc_data.read(meta.pixels.size)
 
     elif tag_cls == "hmt ":
-        # might need to grab string data correctly from resource map
+        # might need to grab string data from resource map
         meta_offset = tag_index_ref.meta_offset
 
         if is_not_indexed:
             return meta
-        elif not self.map_is_resource:
-            meta_offset = self.loc_rsrc_header.tag_headers\
-                          [meta_offset].offset
+        elif not active_map.is_resource:
+            if loc is None or loc.map_header is None: return
+            meta_offset = loc.rsrc_header.tag_headers[meta_offset].offset
 
         b = meta.string
         loc_data.seek(b.pointer + meta_offset)
@@ -84,12 +110,11 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
         #     ex: sound\sfx\impulse\coolant\enter_water__0__0
 
         # why do ce and pc have to store shit so differently.
-        # it was really annoying to figure out the differences
         other_data = sound_data
         if is_pc:
             sound_magic = 0 - magic
             other_data = map_data
-        elif not self.map_is_resource:
+        elif not active_map.is_resource:
             sound_map = self.ce_sound_offsets_by_path
             tag_path  = tag_index_ref.tag.tag_path
             if sound_map is None or tag_path not in sound_map:
@@ -106,6 +131,7 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
 
                 if is_ce and not samples.flags.data_in_resource_map:
                     continue
+                elif sound_data is None: return
 
                 if samples.size:
                     sound_data.seek(samples.raw_pointer)
@@ -126,14 +152,14 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
                     subtitle_data.data = b''
 
     elif tag_cls == "ustr":
-        # might need to grab string data correctly from resource map
+        # might need to grab string data from resource map
         meta_offset = tag_index_ref.meta_offset
 
         if is_not_indexed:
             return meta
-        elif not self.map_is_resource:
-            meta_offset = self.loc_rsrc_header.tag_headers\
-                          [meta_offset].offset
+        elif not active_map.is_resource:
+            if loc is None or loc.map_header is None: return
+            meta_offset = loc.rsrc_header.tag_headers[meta_offset].offset
 
         string_blocks = meta.strings.STEPTREE
 
@@ -154,10 +180,11 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
 
 
 def meta_to_tag_data(self, meta, tag_cls, tag_index_ref):
-    magic     = self.map_magic
-    engine    = self.engine
-    map_data  = self.map_data
-    tag_index = self.tag_index
+    active_map = self.active_map
+    magic      = active_map.map_magic
+    engine     = active_map.engine
+    map_data   = active_map.map_data
+    tag_index  = active_map.tag_index
 
     predicted_resources = []
 
@@ -557,3 +584,124 @@ def meta_to_tag_data(self, meta, tag_cls, tag_index_ref):
         del pr.STEPTREE[:]
 
     return meta
+
+def load_all_resource_maps(self, maps_dir=""):
+    map_paths = {}
+    active_map = self.active_map
+
+    if active_map.engine in ("halo1pc", "halo1pcdemo", "halo1ce", "halo1yelo"):
+        map_paths['bitmaps'] = "bitmaps"
+        map_paths['sounds']  = "sounds"
+        if active_map.engine in ("halo1ce", "halo1yelo"):
+            map_paths['loc'] = "loc"
+
+    # detect/ask for the map paths for the resource maps
+    for map_name in sorted(map_paths.keys()):
+        map_path = map_paths[map_name]
+        if map_path == map_name:
+            map_path = join(maps_dir, "%s.map" % map_path)
+
+        while map_path and not exists(map_path):
+            map_path = askopenfilename(
+                initialdir=maps_dir,
+                title="Select the %s.map" % map_name, parent=self,
+                filetypes=(("%s.map" % map_name, "*.map"), ("All", "*")))
+
+            if map_path:
+                maps_dir = dirname(map_path)
+            else:
+                print("    You wont be able to extract from %s.map" % map_name)
+
+        map_paths[map_name] = map_path
+
+
+    for map_name in sorted(map_paths.keys()):
+        print("Loading %s.map..." % map_name)
+        try:
+            self.load_halo1_resource_map(map_paths[map_name], False)
+            print("    Finished")
+
+            if map_name == "sounds" and active_map.engine in ("halo1ce",
+                                                              "halo1yelo"):
+                # ce resource sounds are recognized by tag_path
+                # so we must cache their offsets by their paths
+                self.ce_sound_offsets_by_path = sound_map = {}
+                header = self.maps["sounds"].rsrc_header
+                for i in range(len(header.tag_paths)):
+                    tag_path   = header.tag_paths[i].tag_path
+                    tag_offset = header.tag_headers[i].offset
+                    sound_map[tag_path] = tag_offset
+
+        except Exception:
+            print(format_exc())
+
+def load_resource_map(self, map_path, will_be_active=True):
+    with open(map_path, 'rb+') as f:
+        map_data = PeekableMmap(f.fileno(), 0)
+
+    resource_type = unpack("<I", map_data.read(4))[0]; map_data.seek(0)
+
+    rsrc_head = resource_def.build(rawdata=map_data)
+    new_map = LoadedMap()
+
+    # check if this is a pc or ce cache. cant rip pc ones
+    pth = rsrc_head.tag_paths[0].tag_path
+    new_map.engine = "halo1ce"
+    if resource_type < 3 and not (pth.endswith('__pixels') or
+                                  pth.endswith('__permutations')):
+        new_map.engine = "halo1pc"
+
+    # so we don't have to redo a lot of code, we'll make a
+    # fake tag_index and map_header and just fill in info
+    new_map.map_header = head = map_header_demo_def.build()
+    new_map.tag_index  = tags = tag_index_pc_def.build()
+    new_map.map_magic  = 0
+    new_map.map_data   = map_data
+    new_map.rsrc_header = rsrc_head
+    new_map.is_resource = True
+
+    head.version.set_to(new_map.engine)
+    new_map.index_magic = 0
+
+    self.set_defs()
+
+    index_mul = 2
+    if new_map.engine == "halo1pc" or resource_type == 3:
+        index_mul = 1
+
+    head.map_name = "loc"
+    def_class = 'unicode_string_list'
+    tag_classes = loc_tag_extensions
+    if resource_type == 1:
+        head.map_name = "bitmaps"
+        tag_classes = bitmap_tag_extensions
+        def_class = 'bitmap'
+    elif resource_type == 2:
+        head.map_name = "sounds"
+        tag_classes = sound_tag_extensions
+        def_class = 'sound'
+
+    self.maps[head.map_name] = new_map
+    if will_be_active:
+        self.maps["active"] = new_map
+
+    rsrc_tag_count = len(rsrc_head.tag_paths)//index_mul
+    tag_classes += (def_class,)*(rsrc_tag_count - len(tag_classes))
+    tags.tag_index.extend(rsrc_tag_count)
+    tags.scenario_tag_id[:] = (0, 0)
+
+    tags.tag_count = rsrc_tag_count
+    # fill in the fake tag_index
+    for i in range(rsrc_tag_count):
+        j = i*index_mul
+        if index_mul != 1:
+            j += 1
+
+        tag_ref = tags.tag_index[i]
+        tag_ref.class_1.set_to(tag_classes[i])
+        tag_ref.id[:] = (i, 0)
+
+        tag_ref.meta_offset  = rsrc_head.tag_headers[j].offset
+        tag_ref.indexed      = 1
+        tag_ref.tag.tag_path = rsrc_head.tag_paths[j].tag_path
+        tagid = (tag_ref.id[0], tag_ref.id[1])
