@@ -8,9 +8,16 @@ def get():
 config_header = Struct("header",
     LUEnum32("id", ('rppr', 'rppr'), VISIBLE=False, DEFAULT='rppr'),
     UInt32("version", DEFAULT=1, VISIBLE=False, EDITABLE=False),
-    Bool32("flags",
-        "debug_mode",
-        "show_output",
+    BitStruct("flags",
+        BitUEnum("display_mode",
+            ("hierarchy", 1),
+            ("class",     2),
+            ("hybrid",    3),
+            SIZE=2
+            ),
+        Bit("debug_mode"),
+        Bit("show_output"),
+        SIZE=4
         ),
     Bool32("extraction_flags",
         "use_old_gelo",
@@ -29,8 +36,8 @@ config_header = Struct("header",
 
     Pad(128 - 5*4 - 2*4),
 
-    Timestamp("data_created", EDITABLE=False),
-    Timestamp("data_modified", EDITABLE=False),
+    Timestamp("date_created", EDITABLE=False),
+    Timestamp("date_modified", EDITABLE=False),
 
     SIZE=128
     )
