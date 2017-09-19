@@ -5,7 +5,6 @@ from traceback import format_exc
 from supyr_struct.buffer import BytearrayBuffer
 from supyr_struct.defs.constants import *
 from supyr_struct.defs.util import *
-from supyr_struct.defs.bitmaps.dds import dds_def
 from supyr_struct.defs.audio.wav import wav_def
 from supyr_struct.field_types import FieldType
 from .util import *
@@ -21,7 +20,7 @@ VALID_H2_DATA_TAGS = frozenset((
     #'sbsp',
 
     #'hmt ', 'unic',
-    #'bitm', 'snd!',
+    'bitm', 'snd!',
     ))
 
 
@@ -73,15 +72,15 @@ def extract_bitm(settings, meta, tag_index_ref):
     return ()
 
 
-def extract_tag_data(app, settings, meta, tag_index_ref):
+def extract_tag_data(self, settings, meta, tag_index_ref):
     data_dir = settings['out_dir'].get()
     base_filepath = join(data_dir, tag_index_ref.path.tagpath)
     tag_cls = fourcc(tag_index_ref.class_1.data)
 
     extractor = None
-    if "halo1" in app.engine or "stubbs" in app.engine:
+    if "halo1" in self.engine or "stubbs" in self.engine:
         extractor = h1_data_extractors.get(tag_cls)
-    elif app.engine == "halo2":
+    elif self.engine == "halo2":
         extractor = h2_data_extractors.get(tag_cls)
 
     if extractor is None: return
