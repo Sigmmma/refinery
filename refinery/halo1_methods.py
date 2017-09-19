@@ -595,7 +595,7 @@ def load_all_resource_maps(self, maps_dir=""):
             map_path = askopenfilename(
                 initialdir=maps_dir,
                 title="Select the %s.map" % map_name, parent=self,
-                filetypes=(("%s.map" % map_name, "*.map"), ("All", "*")))
+                filetypes=(("%s.map" % map_name, "*.map"), ("All", "*.*")))
 
             if map_path:
                 maps_dir = dirname(map_path)
@@ -604,10 +604,9 @@ def load_all_resource_maps(self, maps_dir=""):
 
         map_paths[map_name] = map_path
 
-
     for map_name in sorted(map_paths.keys()):
         try:
-            if self.maps.get(map_name) is None:
+            if self.maps.get(map_name) is not None:
                 # map already loaded
                 continue
 
