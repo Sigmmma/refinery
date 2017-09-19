@@ -3,45 +3,27 @@ from struct import unpack
 from tkinter.filedialog import asksaveasfilename
 from traceback import format_exc
 
-
 from . import halo1_methods, halo2_methods
 from .util import is_protected, fourcc
 from supyr_struct.buffer import BytearrayBuffer, BytesBuffer, PeekableMmap
 from supyr_struct.field_types import FieldType
+
 from reclaimer.meta.resource import resource_def
 from reclaimer.meta.halo_map import get_map_version, get_map_header,\
      get_tag_index, get_index_magic, get_map_magic, get_is_compressed_map,\
      decompress_map, map_header_demo_def, tag_index_pc_def
 
-
 from reclaimer.hek.defs.sbsp import sbsp_meta_header_def
 from reclaimer.os_hek.defs.gelc    import gelc_def
-from reclaimer.os_v4_hek.defs.gelo import gelo_def
-from reclaimer.os_v4_hek.defs.antr import antr_def
-from reclaimer.os_v4_hek.defs.bipd import bipd_def
-from reclaimer.os_v4_hek.defs.cdmg import cdmg_def
-from reclaimer.os_v4_hek.defs.coll import coll_def
-from reclaimer.os_v4_hek.defs.jpt_ import jpt__def
-from reclaimer.os_v4_hek.defs.mode import mode_def
-from reclaimer.os_v4_hek.defs.soso import soso_def
-from reclaimer.os_v4_hek.defs.unit import unit_def
-from reclaimer.os_v4_hek.defs.vehi import vehi_def
 from reclaimer.os_v4_hek.defs.sbsp import fast_sbsp_def
 from reclaimer.os_v4_hek.defs.coll import fast_coll_def
-
-
-from reclaimer.h2.defs.bitm import bitm_meta_def as h2_bitm_meta_def
-
-
-from reclaimer.stubbs.defs.antr import antr_def as stubbs_antr_def
-from reclaimer.stubbs.defs.cdmg import cdmg_def as stubbs_cdmg_def
-from reclaimer.stubbs.defs.coll import coll_def as stubbs_coll_def
-from reclaimer.stubbs.defs.jpt_ import jpt__def as stubbs_jpt__def
-from reclaimer.stubbs.defs.mode import mode_def as stubbs_mode_def,\
-     pc_mode_def as stubbs_pc_mode_def
-from reclaimer.stubbs.defs.soso import soso_def as stubbs_soso_def
+from reclaimer.os_v4_hek.handler   import OsV4HaloHandler
+from reclaimer.stubbs.defs.mode import mode_def as stubbs_mode_def,
+from reclaimer.stubbs.defs.mode import pc_mode_def as stubbs_pc_mode_def
 from reclaimer.stubbs.defs.sbsp import fast_sbsp_def as stubbs_fast_sbsp_def
 from reclaimer.stubbs.defs.coll import fast_coll_def as stubbs_fast_coll_def
+from reclaimer.stubbs.handler   import StubbsHandler
+from reclaimer.h2.defs.bitm import bitm_meta_def as h2_bitm_meta_def
 
 
 __all__ = ("HaloMap", "StubbsMap", "Halo1Map", "Halo1RsrcMap", "Halo2Map")
@@ -125,7 +107,6 @@ class HaloMap:
     bsp_header_offsets = ()
 
     defs = None
-    tag_headers = None
 
     def __init__(self):
         self.bsp_magics = {}
@@ -135,8 +116,8 @@ class HaloMap:
         self.orig_tag_paths = ()
         if type(self).defs is None:
             type(self).defs = {}
-        if type(self).tag_headers is None:
-            type(self).tag_headers = {}
+
+        self.setup_defs()
 
     def get_meta_descriptor(self, tag_cls):
         tagdef = self.defs.get(tag_cls)
@@ -210,9 +191,6 @@ class HaloMap:
 
         return h_block[0]
 
-    def setup_tag_headers(self):
-        pass
-
     def meta_to_tag_data(self, meta, tag_cls, tag_index_ref):
         '''
         Changes anything in a meta data block that needs to be changed for
@@ -263,8 +241,6 @@ class HaloMap:
             print("Could not read tag index.")
             return
 
-        self.setup_defs()
-
         if will_be_active:
             self.maps["active"] = curr_map
 
@@ -281,7 +257,7 @@ class HaloMap:
     def unload_map(self):
         try: self.map_data.close()
         except Exception: pass
-        try: self.maps.pop(self.header.map_name, None)
+        try: self.maps.pop(self.map_header.map_name)
         except Exception: pass
 
         if self.maps.get('active') is self:
@@ -290,6 +266,7 @@ class HaloMap:
 
 class Halo1Map(HaloMap):
     ce_sound_offsets_by_path = None
+    tag_headers = None
 
     meta_to_tag_data       = halo1_methods.meta_to_tag_data
     inject_rawdata         = halo1_methods.inject_rawdata
@@ -298,6 +275,10 @@ class Halo1Map(HaloMap):
     def __init__(self):
         HaloMap.__init__(self)
         self.ce_sound_offsets_by_path = {}
+        if type(self).tag_headers is None:
+            type(self).tag_headers = {}
+
+        self.setup_tag_headers()
 
     def setup_tag_headers(self):
         defs = self.defs
@@ -317,26 +298,10 @@ class Halo1Map(HaloMap):
                                      calc_pointers=False))
 
     def setup_defs(self):
+        self.defs = defs = dict(self.defs)
         return
-        defs = self.defs
-        headers = self.tag_headers
-        headers["antr"] = headers["antr_halo"]
-        headers["coll"] = headers["coll_halo"]
-        headers["mode"] = headers["mode_halo"]
-        headers["soso"] = headers["soso_halo"]
-        defs["mode"] = mode_def
-        defs["antr"] = antr_def
-        defs["bipd"] = bipd_def
-        defs["cdmg"] = cdmg_def
-        defs["jpt!"] = jpt__def
-        defs["soso"] = soso_def
-        defs["unit"] = unit_def
-        defs["vehi"] = vehi_def
         defs["sbsp"] = fast_sbsp_def
         defs["coll"] = fast_coll_def
-        defs.pop("imef", None)
-        defs.pop("vege", None)
-        defs.pop("terr", None)
 
     def basic_deprotection(self):
         if self.tag_index is None or self.is_resource:
@@ -507,29 +472,18 @@ class StubbsMap(Halo1Map):
                 h_block[0].serialize(buffer=BytearrayBuffer(), calc_pointers=0))
 
     def setup_defs(self):
+        self.defs = defs = dict(self.defs)
         return
-        defs = self.defs
-        headers = self.tag_headers
-        headers["antr"] = headers["antr_stubbs"]
-        headers["coll"] = headers["coll_stubbs"]
-        headers["mode"] = headers["mode_stubbs"]
-        headers["soso"] = headers["soso_stubbs"]
         if self.engine == "stubbspc":
             defs["mode"] = stubbs_pc_mode_def
         else:
             defs["mode"] = stubbs_mode_def
-        defs["antr"] = stubbs_antr_def
-        defs["bipd"] = None
-        defs["cdmg"] = stubbs_cdmg_def
-        defs["jpt!"] = stubbs_jpt__def
-        defs["soso"] = stubbs_soso_def
-        defs["unit"] = None
-        defs["vehi"] = None
         defs["sbsp"] = stubbs_fast_sbsp_def
         defs["coll"] = stubbs_fast_coll_def
 
 
 class Halo1RsrcMap(Halo1Map):
+    tag_classes = None
 
     def __init__(self):
         Halo1Map.__init__(self)
@@ -564,24 +518,26 @@ class Halo1RsrcMap(Halo1Map):
         head.version.set_to(curr_map.engine)
         curr_map.index_magic = 0
 
-        self.setup_defs()
-
         index_mul = 2
         if curr_map.engine == "halo1pc" or resource_type == 3:
             index_mul = 1
 
-        head.map_name, tag_classes, def_class = {
+        head.map_name, tag_classes, def_cls = {
             1: ("bitmaps", bitmap_exts, 'bitmap'),
             2: ("sounds",  sound_exts,  'sound'),
             3: ("loc",     loc_exts,    'unicode_string_list')
             }[resource_type]
+
+        # allow an override to be specified before the map is loaded
+        if self.tag_classes is None:
+            self.tag_classes = tag_classes
 
         self.maps[head.map_name] = curr_map
         if will_be_active:
             self.maps["active"] = curr_map
 
         rsrc_tag_count = len(rsrc_head.tag_paths)//index_mul
-        tag_classes += (def_class,)*(rsrc_tag_count - len(tag_classes))
+        self.tag_classes += (def_cls,)*(rsrc_tag_count - len(self.tag_classes))
         tags.tag_index.extend(rsrc_tag_count)
         tags.scenario_tag_id[:] = (0, 0)
 
@@ -593,7 +549,7 @@ class Halo1RsrcMap(Halo1Map):
                 j += 1
 
             tag_ref = tags.tag_index[i]
-            tag_ref.class_1.set_to(tag_classes[i])
+            tag_ref.class_1.set_to(self.tag_classes[i])
             tag_ref.id[:] = (i, 0)
 
             tag_ref.meta_offset  = rsrc_head.tag_headers[j].offset
