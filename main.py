@@ -579,10 +579,10 @@ class Refinery(tk.Tk):
 
     def unload_maps(self, maps_to_unload=("active", )):
         if maps_to_unload is None:
-            maps_to_unload = self.maps.keys()
+            maps_to_unload = tuple(self.maps.keys())
 
         for map_name in maps_to_unload:
-            try: self.maps[map_name].unload()
+            try: self.maps[map_name].unload_map()
             except Exception: pass
 
         if self.map_loaded: return
@@ -605,7 +605,8 @@ class Refinery(tk.Tk):
             elif self.running:
                 return
 
-            self.unload_maps()
+            if self.active_map is not None and not self.active_map.is_resource:
+                self.unload_maps()
 
             self._running = True
             self.tk_map_path.set(map_path)
@@ -617,27 +618,36 @@ class Refinery(tk.Tk):
                 engine = get_map_version(map_header)
                 comp_data.close()
 
-            if header_integ in (1, 2, 3):
-                new_map = Halo1RsrcMap()
-            elif map_header is None:
-                print("Could not read map header.")
-                return
-            elif engine is None:
-                print("Could not determine map version.")
-                return
-            elif "stubbs" in engine:
-                new_map = StubbsMap()
-            elif "halo1" in engine:
-                new_map = Halo1Map()
-            elif "halo2" in engine:
-                new_map = Halo2Map()
+            if map_header is None:
+                map_name = {1:"bitmaps", 2:"sounds", 3:"loc"}.get(header_integ)
             else:
-                print("Cant let you do that.")
-                map_header.pprint(printout=True)
-                return
+                map_name = map_header.map_name
 
-            new_map.maps = self.maps
-            new_map.load_map(map_path, will_be_active)
+            if self.maps.get(map_name) is None:
+                if header_integ in (1, 2, 3):
+                    new_map = Halo1RsrcMap()
+                elif map_header is None:
+                    print("Could not read map header.")
+                    return
+                elif engine is None:
+                    print("Could not determine map version.")
+                    return
+                elif "stubbs" in engine:
+                    new_map = StubbsMap()
+                elif "halo1" in engine:
+                    new_map = Halo1Map()
+                elif "halo2" in engine:
+                    new_map = Halo2Map()
+                else:
+                    print("Cant let you do that.")
+                    map_header.pprint(printout=True)
+                    return
+
+                new_map.maps = self.maps
+                new_map.load_map(map_path, will_be_active)
+            else:
+                # map is already loaded, just set it as active
+                self.maps['active'] = self.maps.get(map_name)
 
             self.display_map_info()
             self.reload_explorers()
@@ -675,9 +685,9 @@ class Refinery(tk.Tk):
                 if active_map.is_resource: map_type = "resource cache"
                 elif map_type == "sp":     map_type = "singleplayer"
                 elif map_type == "mp":     map_type = "multiplayer"
-                elif map_type == "ui":     map_type = "user interface"
+                elif map_type == "ui":     map_type = "mainmenu"
                 elif map_type == "shared":   map_type = "shared"
-                elif map_type == "sharedsp": map_type = "shared singleplayer"
+                elif map_type == "sharedsp": map_type = "shared single player"
                 elif "INVALID" in map_type:  map_type = "unknown"
 
                 string += ((
