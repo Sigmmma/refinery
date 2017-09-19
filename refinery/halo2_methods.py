@@ -11,12 +11,12 @@ from supyr_struct.defs.constants import *
 from supyr_struct.defs.util import *
 from supyr_struct.field_types import FieldType
 
-from .loaded_map import *
 from .byteswapping import raw_block_def
 
 
 __all__ = (
     "inject_rawdata", "meta_to_tag_data", "load_all_resource_maps",
+    "HALO2_MAP_TYPES"
     )
 
 # DO NOT CHANGE THE ORDER OF THESE
@@ -69,7 +69,7 @@ def load_all_resource_maps(self, maps_dir=""):
                 title="Select the %s.map" % map_name, parent=self,
                 filetypes=((map_name, "*.map"),
                            (map_name, "*.map.dtz"),
-                           (map_name, "*")))
+                           (map_name, "*.*")))
 
             if map_path:
                 maps_dir = dirname(map_path)
@@ -80,11 +80,12 @@ def load_all_resource_maps(self, maps_dir=""):
 
     for map_name, map_path in sorted(map_paths.items()):
         if self.maps.get(map_name) is not None:
+            # map already loaded
             continue
 
         print("Loading %s.map..." % map_name)
         try:
-            self.load_regular_map(map_path, False)
+            self.load_map(map_path, False, True)
             print("    Finished")
         except Exception:
             print(format_exc())
