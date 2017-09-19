@@ -57,9 +57,8 @@ def ask_extract_settings(parent, def_vars=None, tag_index_ref=None, title=None):
 
 
 class ExplorerHierarchyTree(HierarchyFrame):
-    map_magic = None
+    active_map = None
     tags_tree = None
-    tag_index = None
     valid_classes = None
 
     tree_id_to_index_ref = None
@@ -98,8 +97,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
             tags_tree.column("pointer", minwidth=5, width=70, stretch=False)
             tags_tree.column("index_id", minwidth=5, width=50, stretch=False)
 
-    def reload(self, tag_index=None):
-        self.tag_index = tag_index
+    def reload(self, active_map=None):
+        self.active_map = active_map
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
         self.setup_columns()
@@ -109,9 +108,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
             tags_tree.delete(child)
             tree_id_to_index_ref.pop(child, None)
 
-        if tag_index:
+        if active_map is not None:
             # generate the hierarchy
-            self.add_tag_index_refs(tag_index.tag_index)
+            self.add_tag_index_refs(active_map.tag_index.tag_index)
 
     def _compile_list_of_selected(self, parent, selected=None):
         if selected is None:
@@ -174,13 +173,15 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
     def rename_tag_index_refs(self, index_refs, old_basename, new_basename,
                               rename_in_other_trees=True):
+        if self.active_map is None: return
+
         old_basename = old_basename.lower()
         new_basename = new_basename.lower()
         if old_basename == new_basename:
             return
 
         tags_tree = self.tags_tree
-        map_magic = self.map_magic
+        active_map = self.active_map.map_magic
         tree_id_to_index_ref = self.tree_id_to_index_ref
 
         child_items = []
@@ -272,7 +273,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
                                            new_basename, False)
 
     def add_tag_index_refs(self, index_refs, dont_sort=False):
-        map_magic = self.map_magic
+        if self.active_map is None: return
+
+        map_magic = self.active_map.map_magic
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
 
@@ -321,7 +324,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
             tag_name = basename(tag_path)
             b = index_refs_by_path[tag_path]
             tag_id = b.id.tag_table_index
-            map_magic = self.map_magic
+            map_magic = self.active_map.map_magic
 
             if b.indexed and map_magic:
                 pointer = "not in map"
@@ -382,7 +385,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
 class ExplorerClassTree(ExplorerHierarchyTree):
 
     def add_tag_index_refs(self, index_refs, dont_sort=False):
-        map_magic = self.map_magic
+        if self.active_map is None: return
+
+        map_magic = self.active_map.map_magic
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
 
@@ -418,7 +423,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             b = sortable_index_refs[tag_path]
             tag_path = tag_path.split(PATHDIV, 1)[1]
             tag_id = b.id.tag_table_index
-            map_magic = self.map_magic
+            map_magic = self.active_map.map_magic
             tag_cls = "INVALID"
             if b.class_1.enum_name not in ("<INVALID>", "NONE"):
                 tag_cls = fourcc(b.class_1.data)
@@ -592,7 +597,7 @@ class QueueTree(ExplorerHierarchyTree):
     def remove_curr_selection(self, e=None):
         self.remove_items(self.tags_tree.selection())
 
-    def reload(self, tag_index=None):
+    def reload(self, active_map=None):
         self.setup_columns()
 
         # remove any currently existing children
@@ -622,7 +627,7 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         for attr in ("extract_from_ce_resources", "overwrite",
                      "rename_duplicates_in_scnr", "fix_tag_classes",
-                     "use_hashcaches", "use_heuristics", "use_old_gelo",
+                     "use_hashcaches", "use_heuristics",
                      "extract_cheape", "show_output", "fix_tag_index_offset"):
             object.__setattr__(self, attr, tk_vars.get(attr, tk.IntVar(self)))
 
@@ -658,9 +663,6 @@ class RefinerySettingsWindow(tk.Toplevel):
                                         "WARNING: Can corrupt certain maps"),
             variable=self.fix_tag_index_offset, justify='left')
 
-        self.use_old_gelo_checkbutton = tk.Checkbutton(
-            self.yelo_frame, text="Use old project_yellow_globals definition",
-            variable=self.use_old_gelo)
         self.extract_cheape_checkbutton = tk.Checkbutton(
             self.yelo_frame, text="Extract cheape.map from yelo maps",
             variable=self.extract_cheape)
@@ -707,7 +709,6 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.fix_tag_index_offset_checkbutton.pack(padx=4, anchor='w')
 
         self.extract_cheape_checkbutton.pack(padx=4, anchor='w')
-        self.use_old_gelo_checkbutton.pack(padx=4, anchor='w')
 
         self.tags_dir_entry.pack(
             padx=(4, 0), pady=2, side='left', expand=True, fill='x')
@@ -984,7 +985,8 @@ class RefineryActionsWindow(tk.Toplevel):
 
         try:
             # make sure it's re-extracted
-            meta = self.app_root.get_meta(index_ref.id.tag_table_index, True)
+            meta = self.app_root.active_map.get_meta(
+                index_ref.id.tag_table_index, True)
             if meta is None:
                 print("Could not get meta.")
                 return
