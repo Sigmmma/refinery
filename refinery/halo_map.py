@@ -3,10 +3,11 @@ from struct import unpack
 from tkinter.filedialog import asksaveasfilename
 from traceback import format_exc
 
-from . import halo1_methods, halo2_methods
-from .util import is_protected, fourcc
+from refinery import halo1_methods, halo2_methods
+from refinery.util import is_protected_tag, fourcc
 from supyr_struct.buffer import BytearrayBuffer, BytesBuffer, PeekableMmap
 from supyr_struct.field_types import FieldType
+from supyr_struct.defs.frozen_dict import FrozenDict
 
 from reclaimer.meta.resource import resource_def
 from reclaimer.meta.halo_map import get_map_version, get_map_header,\
@@ -15,15 +16,21 @@ from reclaimer.meta.halo_map import get_map_version, get_map_header,\
 
 from reclaimer.hek.defs.sbsp import sbsp_meta_header_def
 from reclaimer.os_hek.defs.gelc    import gelc_def
-from reclaimer.os_v4_hek.defs.sbsp import fast_sbsp_def
+from reclaimer.os_v4_hek.defs.bitm import bitm_def
+from reclaimer.os_v4_hek.defs.snd_ import snd__def
+from reclaimer.os_v4_hek.defs.font import font_def
+from reclaimer.os_v4_hek.defs.hmt_ import hmt__def
+from reclaimer.os_v4_hek.defs.ustr import ustr_def
 from reclaimer.os_v4_hek.defs.coll import fast_coll_def
+from reclaimer.os_v4_hek.defs.sbsp import fast_sbsp_def
 from reclaimer.os_v4_hek.handler   import OsV4HaloHandler
-from reclaimer.stubbs.defs.mode import mode_def as stubbs_mode_def,
+from reclaimer.stubbs.defs.mode import mode_def as stubbs_mode_def
 from reclaimer.stubbs.defs.mode import pc_mode_def as stubbs_pc_mode_def
 from reclaimer.stubbs.defs.sbsp import fast_sbsp_def as stubbs_fast_sbsp_def
 from reclaimer.stubbs.defs.coll import fast_coll_def as stubbs_fast_coll_def
 from reclaimer.stubbs.handler   import StubbsHandler
 from reclaimer.h2.defs.bitm import bitm_meta_def as h2_bitm_meta_def
+from reclaimer.h2.defs.snd_ import snd__meta_def as h2_snd__meta_def
 
 
 __all__ = ("HaloMap", "StubbsMap", "Halo1Map", "Halo1RsrcMap", "Halo2Map")
@@ -57,21 +64,25 @@ def h2_to_h1_tag_index(map_header, tag_index):
         new_index_array.append()
         new_index_entry = new_index_array[-1]
         if old_index_entry.tag_class.data not in tag_types:
-            new_index_entry.tag.tag_path = "reserved for main map"
-            new_index_entry.id.tag_table_index = i
+            new_index_entry.tag.tag_path = "reserved"
+            new_index_entry.class_1.data = new_index_entry.class_2.data =\
+                                           new_index_entry.class_3.data =\
+                                           0xFFFFFFFF
             continue
+        else:
+            types = tag_types[old_index_entry.tag_class.data]
+            new_index_entry.class_1 = types[0]
+            new_index_entry.class_2 = types[1]
+            new_index_entry.class_3 = types[2]
 
-        types = tag_types[old_index_entry.tag_class.data]
-        new_index_entry.class_1 = types[0]
-        new_index_entry.class_2 = types[1]
-        new_index_entry.class_3 = types[2]
+            #new_index_entry.path_offset = ????
+            new_index_entry.tag.tag_path = map_header.strings.\
+                                           tag_name_table[i].tag_name
 
         new_index_entry.id = old_index_entry.id
         new_index_entry.meta_offset = old_index_entry.offset
-
-        #new_index_entry.path_offset = ????
-        new_index_entry.tag.tag_path = map_header.strings.\
-                                       tag_name_table[i].tag_name
+        if new_index_entry.meta_offset == 0:
+            new_index_entry.indexed = 1
 
     return new_index
 
@@ -94,9 +105,12 @@ class HaloMap:
     matg_meta = None
 
     # determines how to work with this map
+    filepath      = ""
     engine        = ""
     is_resource   = False
     is_compressed = False
+
+    handler = None
 
     index_magic = 0
     map_magic   = 0
@@ -107,91 +121,24 @@ class HaloMap:
     bsp_header_offsets = ()
 
     defs = None
+    maps = None
 
-    def __init__(self):
+    def __init__(self, maps=None):
         self.bsp_magics = {}
         self.bsp_sizes  = {}
         self.bsp_header_offsets = {}
         self.bsp_headers = {}
         self.orig_tag_paths = ()
-        if type(self).defs is None:
-            type(self).defs = {}
-
         self.setup_defs()
+
+        self.maps = {} if maps is None else maps
 
     def get_meta_descriptor(self, tag_cls):
         tagdef = self.defs.get(tag_cls)
         if tagdef is not None:
             return tagdef.descriptor[1]
 
-    def get_meta(self, tag_id, reextract=False):
-        '''
-        Takes a tag reference id as the sole argument.
-        Returns that tags meta data as a parsed block.
-        '''
-        if tag_id is None: return
-        magic     = self.map_magic
-        engine    = self.engine
-        map_data  = self.map_data
-        tag_index = self.tag_index
-        tag_index_array = tag_index.tag_index
-
-        # if we are given a 32bit tag id, mask it off
-        tag_id &= 0xFFFF
-
-        tag_index_ref = tag_index_array[tag_id]
-
-        if tag_id != tag_index.scenario_tag_id[0] or self.is_resource:
-            tag_cls = None
-            if tag_index_ref.class_1.enum_name not in ("<INVALID>", "NONE"):
-                tag_cls = fourcc(tag_index_ref.class_1.data)
-        else:
-            tag_cls = "scnr"
-
-        # if we dont have a defintion for this tag_cls, then return nothing
-        if self.get_meta_descriptor(tag_cls) is None:
-            return
-
-        if tag_cls is None:
-            # couldn't determine the tag class
-            return
-        elif self.is_indexed(tag_index_ref) and engine in ("halo1ce",
-                                                           "halo1yelo"):
-            # tag exists in a resource cache
-            return self.get_ce_resource_meta(tag_cls, tag_index_ref)
-        elif not reextract:
-            if tag_id == tag_index.scenario_tag_id[0] and self.scnr_meta:
-                return self.scnr_meta
-            elif tag_cls == "matg" and self.matg_meta:
-                return self.matg_meta
-
-        h_desc = self.get_meta_descriptor(tag_cls)
-        h_block = [None]
-        offset = tag_index_ref.meta_offset - magic
-        if tag_cls == "sbsp":
-            # bsps use their own magic because they are stored in
-            # their own section of the map, directly after the header
-            magic  = (self.bsp_magics[tag_id] -
-                      self.bsp_header_offsets[tag_id])
-            offset = self.bsp_headers[tag_id].meta_pointer - magic
-
-        try:
-            # read the meta data from the map
-            FieldType.force_little()
-            h_desc['TYPE'].parser(
-                h_desc, parent=h_block, attr_index=0, magic=magic,
-                tag_index=tag_index_array, rawdata=map_data, offset=offset)
-            FieldType.force_normal()
-        except Exception:
-            print(format_exc())
-            FieldType.force_normal()
-            return
-
-        self.inject_rawdata(h_block[0], tag_cls, tag_index_ref)
-
-        return h_block[0]
-
-    def meta_to_tag_data(self, meta, tag_cls, tag_index_ref):
+    def meta_to_tag_data(self, meta, tag_cls, tag_index_ref, **kwargs):
         '''
         Changes anything in a meta data block that needs to be changed for
         it to be a working tag. This includes removing predicted_resource
@@ -203,7 +150,16 @@ class HaloMap:
     def inject_rawdata(self, meta, tag_cls, tag_index_ref):
         raise NotImplementedError()
 
-    def load_map(self, map_path, will_be_active=True, make_new_map=False):
+    def setup_defs(self):
+        raise NotImplementedError()
+
+    def get_meta(self, tag_id, reextract=False):
+        raise NotImplementedError()
+
+    def load_all_resource_maps(self, maps_dir=""):
+        pass
+
+    def load_map(self, map_path, will_be_active=True):
         with open(map_path, 'rb+') as f:
             comp_data = PeekableMmap(f.fileno(), 0)
 
@@ -212,10 +168,6 @@ class HaloMap:
             print("Could not read map header.")
             comp_data.close()
             return
-
-        curr_map = self
-        if make_new_map:
-            curr_map = type(curr_map)()
 
         engine = get_map_version(map_header)
 
@@ -242,66 +194,73 @@ class HaloMap:
             return
 
         if will_be_active:
-            self.maps["active"] = curr_map
+            self.maps["active"] = self
 
+        self.filepath    = map_path
         self.engine      = engine
         self.map_header  = map_header
         self.index_magic = get_index_magic(map_header)
         self.map_magic   = get_map_magic(map_header)
         self.tag_index   = tag_index
-        return curr_map
 
-    def load_all_resource_maps(self, maps_dir=""):
-        raise NotImplementedError()
-
-    def unload_map(self):
-        try: self.map_data.close()
-        except Exception: pass
-        try: self.maps.pop(self.map_header.map_name)
-        except Exception: pass
+    def unload_map(self, keep_resources_loaded=True):
+        keep_resources_loaded &= self.is_resource 
+        try: map_name = self.map_header.map_name
+        except Exception: map_name = None
 
         if self.maps.get('active') is self:
-            self.maps.pop('active', None)
+            self.maps.pop('active')
+
+        if keep_resources_loaded and map_name in self.maps:
+            return
+
+        try: self.map_data.close()
+        except Exception: pass
+        try: self.maps.pop(map_name)
+        except Exception: pass
 
 
 class Halo1Map(HaloMap):
-    ce_sound_offsets_by_path = None
+    ce_sound_indexes_by_path = None
     tag_headers = None
 
     meta_to_tag_data       = halo1_methods.meta_to_tag_data
     inject_rawdata         = halo1_methods.inject_rawdata
     load_all_resource_maps = halo1_methods.load_all_resource_maps
 
-    def __init__(self):
-        HaloMap.__init__(self)
-        self.ce_sound_offsets_by_path = {}
-        if type(self).tag_headers is None:
-            type(self).tag_headers = {}
-
+    def __init__(self, maps=None):
+        HaloMap.__init__(self, maps)
+        self.ce_sound_indexes_by_path = {}
         self.setup_tag_headers()
 
     def setup_tag_headers(self):
-        defs = self.defs
-        if self.tag_headers is None:
-            self.tag_headers = {}
+        if Halo1Map.tag_headers is not None:
+            return
 
-        tag_headers = self.tag_headers
-        for def_id in sorted(defs):
+        tag_headers = Halo1Map.tag_headers = {}
+        for def_id in sorted(self.defs):
             if def_id in tag_headers or len(def_id) != 4:
                 continue
-            h_desc = defs[def_id].descriptor[0]
-
-            h_block = [None]
+            h_desc, h_block = self.defs[def_id].descriptor[0], [None]
             h_desc['TYPE'].parser(h_desc, parent=h_block, attr_index=0)
             tag_headers[def_id] = bytes(
                 h_block[0].serialize(buffer=BytearrayBuffer(),
                                      calc_pointers=False))
 
     def setup_defs(self):
-        self.defs = defs = dict(self.defs)
-        return
-        defs["sbsp"] = fast_sbsp_def
-        defs["coll"] = fast_coll_def
+        if Halo1Map.defs is None:
+            print("Loading Halo 1 OSv4 tag definitions...")
+            Halo1Map.handler = OsV4HaloHandler(build_reflexive_cache=False,
+                                               build_raw_data_cache=False)
+            Halo1Map.defs = FrozenDict(Halo1Map.handler.defs)
+            print("    Finished")
+
+        # make a shallow copy for this instance to manipulate
+        self.defs = dict(self.defs)
+
+        self.defs["sbsp"] = fast_sbsp_def
+        self.defs["coll"] = fast_coll_def
+        self.defs["gelc"] = gelc_def
 
     def basic_deprotection(self):
         if self.tag_index is None or self.is_resource:
@@ -313,7 +272,7 @@ class Halo1Map(HaloMap):
             tag_path = b.tag.tag_path
             tag_cls  = b.class_1.data
             name_id  = (tag_path, tag_cls)
-            if is_protected(tag_path):
+            if is_protected_tag(tag_path):
                 b.tag.tag_path = "protected_%s" % i
                 i += 1
             elif name_id in found_counts:
@@ -323,14 +282,12 @@ class Halo1Map(HaloMap):
                 found_counts[name_id] = 0
 
     def load_resource_map(self, map_path):
-        new_map = Halo1RsrcMap()
-        new_map.maps = self.maps
-        new_map.load_map(map_path, False, True)
+        Halo1RsrcMap(self.maps).load_map(map_path, False)
 
-    def load_map(self, map_path, will_be_active=True, make_new_map=False):
-        curr_map = HaloMap.load_map(self, map_path, will_be_active, make_new_map)
+    def load_map(self, map_path, will_be_active=True):
+        HaloMap.load_map(self, map_path, will_be_active)
 
-        self.maps[self.map_header.map_name] = curr_map
+        self.maps[self.map_header.map_name] = self
         tag_index = self.tag_index
         tag_index_array = tag_index.tag_index
 
@@ -385,71 +342,95 @@ class Halo1Map(HaloMap):
             print("Could not read globals tag")
 
         self.load_all_resource_maps(dirname(map_path))
-        return curr_map
 
     def is_indexed(self, tag_index_ref):
         if self.engine in ("halo1ce", "halo1yelo"):
             return bool(tag_index_ref.indexed)
         return False
 
-    def get_ce_resource_meta(self, tag_cls, tag_index_ref):
-        '''Returns just the meta of the tag without any raw data.'''
-        # read the meta data from the map
+    def get_meta(self, tag_id, reextract=False):
+        '''
+        Takes a tag reference id as the sole argument.
+        Returns that tags meta data as a parsed block.
+        '''
+        if tag_id is None: return
+        magic     = self.map_magic
+        engine    = self.engine
+        map_data  = self.map_data
+        tag_index = self.tag_index
+        tag_index_array = tag_index.tag_index
+
+        # if we are given a 32bit tag id, mask it off
+        tag_id &= 0xFFFF
+
+        tag_index_ref = tag_index_array[tag_id]
+
+        if tag_id != tag_index.scenario_tag_id[0] or self.is_resource:
+            tag_cls = None
+            if tag_index_ref.class_1.enum_name not in ("<INVALID>", "NONE"):
+                tag_cls = fourcc(tag_index_ref.class_1.data)
+        else:
+            tag_cls = "scnr"
+
+        # if we dont have a defintion for this tag_cls, then return nothing
         if self.get_meta_descriptor(tag_cls) is None:
             return
-        elif self.engine not in ("halo1ce", "halo1yelo"):
+
+        if tag_cls is None:
+            # couldn't determine the tag class
             return
+        elif self.is_indexed(tag_index_ref) and engine in ("halo1ce",
+                                                           "halo1yelo"):
+            # tag exists in a resource cache
 
-        kwargs = dict(parsing_resource=True)
-
-        if self.is_resource:
-            # this map is a resource map, not a real map.
-            rsrc_map    = self
-            rsrc_head   = rsrc_map.rsrc_header
-            meta_offset = tag_index_ref.meta_offset
-        else:
-            if   tag_cls == "snd!": rsrc_map = self.maps.get("sounds")
-            elif tag_cls == "bitm": rsrc_map = self.maps.get("bitmaps")
-            else:                   rsrc_map = self.maps.get("loc")
-
-            rsrc_head = rsrc_map.rsrc_header
-
-            # resource map not loaded
-            if rsrc_head is None:
-                return
-            elif tag_cls == "snd!":
-                sound_mapping = self.ce_sound_offsets_by_path
-                tag_path  = tag_index_ref.tag.tag_path
+            tag_id = tag_index_ref.meta_offset
+            if tag_cls == "snd!":
+                rsrc_map = self.maps.get("sounds")
+                sound_mapping = self.ce_sound_indexes_by_path
+                tag_path = tag_index_ref.tag.tag_path
                 if sound_mapping is None or tag_path not in sound_mapping:
                     return
 
-                meta_offset = sound_mapping[tag_path]
+                tag_id = sound_mapping[tag_path]//2
+            elif tag_cls == "bitm":
+                rsrc_map = self.maps.get("bitmaps")
+                tag_id = tag_id//2
             else:
-                meta_offset = rsrc_head.tag_headers[
-                    tag_index_ref.meta_offset].offset
+                rsrc_map = self.maps.get("loc")
 
-        map_data = rsrc_map.map_data
-        if map_data is None:
-            # resource map not loaded
-            return
+            if rsrc_map is None:
+                return
 
-        if tag_cls != 'snd!':
-            kwargs['magic'] = 0
+            return rsrc_map.get_meta(tag_id)
+        elif not reextract:
+            if tag_id == tag_index.scenario_tag_id[0] and self.scnr_meta:
+                return self.scnr_meta
+            elif tag_cls == "matg" and self.matg_meta:
+                return self.matg_meta
 
-        h_desc  = self.get_meta_descriptor(tag_cls)
+        h_desc = self.get_meta_descriptor(tag_cls)
         h_block = [None]
+        offset = tag_index_ref.meta_offset - magic
+        if tag_cls == "sbsp":
+            # bsps use their own magic because they are stored in
+            # their own section of the map, directly after the header
+            magic  = (self.bsp_magics[tag_id] -
+                      self.bsp_header_offsets[tag_id])
+            offset = self.bsp_headers[tag_id].meta_pointer - magic
 
         try:
+            # read the meta data from the map
             FieldType.force_little()
             h_desc['TYPE'].parser(
-                h_desc, parent=h_block, attr_index=0, rawdata=map_data,
-                tag_index=rsrc_head.tag_paths, root_offset=meta_offset,
-                tag_cls=tag_cls, **kwargs)
+                h_desc, parent=h_block, attr_index=0, magic=magic,
+                tag_index=tag_index_array, rawdata=map_data, offset=offset)
             FieldType.force_normal()
-            self.inject_rawdata(h_block[0], tag_cls, tag_index_ref)
         except Exception:
             print(format_exc())
+            FieldType.force_normal()
             return
+
+        self.inject_rawdata(h_block[0], tag_cls, tag_index_ref)
 
         return h_block[0]
 
@@ -457,69 +438,91 @@ class Halo1Map(HaloMap):
 class StubbsMap(Halo1Map):
 
     def setup_tag_headers(self):
-        defs = self.defs
-        if self.tag_headers is None:
-            self.tag_headers = {}
+        if StubbsMap.tag_headers is not None:
+            return
 
-        for block_def in (stubbs_antr_def, stubbs_coll_def, stubbs_mode_def,
-                          stubbs_soso_def):
-            h_block = [None]
-            def_id = block_def.def_id
-            h_desc = block_def.descriptor[0]
+        Halo1Map.setup_tag_headers(self)
+        tag_headers = StubbsMap.tag_headers = dict(Halo1Map.tag_headers)
+
+        for b_def in (stubbs_antr_def, stubbs_coll_def, stubbs_mode_def,
+                      stubbs_soso_def):
+            def_id , h_desc, h_block = b_def.def_id, b_def.descriptor[0], [None]
             h_desc['TYPE'].parser(h_desc, parent=h_block, attr_index=0)
-            self.tag_headers[def_id + "_halo"]   = self.tag_headers[def_id]
-            self.tag_headers[def_id + "_stubbs"] = bytes(
-                h_block[0].serialize(buffer=BytearrayBuffer(), calc_pointers=0))
+            self.tag_headers[def_id] = bytes(
+                h_block[0].serialize(buffer=BytearrayBuffer(),
+                                     calc_pointers=False))
 
     def setup_defs(self):
-        self.defs = defs = dict(self.defs)
-        return
+        Halo1Map.setup_defs(self)
+        if StubbsMap.defs is None:
+            print("Loading Stubbs tag definitions...")
+            StubbsMap.handler = StubbsHandler(build_reflexive_cache=False,
+                                              build_raw_data_cache=False)
+            StubbsMap.defs = FrozenDict(StubbsMap.handler.defs)
+            print("    Finished")
+
         if self.engine == "stubbspc":
-            defs["mode"] = stubbs_pc_mode_def
+            self.defs["mode"] = stubbs_pc_mode_def
         else:
-            defs["mode"] = stubbs_mode_def
-        defs["sbsp"] = stubbs_fast_sbsp_def
-        defs["coll"] = stubbs_fast_coll_def
+            self.defs["mode"] = stubbs_mode_def
+        self.defs["sbsp"] = stubbs_fast_sbsp_def
+        self.defs["coll"] = stubbs_fast_coll_def
 
 
 class Halo1RsrcMap(Halo1Map):
     tag_classes = None
 
-    def __init__(self):
-        Halo1Map.__init__(self)
+    def __init__(self, maps=None):
+        Halo1Map.__init__(self, maps)
 
-    def load_map(self, map_path, will_be_active=True, make_new_map=False):
+    def setup_tag_headers(self):
+        if Halo1RsrcMap.tag_headers is not None:
+            return
+
+        tag_headers = Halo1RsrcMap.tag_headers = {}
+        for def_id in ("bitm", "snd!", "font", "hmt ", "ustr"):
+            h_desc, h_block = self.defs[def_id].descriptor[0], [None]
+            h_desc['TYPE'].parser(h_desc, parent=h_block, attr_index=0)
+            tag_headers[def_id] = bytes(
+                h_block[0].serialize(buffer=BytearrayBuffer(),
+                                     calc_pointers=False))
+
+    def setup_defs(self):
+        self.defs = {
+            "bitm": bitm_def, "snd!": snd__def,
+            "font": font_def, "hmt ": hmt__def, "ustr": ustr_def
+            }
+
+    def load_map(self, map_path, will_be_active=True):
         with open(map_path, 'rb+') as f:
             map_data = PeekableMmap(f.fileno(), 0)
 
         resource_type = unpack("<I", map_data.read(4))[0]; map_data.seek(0)
 
         rsrc_head = resource_def.build(rawdata=map_data)
-        curr_map = self
-        if make_new_map:
-            curr_map = Halo1RsrcMap()
 
         # check if this is a pc or ce cache. cant rip pc ones
         pth = rsrc_head.tag_paths[0].tag_path
-        curr_map.engine = "halo1ce"
+        self.filepath    = map_path
+        self.engine = "halo1ce"
         if resource_type < 3 and not (pth.endswith('__pixels') or
                                       pth.endswith('__permutations')):
-            curr_map.engine = "halo1pc"
+            self.engine = "halo1pc"
 
         # so we don't have to redo a lot of code, we'll make a
         # fake tag_index and map_header and just fill in info
-        curr_map.map_header = head = map_header_demo_def.build()
-        curr_map.tag_index  = tags = tag_index_pc_def.build()
-        curr_map.map_magic  = 0
-        curr_map.map_data   = map_data
-        curr_map.rsrc_header = rsrc_head
-        curr_map.is_resource = True
+        self.map_header = head = map_header_demo_def.build()
+        self.tag_index  = tags = tag_index_pc_def.build()
+        self.map_magic  = 0
+        self.map_data   = map_data
+        self.rsrc_header = rsrc_head
+        self.is_resource = True
 
-        head.version.set_to(curr_map.engine)
-        curr_map.index_magic = 0
+        head.version.set_to(self.engine)
+        self.index_magic = 0
 
         index_mul = 2
-        if curr_map.engine == "halo1pc" or resource_type == 3:
+        if self.engine == "halo1pc" or resource_type == 3:
             index_mul = 1
 
         head.map_name, tag_classes, def_cls = {
@@ -532,9 +535,9 @@ class Halo1RsrcMap(Halo1Map):
         if self.tag_classes is None:
             self.tag_classes = tag_classes
 
-        self.maps[head.map_name] = curr_map
+        self.maps[head.map_name] = self
         if will_be_active:
-            self.maps["active"] = curr_map
+            self.maps["active"] = self
 
         rsrc_tag_count = len(rsrc_head.tag_paths)//index_mul
         self.tag_classes += (def_cls,)*(rsrc_tag_count - len(self.tag_classes))
@@ -557,26 +560,72 @@ class Halo1RsrcMap(Halo1Map):
             tag_ref.tag.tag_path = rsrc_head.tag_paths[j].tag_path
             tagid = (tag_ref.id[0], tag_ref.id[1])
 
+    def get_meta(self, tag_id, reextract=False):
+        '''Returns just the meta of the tag without any raw data.'''
+
+        # if we are given a 32bit tag id, mask it off
+        tag_id &= 0xFFFF
+        tag_index_ref = self.tag_index.tag_index[tag_id]
+        tag_cls = dict(
+            sound="snd!", bitmap="bitm", font="font",
+            unicode_string_list="ustr", hud_message_text="hmt ").get(
+                tag_index_ref.class_1.enum_name)
+
+        # read the meta data from the map
+        if self.get_meta_descriptor(tag_cls) is None:
+            return
+        elif self.engine not in ("halo1ce", "halo1yelo"):
+            return
+
+        kwargs = dict(parsing_resource=True)
+
+        if tag_cls != 'snd!': kwargs['magic'] = 0
+
+        h_desc  = self.get_meta_descriptor(tag_cls)
+        h_block = [None]
+
+        try:
+            FieldType.force_little()
+            h_desc['TYPE'].parser(
+                h_desc, parent=h_block, attr_index=0, rawdata=self.map_data,
+                tag_index=self.rsrc_header.tag_paths, tag_cls=tag_cls,
+                root_offset=tag_index_ref.meta_offset, **kwargs)
+            FieldType.force_normal()
+            self.inject_rawdata(h_block[0], tag_cls, tag_index_ref)
+        except Exception:
+            print(format_exc())
+            return
+
+        return h_block[0]
+
 
 class Halo2Map(HaloMap):
-    def __init__(self):
-        HaloMap.__init__(self)
+    def __init__(self, maps=None):
+        HaloMap.__init__(self, maps)
 
     meta_to_tag_data       = halo2_methods.meta_to_tag_data
     inject_rawdata         = halo2_methods.inject_rawdata
     load_all_resource_maps = halo2_methods.load_all_resource_maps
 
     def setup_defs(self):
-        '''Switch definitions based on which game the map is for'''
-        pass
+        self.defs = {
+            "bitm": h2_bitm_meta_def, "snd!": h2_snd__meta_def,
+            }
 
-    def load_map(self, map_path, will_be_active=True, make_new_map=False):
-        curr_map = HaloMap.load_map(self, map_path, will_be_active, make_new_map)
+    def get_meta_descriptor(self, tag_cls):
+        tagdef = self.defs.get(tag_cls)
+        if tagdef is not None:
+            return tagdef.descriptor
+
+    def load_map(self, map_path, will_be_active=True):
+        HaloMap.load_map(self, map_path, will_be_active)
         tag_index = self.tag_index
         self.tag_index = h2_to_h1_tag_index(self.map_header, tag_index)
 
         map_type = self.map_header.map_type.data - 1
         if map_type > 0 and map_type < 4:
+            self.is_resource = True
             self.maps[halo2_methods.HALO2_MAP_TYPES[map_type]] = self
 
-        self.load_all_resource_maps(dirname(map_path))
+        if will_be_active or not self.is_resource:
+            self.load_all_resource_maps(dirname(map_path))

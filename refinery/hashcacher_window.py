@@ -5,20 +5,11 @@ from threading import Thread
 from tkinter.filedialog import askdirectory
 from traceback import format_exc
 
+from refinery.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS
 from reclaimer.os_v4_hek.handler import OsV4HaloHandler
 from supyr_struct.defs.constants import *
 from supyr_struct.defs.util import *
 
-
-RESERVED_WINDOWS_FILENAME_MAP = {}
-INVALID_PATH_CHARS = set([str(i.to_bytes(1, 'little'), 'ascii')
-                          for i in range(32)])
-for name in ('CON', 'PRN', 'AUX', 'NUL'):
-    RESERVED_WINDOWS_FILENAME_MAP[name] = '_' + name
-for i in range(1, 9):
-    RESERVED_WINDOWS_FILENAME_MAP['COM%s' % i] = '_COM%s' % i
-    RESERVED_WINDOWS_FILENAME_MAP['LPT%s' % i] = '_LPT%s' % i
-INVALID_PATH_CHARS.update('<>:"|?*')
 
 def sanitize_filename(name):
     # make sure to rename reserved windows filenames to a valid one
