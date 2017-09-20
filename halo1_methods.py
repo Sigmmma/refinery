@@ -9,7 +9,7 @@ from supyr_struct.defs.constants import *
 from supyr_struct.defs.util import *
 from supyr_struct.field_types import FieldType
 
-from .byteswapping import raw_block_def, byteswap_animation,\
+from refinery.byteswapping import raw_block_def, byteswap_animation,\
      byteswap_uncomp_verts, byteswap_comp_verts, byteswap_tris,\
      byteswap_coll_bsp, byteswap_sbsp_meta, byteswap_scnr_script_syntax_data,\
      byteswap_pcm16_samples
@@ -31,9 +31,9 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
     map_data = self.map_data
 
     try:   bitmap_data = bitmaps.map_data
-    except Exception: bitmap_data = None
+    except Exception:    bitmap_data = None
     try:   sound_data = sounds.map_data
-    except Exception: sound_data = None
+    except Exception:   sound_data = None
     try:   loc_data = loc.map_data
     except Exception: loc_data = None
 
@@ -108,11 +108,15 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
             sound_magic = 0 - magic
             other_data = map_data
         elif not self.is_resource:
-            sound_map = self.ce_sound_offsets_by_path
+            if sounds is None: return
+
+            sound_map = self.ce_sound_indexes_by_path
             tag_path  = tag_index_ref.tag.tag_path
             if sound_map is None or tag_path not in sound_map:
                 return
-            sound_magic = sound_map[tag_path] + meta.get_size()
+
+            rsrc_tag_head = sounds.rsrc_header.tag_headers[sound_map[tag_path]]
+            sound_magic = rsrc_tag_head.offset + meta.get_size()
         else:
             sound_magic = tag_index_ref.meta_offset + meta.get_size()
 
@@ -172,7 +176,7 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
             raise
 
 
-def meta_to_tag_data(self, meta, tag_cls, tag_index_ref):
+def meta_to_tag_data(self, meta, tag_cls, tag_index_ref, **kwargs):
     magic      = self.map_magic
     engine     = self.engine
     map_data   = self.map_data
@@ -491,7 +495,7 @@ def meta_to_tag_data(self, meta, tag_cls, tag_index_ref):
         byteswap_scnr_script_syntax_data(meta)
 
         # rename duplicate stuff that causes errors when compiling scripts
-        if self.rename_duplicates_in_scnr.get():
+        if kwargs.get("rename_scnr_dups", False):
             for refl in (meta.cutscene_flags, meta.cutscene_camera_points,
                          meta.recorded_animations):
                 names = set()
@@ -578,8 +582,13 @@ def meta_to_tag_data(self, meta, tag_cls, tag_index_ref):
     return meta
 
 def load_all_resource_maps(self, maps_dir=""):
-    if self.engine not in ("halo1pc", "halo1pcdemo", "halo1ce", "halo1yelo"):
+    if self.is_resource:
         return
+    elif self.engine not in ("halo1pc", "halo1pcdemo", "halo1ce", "halo1yelo"):
+        return
+
+    if not maps_dir:
+        maps_dir = dirname(self.filepath)
 
     map_paths = {i:i for i in ("bitmaps", "sounds")}
     if self.engine in ("halo1ce", "halo1yelo"):
@@ -606,23 +615,19 @@ def load_all_resource_maps(self, maps_dir=""):
 
     for map_name in sorted(map_paths.keys()):
         try:
-            if self.maps.get(map_name) is not None:
-                # map already loaded
-                continue
-
-            print("Loading %s.map..." % map_name)
-            self.load_resource_map(map_paths[map_name])
+            if self.maps.get(map_name) is None:
+                print("Loading %s.map..." % map_name)
+                self.load_resource_map(map_paths[map_name])
+                print("    Finished")
 
             if map_name == "sounds" and self.engine in ("halo1ce", "halo1yelo"):
                 # ce resource sounds are recognized by tag_path
                 # so we must cache their offsets by their paths
-                header = self.maps["sounds"].rsrc_header
-                for i in range(len(header.tag_paths)):
-                    tag_path   = header.tag_paths[i].tag_path
-                    tag_offset = header.tag_headers[i].offset
-                    self.ce_sound_offsets_by_path[tag_path] = tag_offset
+                i = 0
+                for tag_header in self.maps["sounds"].rsrc_header.tag_paths:
+                    self.ce_sound_indexes_by_path[tag_header.tag_path] = i
+                    i += 1
 
-            print("    Finished")
         except Exception:
             self.maps.pop(map_name, None)
             print(format_exc())

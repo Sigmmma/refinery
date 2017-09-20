@@ -7,7 +7,7 @@ from supyr_struct.defs.constants import *
 from supyr_struct.defs.util import *
 from supyr_struct.defs.audio.wav import wav_def
 from supyr_struct.field_types import FieldType
-from .util import *
+from refinery.util import is_protected_tag, fourcc, is_reserved_tag
 
 VALID_H1_DATA_TAGS = frozenset((
     #'mode', 'mod2', 'coll', 'phys', 'antr', 'magy', 'sbsp',
