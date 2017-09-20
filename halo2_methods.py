@@ -11,7 +11,7 @@ from supyr_struct.defs.constants import *
 from supyr_struct.defs.util import *
 from supyr_struct.field_types import FieldType
 
-from .byteswapping import raw_block_def
+from refinery.byteswapping import raw_block_def
 
 
 __all__ = (
@@ -48,12 +48,14 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
         meta.processed_pixel_data.STEPTREE = new_pixels
 
 
-def meta_to_tag_data(self, meta, tag_cls, tag_index_ref):
+def meta_to_tag_data(self, meta, tag_cls, tag_index_ref, **kwargs):
     return meta
 
 
 def load_all_resource_maps(self, maps_dir=""):
     map_paths = {name: name for name in HALO2_MAP_TYPES[1:]}
+    if not maps_dir:
+        maps_dir = dirname(self.filepath)
 
     # detect/ask for the map paths for the resource maps
     for map_name in sorted(map_paths.keys()):
@@ -85,7 +87,7 @@ def load_all_resource_maps(self, maps_dir=""):
 
         print("Loading %s.map..." % map_name)
         try:
-            self.load_map(map_path, False, True)
+            type(self)(self.maps).load_map(map_path, False)
             print("    Finished")
         except Exception:
             print(format_exc())

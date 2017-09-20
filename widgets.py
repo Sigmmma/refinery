@@ -6,9 +6,9 @@ from tkinter import messagebox
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
-from .hashcacher_window import sanitize_filename, HashcacherWindow
-from .meta_window import MetaWindow
-from .util import *
+from refinery.hashcacher_window import sanitize_filename, HashcacherWindow
+from refinery.meta_window import MetaWindow
+from refinery.util import is_protected_tag, fourcc, is_reserved_tag
 
 from mozzarilla.tools.shared_widgets import HierarchyFrame
 from reclaimer.common_descs import blam_header, QStruct
@@ -25,8 +25,10 @@ meta_tag_def = TagDef("meta tag",
     QStruct('tagdata'),
     )
 
+TREE_SORT_METHODS = {0: "name", 4:"pointer", 5:"pointer", 6:"index_id"}
+BAD_CLASSES = ("<INVALID>", "NONE")
 
-def ask_extract_settings(parent, def_vars=None, tag_index_ref=None, title=None):
+def ask_extract_settings(parent, def_vars=None, **kwargs):
     if def_vars is None:
         def_vars = {}
 
@@ -34,7 +36,7 @@ def ask_extract_settings(parent, def_vars=None, tag_index_ref=None, title=None):
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
         show_output=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
-        extract_mode=tk.StringVar(parent, "tags"),
+        extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), tags_list_path=tk.StringVar(parent)
         )
 
@@ -47,8 +49,7 @@ def ask_extract_settings(parent, def_vars=None, tag_index_ref=None, title=None):
     settings_vars["out_dir"] = def_vars.pop(
         def_vars.get("extract_mode").get() + "_dir")
 
-    w = RefineryActionsWindow(parent, tk_vars=settings_vars,
-                              tag_index_ref=tag_index_ref, title=title)
+    w = RefineryActionsWindow(parent, tk_vars=settings_vars, **kwargs)
 
     # make the parent freeze what it's doing until we're destroyed
     parent.wait_window(w)
@@ -65,6 +66,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
     queue_tree = None
     sibling_tree_frames = None
+    sort_by = "name"
+    reverse_sorted = False
 
     def __init__(self, *args, **kwargs):
         self.queue_tree = kwargs.pop('queue_tree', self.queue_tree)
@@ -74,6 +77,57 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         HierarchyFrame.__init__(self, *args, **kwargs)
         self.tags_tree.bind('<Return>', self.activate_item)
+        self.tags_tree.bind('<Button-1>', self.set_sort_mode)
+
+    def set_sort_mode(self, event):
+        if self.tags_tree.identify_region(event.x, event.y) != "heading":
+            return
+        column = int(self.tags_tree.identify_column(event.x)[1:])
+        new_sort = TREE_SORT_METHODS.get(column)
+        if new_sort is None:
+            return
+        elif new_sort == self.sort_by:
+            self.reverse_sorted = not self.reverse_sorted
+        else:
+            self.reverse_sorted = False
+
+        self.sort_by = new_sort
+        self.reload(self.active_map)
+
+    def sort_index_refs(self, sortable_index_refs):
+        new_sorting = {}
+
+        if self.sort_by == "index_id":
+            for index_ref in sortable_index_refs:
+                key = index_ref[1].id.tag_table_index
+                same_list = new_sorting.get(key, [])
+                same_list.append(index_ref)
+                new_sorting[key] = same_list
+        elif self.sort_by == "pointer":
+            for index_ref in sortable_index_refs:
+                key = index_ref[1].meta_offset
+                same_list = new_sorting.get(key, [])
+                same_list.append(index_ref)
+                new_sorting[key] = same_list
+        else:
+            # default to sorting by name
+            for index_ref in sortable_index_refs:
+                key = index_ref[0]
+                same_list = new_sorting.get(key, [])
+                same_list.append(index_ref)
+                new_sorting[key] = same_list
+
+        sorted_index_refs = [None]*len(sortable_index_refs)
+        i = 0
+        for key in sorted(new_sorting):
+            for index_ref in new_sorting[key]:
+                sorted_index_refs[i] = index_ref
+                i += 1
+
+        if self.reverse_sorted:
+            return list(reversed(sorted_index_refs[:i]))
+
+        return sorted_index_refs[:i]
 
     def setup_columns(self):
         tags_tree = self.tags_tree
@@ -128,6 +182,30 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         return selected
 
+    def activate_all(self, e=None):
+        tags_tree = self.tags_tree
+        if self.queue_tree is None:
+            return
+
+        app_root = self.app_root
+        def_tk_vars = {}
+        if app_root:
+            def_tk_vars = dict(app_root.tk_vars)
+            if app_root.running:
+                return
+
+        item_name = self.active_map.map_header.map_name
+
+        # ask for extraction settings
+        settings = ask_extract_settings(self, def_tk_vars,
+                                        title=item_name, renamable=False)
+
+        if settings['accept_settings'].get():
+            settings['tag_index_refs'] = self._compile_list_of_selected("")
+            settings['title'] = item_name
+            self.queue_tree.add_to_queue("%s: map: %s" % (
+                settings['extract_mode'].get(), item_name), settings)
+
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
@@ -135,13 +213,11 @@ class ExplorerHierarchyTree(HierarchyFrame):
             return
 
         app_root = self.app_root
+        def_tk_vars = {}
         if app_root:
-            def_settings_vars = dict(app_root.tk_vars)
-        else:
-            def_settings_vars = {}
-
-        if app_root.running:
-            return
+            def_tk_vars = dict(app_root.tk_vars)
+            if app_root.running:
+                return
 
         # add selection to queue
         for iid in tags_tree.selection():
@@ -156,17 +232,18 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tag_index_ref = None
                 tag_index_refs = self._compile_list_of_selected(iid)
 
-            def_settings_vars['rename_string'] = item_name
+            def_tk_vars['rename_string'] = item_name
 
             # ask for extraction settings
-            settings = ask_extract_settings(self, def_settings_vars,
-                                            tag_index_ref)
+            settings = ask_extract_settings(self, def_tk_vars, title=item_name,
+                                            tag_index_ref=tag_index_ref)
 
             if settings['accept_rename'].get():
                 new_name = splitext(settings['rename_string'].get())[0]
                 self.rename_tag_index_refs(tag_index_refs, item_name, new_name)
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
+                settings['title'] = item_name
                 self.queue_tree.add_to_queue(
                     "%s: %s" % (settings['extract_mode'].get(),
                                 item_name), settings)
@@ -181,7 +258,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
             return
 
         tags_tree = self.tags_tree
-        active_map = self.active_map.map_magic
+        map_magic = self.active_map.map_magic
         tree_id_to_index_ref = self.tree_id_to_index_ref
 
         child_items = []
@@ -272,21 +349,20 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tree.rename_tag_index_refs(renamed_index_refs, old_basename,
                                            new_basename, False)
 
-    def add_tag_index_refs(self, index_refs, dont_sort=False):
+    def add_tag_index_refs(self, index_refs, presorted=False):
         if self.active_map is None: return
 
         map_magic = self.active_map.map_magic
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
 
-        if dont_sort:
-            assert isinstance(index_refs, dict)
-            index_refs_by_path = index_refs
+        if presorted:
+            sorted_index_refs = index_refs
         else:
-            index_refs_by_path = {}
+            sorted_index_refs = []
             # sort the index_refs
             if isinstance(index_refs, dict):
-                index_refs = index_refs.keys()
+                index_refs = index_refs.values()
 
             check_classes = hasattr(self.valid_classes, "__iter__")
             for b in index_refs:
@@ -294,7 +370,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                     if fourcc(b.class_1.data) not in self.valid_classes:
                         continue
 
-                if b.class_1.enum_name != "<INVALID>":
+                if b.class_1.enum_name not in BAD_CLASSES:
                     ext = ".%s" % b.class_1.enum_name
                 else:
                     ext = ".INVALID"
@@ -302,13 +378,18 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tag_path = b.tag.tag_path.lower()
                 if PATHDIV == "/":
                     tag_path = sanitize_path(tag_path)
-                index_refs_by_path[tag_path + ext] = b
+                sorted_index_refs.append((tag_path + ext, b))
+
+            sorted_index_refs = self.sort_index_refs(sorted_index_refs)
 
         # add all the directories before files
-        for tag_path in sorted(index_refs_by_path):
-            dir_path = dirname(tag_path)
-            if dir_path:
-                dir_path += PATHDIV
+        # put the directories in sorted by name
+        indices_by_dirpath = {dirname(sorted_index_refs[i][0]): i
+                              for i in range(len(sorted_index_refs))}
+        for dir_path in sorted(indices_by_dirpath):
+            b = sorted_index_refs[indices_by_dirpath[dir_path]][1]
+            if is_reserved_tag(b): continue
+            if dir_path: dir_path += PATHDIV
 
             try:
                 if not tags_tree.exists(dir_path):
@@ -316,13 +397,15 @@ class ExplorerHierarchyTree(HierarchyFrame):
             except Exception:
                 print(format_exc())
 
-        for tag_path in sorted(index_refs_by_path):
+        for index_ref in sorted_index_refs:
+            tag_path, b = index_ref
+            if is_reserved_tag(b): continue
+
             dir_path = dirname(tag_path)
             if dir_path:
                 dir_path += PATHDIV
 
             tag_name = basename(tag_path)
-            b = index_refs_by_path[tag_path]
             tag_id = b.id.tag_table_index
             map_magic = self.active_map.map_magic
 
@@ -339,11 +422,11 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
             try:
                 cls1 = cls2 = cls3 = ""
-                if b.class_1.enum_name not in ("<INVALID>", "NONE"):
+                if b.class_1.enum_name not in BAD_CLASSES:
                     cls1 = fourcc(b.class_1.data)
-                if b.class_2.enum_name not in ("<INVALID>", "NONE"):
+                if b.class_2.enum_name not in BAD_CLASSES:
                     cls2 = fourcc(b.class_2.data)
-                if b.class_3.enum_name not in ("<INVALID>", "NONE"):
+                if b.class_3.enum_name not in BAD_CLASSES:
                     cls3 = fourcc(b.class_3.data)
                 tags_tree.insert(
                     # NEED TO DO str OR ELSE THE SCENARIO TAG'S ID WILL
@@ -384,18 +467,17 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
 class ExplorerClassTree(ExplorerHierarchyTree):
 
-    def add_tag_index_refs(self, index_refs, dont_sort=False):
+    def add_tag_index_refs(self, index_refs, presorted=False):
         if self.active_map is None: return
 
         map_magic = self.active_map.map_magic
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
 
-        if dont_sort:
-            assert isinstance(index_refs, dict)
-            index_refs_by_path = index_refs
+        if presorted:
+            sorted_index_refs = index_refs
         else:
-            sortable_index_refs = {}
+            sorted_index_refs = []
 
             # sort the index_refs
             if isinstance(index_refs, dict):
@@ -407,7 +489,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     if fourcc(b.class_1.data) not in self.valid_classes:
                         continue
 
-                if b.class_1.enum_name not in ("<INVALID>", "NONE"):
+                if b.class_1.enum_name not in BAD_CLASSES:
                     tag_cls = fourcc(b.class_1.data)
                     ext = ".%s" % b.class_1.enum_name
                 else:
@@ -417,15 +499,35 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                 tag_path = b.tag.tag_path.lower()
                 if PATHDIV == "/":
                     tag_path = sanitize_path(tag_path)
-                sortable_index_refs[tag_cls + PATHDIV + tag_path + ext] = b
+                sorted_index_refs.append(
+                    (tag_cls + PATHDIV + tag_path + ext, b))
 
-        for tag_path in sorted(sortable_index_refs):
-            b = sortable_index_refs[tag_path]
+        sorted_index_refs = self.sort_index_refs(sorted_index_refs)
+
+        # add all the directories before files
+        # put the directories in sorted by name
+        tag_classes = []
+        for index_ref in sorted_index_refs:
+            class_enum = index_ref[1].class_1
+            class_fcc  = fourcc(class_enum.data)
+            if class_enum.enum_name in BAD_CLASSES:     continue
+            elif tags_tree.exists(class_fcc + PATHDIV): continue
+            elif class_fcc in tag_classes:              continue
+
+            tag_classes.append(class_fcc)
+
+        for tag_class in sorted(tag_classes):
+            self.add_folder_path([tag_class])
+
+        for index_ref in sorted_index_refs:
+            tag_path, b = index_ref
+            if is_reserved_tag(b): continue
+
             tag_path = tag_path.split(PATHDIV, 1)[1]
             tag_id = b.id.tag_table_index
             map_magic = self.active_map.map_magic
             tag_cls = "INVALID"
-            if b.class_1.enum_name not in ("<INVALID>", "NONE"):
+            if b.class_1.enum_name not in BAD_CLASSES:
                 tag_cls = fourcc(b.class_1.data)
 
             if b.indexed and map_magic:
@@ -440,15 +542,12 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                 tag_id += (b.id.table_index << 16)
 
             try:
-                if not tags_tree.exists(tag_cls + PATHDIV):
-                    self.add_folder_path([tag_cls])
-
                 cls1 = cls2 = cls3 = ""
-                if b.class_1.enum_name not in ("<INVALID>", "NONE"):
+                if b.class_1.enum_name not in BAD_CLASSES:
                     cls1 = fourcc(b.class_1.data)
-                if b.class_2.enum_name not in ("<INVALID>", "NONE"):
+                if b.class_2.enum_name not in BAD_CLASSES:
                     cls2 = fourcc(b.class_2.data)
-                if b.class_3.enum_name not in ("<INVALID>", "NONE"):
+                if b.class_3.enum_name not in BAD_CLASSES:
                     cls3 = fourcc(b.class_3.data)
 
                 tags_tree.insert(
@@ -466,13 +565,11 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             return
 
         app_root = self.app_root
+        def_tk_vars = {}
         if app_root:
-            def_settings_vars = dict(app_root.tk_vars)
-        else:
-            def_settings_vars = {}
-
-        if app_root.running:
-            return
+            def_tk_vars = dict(app_root.tk_vars)
+            if app_root.running:
+                return
 
         # add selection to queue
         for iid in tags_tree.selection():
@@ -490,11 +587,11 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             title, path_string = item_name.split(PATHDIV, 1)
             if path_string:
                 title = None
-            def_settings_vars['rename_string'] = path_string
+            def_tk_vars['rename_string'] = path_string
 
             # ask for extraction settings
-            settings = ask_extract_settings(self, def_settings_vars,
-                                            tag_index_ref, title)
+            settings = ask_extract_settings(self, def_tk_vars, title=title,
+                                            tag_index_ref=tag_index_ref)
 
             if settings['accept_rename'].get():
                 if not path_string:
@@ -513,13 +610,11 @@ class ExplorerClassTree(ExplorerHierarchyTree):
 
 class ExplorerHybridTree(ExplorerHierarchyTree):
 
-    def add_tag_index_refs(self, index_refs, dont_sort=False):
-        if dont_sort:
-            ExplorerHierarchyTree.add_tag_index_refs(self, index_refs, 1)
+    def add_tag_index_refs(self, index_refs, presorted=False):
+        if presorted:
+            ExplorerHierarchyTree.add_tag_index_refs(self, index_refs, True)
             
-        index_refs_by_tag_cls = {}
-        if isinstance(index_refs, dict):
-            index_refs = index_refs.keys()
+        sorted_index_refs = []
 
         check_classes = hasattr(self.valid_classes, "__iter__")
         for b in index_refs:
@@ -527,21 +622,23 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
                 if fourcc(b.class_1.data) not in self.valid_classes:
                     continue
 
-            if b.class_1.enum_name != "<INVALID>":
+            if b.class_1.enum_name not in BAD_CLASSES:
                 ext = ".%s" % b.class_1.enum_name
             else:
                 ext = ".INVALID"
 
             tag_cls = "INVALID"
-            if b.class_1.enum_name not in ("<INVALID>", "NONE"):
+            if b.class_1.enum_name not in BAD_CLASSES:
                 tag_cls = fourcc(b.class_1.data)
 
             tag_path = b.tag.tag_path.lower()
             if PATHDIV == "/":
                 tag_path = sanitize_path(tag_path)
-            index_refs_by_tag_cls[tag_cls + PATHDIV + tag_path + ext] = b
+            sorted_index_refs.append(
+                (tag_cls + PATHDIV + tag_path + ext, b))
 
-        ExplorerHierarchyTree.add_tag_index_refs(self, index_refs_by_tag_cls, 1)
+        sorted_index_refs = self.sort_index_refs(sorted_index_refs)
+        ExplorerHierarchyTree.add_tag_index_refs(self, sorted_index_refs, True)
 
     activate_item = ExplorerClassTree.activate_item
 
@@ -571,8 +668,9 @@ class QueueTree(ExplorerHierarchyTree):
         iids = self.tags_tree.selection()
 
         if len(iids):
+            tk_vars = self.queue_info[iids[0]]
             w = RefineryEditActionsWindow(
-                self, tk_vars=self.queue_info[iids[0]])
+                self, tk_vars=tk_vars, title=tk_vars.get('title'))
             # make the parent freeze what it's doing until we're destroyed
             w.master.wait_window(self)
 
@@ -773,6 +871,7 @@ class RefinerySettingsWindow(tk.Toplevel):
 class RefineryActionsWindow(tk.Toplevel):
     app_root = None
     tk_vars = None
+    renamable = True
     accept_rename = None
     accept_settings = None
     tag_index_ref = None
@@ -782,6 +881,7 @@ class RefineryActionsWindow(tk.Toplevel):
 
     def __init__(self, *args, **kwargs):
         title = kwargs.pop('title', None)
+        self.renamable = kwargs.pop('renamable', self.renamable)
         self.tk_vars = tk_vars = kwargs.pop('tk_vars', {})
         self.tag_index_ref = kwargs.pop('tag_index_ref', self.tag_index_ref)
         tk.Toplevel.__init__(self, *args, **kwargs)
@@ -871,7 +971,8 @@ class RefineryActionsWindow(tk.Toplevel):
 
         # pack everything
         # frames
-        self.rename_frame.pack(padx=4, pady=2, expand=True, fill="x")
+        if self.renamable:
+            self.rename_frame.pack(padx=4, pady=2, expand=True, fill="x")
         self.tags_list_frame.pack(padx=4, pady=2, expand=True, fill="x")
         self.extract_to_frame.pack(padx=4, pady=2, expand=True, fill="x")
         self.settings_frame.pack(padx=4, pady=2, expand=True, fill="x")
@@ -940,7 +1041,7 @@ class RefineryActionsWindow(tk.Toplevel):
                  "Remove %s characters(excluding extension).") %
                 (MAX_NAME_LEN, str_len - MAX_NAME_LEN), parent=self)
             return
-        elif is_protected(new_name):
+        elif is_protected_tag(new_name):
             messagebox.showerror(
                 "Invalid name",
                 "The entered string is not a valid filename.", parent=self)
@@ -994,7 +1095,7 @@ class RefineryActionsWindow(tk.Toplevel):
             meta_tag = meta_tag_def.build()
             meta_tag.data.tagdata = meta
             tag_path = index_ref.tag.tag_path
-            if index_ref.class_1.enum_name != "<INVALID>":
+            if index_ref.class_1.enum_name not in BAD_CLASSES:
                 ext = ".%s" % index_ref.class_1.enum_name
             else:
                 ext = ".INVALID"
@@ -1064,7 +1165,7 @@ class RefineryRenameWindow(tk.Toplevel):
                 "Max name length exceeded",
                 "The max length for a map is limited to %s characters.\n" %
                 MAX_LEN, parent=self)
-        elif is_protected(new_name) or "/" in new_name or "\\" in new_name:
+        elif is_protected_tag(new_name) or "/" in new_name or "\\" in new_name:
             messagebox.showerror(
                 "Invalid name",
                 "The entered string is not a valid map name.", parent=self)

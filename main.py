@@ -28,18 +28,18 @@ from supyr_struct.field_types import FieldType
 if print_startup:
     print("    Importing refinery modules")
 
-from .class_repair import class_repair_functions, class_bytes_by_fcc
-from .data_extraction import VALID_H1_DATA_TAGS, VALID_H2_DATA_TAGS
-from .widgets import QueueTree, RefinerySettingsWindow,\
+from refinery.class_repair import class_repair_functions, class_bytes_by_fcc
+from refinery.data_extraction import VALID_H1_DATA_TAGS, VALID_H2_DATA_TAGS
+from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, ExplorerHierarchyTree, ExplorerClassTree,\
      ExplorerHybridTree
-from .util import is_protected, fourcc
-from .defs.config_def import config_def
+from refinery.util import fourcc, is_reserved_tag
+from refinery.defs.config_def import config_def
 
 if print_startup:
-    print("    Loading map and tag definitions")
+    print("    Loading map definitions")
 
-from .halo_map import *
+from refinery.halo_map import *
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
      get_tag_index
 
@@ -153,9 +153,19 @@ class Refinery(tk.Tk):
         self.edit_menu = tk.Menu(self.menubar, tearoff=False)
         self.file_menu.add_command(
             label="Load map", command=self.map_path_browse)
+        self.file_menu.add_command(
+            label="Load all resource maps", command=self.load_resource_maps)
         self.file_menu.add_separator()
         self.file_menu.add_command(
-            label="Unload Map", command=self.unload_maps)
+            label="Unload active map",
+            command=lambda s=self: s.unload_maps(False))
+        self.file_menu.add_command(
+            label="Unload all maps",
+            command=lambda s=self: s.unload_maps(False, None))
+        self.file_menu.add_command(
+            label="Unload resource maps",
+            command=lambda s=self: s.unload_maps(True, None))
+        self.file_menu.add_separator()
         self.file_menu.add_command(
             label="Save map as", command=self.save_map_as)
         self.file_menu.add_separator()
@@ -513,7 +523,8 @@ class Refinery(tk.Tk):
         self.place_window_relative(self.rename_window)
 
     def destroy(self, e=None):
-        self.unload_maps(None)
+        self.unload_maps(True)
+        self.unload_maps(False)
         FieldType.force_normal()
         try:
             self.update_config()
@@ -553,16 +564,8 @@ class Refinery(tk.Tk):
         else:
             return
 
-        tags_tree = tree_frame.tags_tree
-
-        # get the current selection
-        curr_sel = tags_tree.selection()
-        # select all the tags
-        tags_tree.selection_set(tags_tree.get_children())
-        # tell the tree_frame to add the selection to the queue
-        tree_frame.activate_item()
-        # revert the selection to what it was
-        tags_tree.selection_set(curr_sel)
+        # tell the tree_frame to add all tags to the queue
+        tree_frame.activate_all()
 
     def queue_del_all(self, e=None):
         if not self.map_loaded:
@@ -577,13 +580,16 @@ class Refinery(tk.Tk):
 
         self.queue_tree.remove_items()
 
-    def unload_maps(self, maps_to_unload=("active", )):
+    def unload_maps(self, resources=False, maps_to_unload=("active", )):
         if maps_to_unload is None:
             maps_to_unload = tuple(self.maps.keys())
 
         for map_name in maps_to_unload:
-            try: self.maps[map_name].unload_map()
-            except Exception: pass
+            try:
+                if resources == self.maps[map_name].is_resource:
+                    self.maps[map_name].unload_map(False)
+            except Exception:
+                pass
 
         if self.map_loaded: return
 
@@ -596,6 +602,22 @@ class Refinery(tk.Tk):
         self.queue_tree.reload()
         self.set_extract_mode("tags")
 
+    def load_resource_maps(self, halo_map=None):
+        if halo_map is None:
+            halo_map = self.active_map
+        if halo_map is None:
+            return
+        elif self.running:
+            return
+
+        self._running = True
+        try:
+            halo_map.load_all_resource_maps()
+        except Exception:
+            print(format_exc())
+
+        self._running = False
+
     def load_map(self, map_path=None, will_be_active=True):
         try:
             if map_path is None:
@@ -605,7 +627,7 @@ class Refinery(tk.Tk):
             elif self.running:
                 return
 
-            if self.active_map is not None and not self.active_map.is_resource:
+            if self.active_map is not None:
                 self.unload_maps()
 
             self._running = True
@@ -625,7 +647,7 @@ class Refinery(tk.Tk):
 
             if self.maps.get(map_name) is None:
                 if header_integ in (1, 2, 3):
-                    new_map = Halo1RsrcMap()
+                    new_map = Halo1RsrcMap(self.maps)
                 elif map_header is None:
                     print("Could not read map header.")
                     return
@@ -633,17 +655,16 @@ class Refinery(tk.Tk):
                     print("Could not determine map version.")
                     return
                 elif "stubbs" in engine:
-                    new_map = StubbsMap()
+                    new_map = StubbsMap(self.maps)
                 elif "halo1" in engine:
-                    new_map = Halo1Map()
+                    new_map = Halo1Map(self.maps)
                 elif "halo2" in engine:
-                    new_map = Halo2Map()
+                    new_map = Halo2Map(self.maps)
                 else:
                     print("Cant let you do that.")
                     map_header.pprint(printout=True)
                     return
 
-                new_map.maps = self.maps
                 new_map.load_map(map_path, will_be_active)
             else:
                 # map is already loaded, just set it as active
@@ -693,8 +714,8 @@ class Refinery(tk.Tk):
                 string += ((
                     "Header:\n" +
                     "    engine version      == %s\n" +
-                    "    map name            == '%s'\n" +
-                    "    build date          == '%s'\n" +
+                    "    map name            == %s\n" +
+                    "    build date          == %s\n" +
                     "    map type            == %s\n" +
                     "    decompressed size   == %s\n" +
                     "    index header offset == %s\n") %
@@ -703,14 +724,26 @@ class Refinery(tk.Tk):
 
                 tag_index_offset = index.tag_index_offset
                 if "halo2" in active_map.engine:
+                    used_tag_count = 0
+                    local_tag_count = 0
+                    for index_ref in index.tag_index:
+                        if is_reserved_tag(index_ref):
+                            continue
+                        elif index_ref.meta_offset != 0:
+                            local_tag_count += 1
+                        used_tag_count += 1
+
                     string += ((
                         "\nTag index:\n" +
                         "    tag count           == %s\n" +
+                        "    used tag count      == %s\n" +
+                        "    local tag count     == %s\n" +
                         "    tag types count     == %s\n" +
                         "    scenario tag id     == %s\n" +
                         "    globals  tag id     == %s\n" +
                         "    index array pointer == %s\n") %
-                    (orig_index.tag_count, orig_index.tag_types_count,
+                    (orig_index.tag_count, used_tag_count, local_tag_count,
+                     orig_index.tag_types_count,
                      orig_index.scenario_tag_id[0],
                      orig_index.globals_tag_id[0], tag_index_offset))
                 elif active_map.engine == "halo3":
@@ -765,7 +798,7 @@ class Refinery(tk.Tk):
                     min_os  = info.minimum_os_build
                     string += ((
                         "\nYelo information:\n" +
-                        "    Mod name              == '%s'\n" +
+                        "    Mod name              == %s\n" +
                         "    Memory upgrade amount == %sx\n" +
                         "\n    Flags:\n" +
                         "        uses memory upgrades       == %s\n" +
@@ -774,12 +807,12 @@ class Refinery(tk.Tk):
                         "        uses game state upgrades   == %s\n" +
                         "        has compression parameters == %s\n" +
                         "\n    Build info:\n" +
-                        "        build string  == '%s'\n" +
+                        "        build string  == %s\n" +
                         "        timestamp     == %s\n" +
                         "        stage         == %s\n" +
                         "        revision      == %s\n" +
                         "\n    Cheape:\n" +
-                        "        build string      == '%s'\n" +
+                        "        build string      == %s\n" +
                         "        version           == %s.%s.%s\n" +
                         "        size              == %s\n" +
                         "        offset            == %s\n" +
@@ -1136,83 +1169,33 @@ class Refinery(tk.Tk):
         return save_path
 
     def start_extraction(self, e=None):
+        queue_tree = self.queue_tree.tags_tree
+
         if not self.map_loaded:
             return
         elif self.running:
             return
-
-        active_map = self.active_map
-        if active_map.is_resource and active_map.engine in ("halo1pc",
-                                                            "halo1pcdemo"):
-            print("\nCannot extract HaloPC resource caches, as they contain\n"
-                  "only rawdata(pixels/sound samples) and no meta data.\n")
-            return
-
-        self._running = True
-        tag_index = active_map.tag_index
-        tag_index_array = tag_index.tag_index
-        start = time()
-        self.stop_processing = False
+        elif not queue_tree.get_children():
+            self.queue_add_all()
 
         print("Starting extraction...")
-
-        if self.extract_cheape and active_map.engine == "halo1yelo":
-            abs_tag_path = sanitize_path(
-                join(self.tk_tags_dir.get(), "cheape.map"))
-
-            print(abs_tag_path)
-
-            try:
-                if not exists(dirname(abs_tag_path)):
-                    os.makedirs(dirname(abs_tag_path))
-
-                cheape = active_map.map_header.yelo_header.cheape_definitions
-                size        = cheape.size
-                decomp_size = cheape.decompressed_size
-
-                active_map.map_data.seek(cheape.offset)
-                cheape_data = active_map.map_data.read(size)
-                with open(abs_tag_path, "wb") as f:
-                    if decomp_size and decomp_size != size:
-                        cheape_data = zlib.decompress(cheape_data)
-                    f.write(cheape_data)
-
-            except Exception:
-                print(format_exc())
-                print("Error ocurred while extracting cheape.map")
-
-        extract_resources = active_map.engine in ("halo1ce", "halo1yelo") and \
-                            self.extract_from_ce_resources.get()
+        self._running = True
+        self.stop_processing = False
+        start = time()
 
         extracted = set()
-        map_magic = active_map.map_magic
-        queue_tree = self.queue_tree.tags_tree
         queue_info = self.queue_tree.queue_info
         queue_items = queue_tree.get_children()
         total = 0
-
-        if not queue_items:
-            print("Queue is empty. Extracting entire map "
-                  "to default extraction folder.")
-            out_dir = self.tk_tags_dir
-            if self.extract_mode.get() == "data":
-                out_dir = self.tk_data_dir
-
-            queue_info = dict(
-                all_tags=dict(
-                    tag_index_refs=tag_index_array, recursive=self.recursive,
-                    overwrite=self.overwrite, show_output=self.show_output,
-                    extract_mode=self.extract_mode,
-                    out_dir=out_dir, tags_list_path=self.tags_list_path)
-                )
-            queue_items = ['all_tags']
 
         for iid in queue_items:
             if self.stop_processing:
                 print("Extraction stopped by user\n")
                 break
+
             try:
                 info = queue_info[iid]
+                active_map     = info['halo_map']
                 out_dir        = info['out_dir'].get()
                 recursive      = info['recursive'].get()
                 overwrite      = info['overwrite'].get()
@@ -1224,11 +1207,55 @@ class Refinery(tk.Tk):
                 print(format_exc())
                 continue
 
+            if active_map.is_resource and "halo1pc" in active_map.engine:
+                print("\nCannot extract PC resource caches, as they ONLY"
+                      "\ncontain raw data(pixels/sound samples).\n")
+                continue
+
+            if self.extract_cheape and active_map.engine == "halo1yelo":
+                filename = active_map.map_header.map_name + "_cheape.map"
+
+                abs_tag_path = sanitize_path(
+                    join(self.tk_tags_dir.get(), filename))
+
+                print(abs_tag_path)
+
+                try:
+                    if not exists(dirname(abs_tag_path)):
+                        os.makedirs(dirname(abs_tag_path))
+
+                    cheape = active_map.map_header.yelo_header.cheape_definitions
+                    size        = cheape.size
+                    decomp_size = cheape.decompressed_size
+
+                    active_map.map_data.seek(cheape.offset)
+                    cheape_data = active_map.map_data.read(size)
+                    with open(abs_tag_path, "wb") as f:
+                        if decomp_size and decomp_size != size:
+                            cheape_data = zlib.decompress(cheape_data)
+                        f.write(cheape_data)
+
+                except Exception:
+                    print(format_exc())
+                    print("Error ocurred while extracting cheape.map")
+
+            extract_rsrc = active_map.engine in ("halo1ce", "halo1yelo") and \
+                           self.extract_from_ce_resources.get()
+
+            map_magic = active_map.map_magic
+            tag_index = active_map.tag_index
+            tag_index_array = tag_index.tag_index
             tagslist = ""
             local_total = 0
+            convert_kwargs = dict(
+                rename_scnr_dups=self.rename_duplicates_in_scnr.get())
 
             for tag_index_ref in tag_index_refs:
+                file_path = "<Could not get filepath>"
                 try:
+                    file_path = sanitize_path("%s.%s" %
+                        (tag_index_ref.tag.tag_path,
+                         tag_index_ref.class_1.enum_name))
                     self.update()
                     if self.stop_processing:
                         break
@@ -1241,21 +1268,10 @@ class Refinery(tk.Tk):
                     # dont want to re-extract tags
                     if (tag_id, extract_mode) in extracted:
                         continue
-                    elif (self.is_indexed(tag_index_ref) and
-                          not extract_resources):
+                    elif active_map.is_indexed(tag_index_ref) and not extract_rsrc:
                         continue
                     extracted.add((tag_id, extract_mode))
-
-                    file_path = sanitize_path("%s.%s" %
-                        (tag_index_ref.tag.tag_path,
-                         tag_index_ref.class_1.enum_name))
                     abs_file_path = join(out_dir, file_path)
-
-                    meta = active_map.get_meta(tag_id, True)
-                    self.update()
-                    if not meta:
-                        print("    Could not get: %s" % file_path)
-                        continue
 
                     if tag_index_ref.class_1.enum_name in ("<INVALID>", "NONE"):
                         print(("Unknown tag class for '%s'\n" +
@@ -1270,23 +1286,21 @@ class Refinery(tk.Tk):
 
                     tag_cls = fourcc(tag_index_ref.class_1.data)
 
-                    # these might have been edited since they
-                    # were first extracted, so re-extract them
-                    if tag_cls == "scnr":
-                        active_map.scnr_meta = meta
-                    elif tag_cls == "matg":
-                        active_map.matg_meta = meta
-
                     if show_output:
                         print("%s: %s" % (extract_mode, file_path))
+
+                    meta = active_map.get_meta(tag_id, True)
                     self.update()
+                    if not meta:
+                        print("    Could not get meta")
+                        continue
 
                     if tags_list_path:
                         tagslist += "%s: %s\n" % (extract_mode, file_path)
 
                     if extract_mode == "tags":
                         meta = active_map.meta_to_tag_data(
-                            meta, tag_cls, tag_index_ref)
+                            meta, tag_cls, tag_index_ref, **convert_kwargs)
                         if not meta:
                             print("    Failed to process: %s" % file_path)
                             continue
