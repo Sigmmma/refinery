@@ -53,22 +53,24 @@ def meta_to_tag_data(self, meta, tag_cls, tag_index_ref, **kwargs):
 
 
 def load_all_resource_maps(self, maps_dir=""):
-    map_paths = {name: name for name in HALO2_MAP_TYPES[1:]}
+    map_paths = {name: None for name in HALO2_MAP_TYPES[1:]}
     if not maps_dir:
         maps_dir = dirname(self.filepath)
 
     # detect/ask for the map paths for the resource maps
     for map_name in sorted(map_paths.keys()):
-        map_path = map_paths[map_name]
-        if map_path == map_name:
-            map_path = join(maps_dir, "%s.map" % map_path)
+        if self.maps.get(map_name) is not None:
+            # map already loaded
+            continue
+
+        map_path = join(maps_dir, "%s.map" % map_name)
 
         if not exists(map_path): map_path += ".dtz"
 
         while map_path and not exists(map_path):
             map_path = askopenfilename(
                 initialdir=maps_dir,
-                title="Select the %s.map" % map_name, parent=self,
+                title="Select the %s.map" % map_name,
                 filetypes=((map_name, "*.map"),
                            (map_name, "*.map.dtz"),
                            (map_name, "*.*")))
@@ -80,14 +82,12 @@ def load_all_resource_maps(self, maps_dir=""):
 
         map_paths[map_name] = map_path
 
-    for map_name, map_path in sorted(map_paths.items()):
-        if self.maps.get(map_name) is not None:
-            # map already loaded
-            continue
-
-        print("Loading %s.map..." % map_name)
+    for map_name in sorted(map_paths.keys()):
+        map_path = map_paths[map_name]
         try:
-            type(self)(self.maps).load_map(map_path, False)
-            print("    Finished")
+            if self.maps.get(map_name) is None and map_path:
+                print("    Loading %s.map..." % map_name)
+                type(self)(self.maps).load_map(map_path, False)
+                print("        Finished")
         except Exception:
             print(format_exc())

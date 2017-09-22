@@ -8,7 +8,7 @@ from traceback import format_exc
 
 from refinery.hashcacher_window import sanitize_filename, HashcacherWindow
 from refinery.meta_window import MetaWindow
-from refinery.util import is_protected_tag, fourcc, is_reserved_tag
+from refinery.util import sanitize_path, is_protected_tag, fourcc, is_reserved_tag
 
 from mozzarilla.tools.shared_widgets import HierarchyFrame
 from reclaimer.common_descs import blam_header, QStruct
@@ -46,10 +46,11 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         if k in settings_vars:
             settings_vars[k].set(def_vars[k].get())
 
-    settings_vars["out_dir"] = def_vars.pop(
-        def_vars.get("extract_mode").get() + "_dir")
+    dir_type = def_vars.get("extract_mode").get() + "_dir"
+    if dir_type in def_vars:
+        settings_vars["out_dir"].set(def_vars[dir_type].get())
 
-    w = RefineryActionsWindow(parent, tk_vars=settings_vars, **kwargs)
+    w = RefineryActionsWindow(parent, settings=settings_vars, **kwargs)
 
     # make the parent freeze what it's doing until we're destroyed
     parent.wait_window(w)
@@ -188,16 +189,16 @@ class ExplorerHierarchyTree(HierarchyFrame):
             return
 
         app_root = self.app_root
-        def_tk_vars = {}
+        def_settings = {}
         if app_root:
-            def_tk_vars = dict(app_root.tk_vars)
+            def_settings = dict(app_root.tk_vars)
             if app_root.running:
                 return
 
         item_name = self.active_map.map_header.map_name
 
         # ask for extraction settings
-        settings = ask_extract_settings(self, def_tk_vars,
+        settings = ask_extract_settings(self, def_settings,
                                         title=item_name, renamable=False)
 
         if settings['accept_settings'].get():
@@ -213,9 +214,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
             return
 
         app_root = self.app_root
-        def_tk_vars = {}
+        def_settings = {}
         if app_root:
-            def_tk_vars = dict(app_root.tk_vars)
+            def_settings = dict(app_root.tk_vars)
             if app_root.running:
                 return
 
@@ -232,10 +233,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tag_index_ref = None
                 tag_index_refs = self._compile_list_of_selected(iid)
 
-            def_tk_vars['rename_string'] = item_name
+            def_settings['rename_string'] = item_name
 
             # ask for extraction settings
-            settings = ask_extract_settings(self, def_tk_vars, title=item_name,
+            settings = ask_extract_settings(self, def_settings, title=item_name,
                                             tag_index_ref=tag_index_ref)
 
             if settings['accept_rename'].get():
@@ -504,20 +505,20 @@ class ExplorerClassTree(ExplorerHierarchyTree):
 
         sorted_index_refs = self.sort_index_refs(sorted_index_refs)
 
-        # add all the directories before files
-        # put the directories in sorted by name
-        tag_classes = []
-        for index_ref in sorted_index_refs:
-            class_enum = index_ref[1].class_1
-            class_fcc  = fourcc(class_enum.data)
-            if class_enum.enum_name in BAD_CLASSES:     continue
-            elif tags_tree.exists(class_fcc + PATHDIV): continue
-            elif class_fcc in tag_classes:              continue
+        if self.sort_by != "name":
+            # add all the directories before files and have them sorted by name
+            tag_classes = []
+            for index_ref in sorted_index_refs:
+                class_enum = index_ref[1].class_1
+                class_fcc  = fourcc(class_enum.data)
+                if class_enum.enum_name in BAD_CLASSES:     continue
+                elif tags_tree.exists(class_fcc + PATHDIV): continue
+                elif class_fcc in tag_classes:              continue
 
-            tag_classes.append(class_fcc)
+                tag_classes.append(class_fcc)
 
-        for tag_class in sorted(tag_classes):
-            self.add_folder_path([tag_class])
+            for tag_class in sorted(tag_classes):
+                self.add_folder_path([tag_class])
 
         for index_ref in sorted_index_refs:
             tag_path, b = index_ref
@@ -542,6 +543,9 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                 tag_id += (b.id.table_index << 16)
 
             try:
+                if not self.tags_tree.exists(tag_cls + PATHDIV):
+                    self.add_folder_path([tag_cls])
+
                 cls1 = cls2 = cls3 = ""
                 if b.class_1.enum_name not in BAD_CLASSES:
                     cls1 = fourcc(b.class_1.data)
@@ -565,9 +569,9 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             return
 
         app_root = self.app_root
-        def_tk_vars = {}
+        def_settings = {}
         if app_root:
-            def_tk_vars = dict(app_root.tk_vars)
+            def_settings = dict(app_root.tk_vars)
             if app_root.running:
                 return
 
@@ -587,10 +591,10 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             title, path_string = item_name.split(PATHDIV, 1)
             if path_string:
                 title = None
-            def_tk_vars['rename_string'] = path_string
+            def_settings['rename_string'] = path_string
 
             # ask for extraction settings
-            settings = ask_extract_settings(self, def_tk_vars, title=title,
+            settings = ask_extract_settings(self, def_settings, title=title,
                                             tag_index_ref=tag_index_ref)
 
             if settings['accept_rename'].get():
@@ -668,9 +672,9 @@ class QueueTree(ExplorerHierarchyTree):
         iids = self.tags_tree.selection()
 
         if len(iids):
-            tk_vars = self.queue_info[iids[0]]
+            settings = self.queue_info[iids[0]]
             w = RefineryEditActionsWindow(
-                self, tk_vars=tk_vars, title=tk_vars.get('title'))
+                self, settings=settings, title=settings.get('title'))
             # make the parent freeze what it's doing until we're destroyed
             w.master.wait_window(self)
 
@@ -703,10 +707,10 @@ class QueueTree(ExplorerHierarchyTree):
 
 
 class RefinerySettingsWindow(tk.Toplevel):
-    tk_vars = None
+    settings = None
 
     def __init__(self, *args, **kwargs):
-        self.tk_vars = tk_vars = kwargs.pop('tk_vars', {})
+        self.settings = settings = kwargs.pop('settings', {})
         tk.Toplevel.__init__(self, *args, **kwargs)
         self.geometry("340x512")
         self.minsize(width=340, height=512)
@@ -727,10 +731,10 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "rename_duplicates_in_scnr", "fix_tag_classes",
                      "use_hashcaches", "use_heuristics",
                      "extract_cheape", "show_output", "fix_tag_index_offset"):
-            object.__setattr__(self, attr, tk_vars.get(attr, tk.IntVar(self)))
+            object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("tags_dir", "data_dir", "tags_list_path"):
-            object.__setattr__(self, attr, tk_vars.get(attr, tk.StringVar(self)))
+            object.__setattr__(self, attr, settings.get(attr, tk.StringVar(self)))
 
         self.extract_from_ce_resources_checkbutton = tk.Checkbutton(
             self.extract_frame, text="Extract from CE resource maps",
@@ -870,7 +874,7 @@ class RefinerySettingsWindow(tk.Toplevel):
 
 class RefineryActionsWindow(tk.Toplevel):
     app_root = None
-    tk_vars = None
+    settings = None
     renamable = True
     accept_rename = None
     accept_settings = None
@@ -882,7 +886,7 @@ class RefineryActionsWindow(tk.Toplevel):
     def __init__(self, *args, **kwargs):
         title = kwargs.pop('title', None)
         self.renamable = kwargs.pop('renamable', self.renamable)
-        self.tk_vars = tk_vars = kwargs.pop('tk_vars', {})
+        self.settings = settings = kwargs.pop('settings', {})
         self.tag_index_ref = kwargs.pop('tag_index_ref', self.tag_index_ref)
         tk.Toplevel.__init__(self, *args, **kwargs)
         self.bind('<Escape>', lambda e=None, s=self, *a, **kw: s.destroy())
@@ -896,12 +900,12 @@ class RefineryActionsWindow(tk.Toplevel):
         if self.app_root is None and hasattr(self.master, 'app_root'):
             self.app_root = self.master.app_root
 
-        self.accept_rename   = tk_vars.get('accept_rename', tk.IntVar(self))
-        self.accept_settings = tk_vars.get('accept_settings', tk.IntVar(self))
-        self.rename_string   = tk_vars.get('rename_string', tk.StringVar(self))
-        self.extract_to_dir  = tk_vars.get('out_dir', tk.StringVar(self))
-        self.tags_list_path  = tk_vars.get('tags_list_path', tk.StringVar(self))
-        self.extract_mode    = tk_vars.get('extract_mode', tk.StringVar(self))
+        self.accept_rename   = settings.get('accept_rename', tk.IntVar(self))
+        self.accept_settings = settings.get('accept_settings', tk.IntVar(self))
+        self.rename_string   = settings.get('rename_string', tk.StringVar(self))
+        self.extract_to_dir  = settings.get('out_dir', tk.StringVar(self))
+        self.tags_list_path  = settings.get('tags_list_path', tk.StringVar(self))
+        self.extract_mode    = settings.get('extract_mode', tk.StringVar(self))
         self.recursive_rename = tk.IntVar(self)
         self.resizable(1, 0)
 
@@ -951,13 +955,13 @@ class RefineryActionsWindow(tk.Toplevel):
         # settings
         self.recursive_checkbutton = tk.Checkbutton(
             self.settings_frame, text="Recursive extraction",
-            variable=tk_vars.get("recursive", tk.IntVar(self)))
+            variable=settings.get("recursive", tk.IntVar(self)))
         self.overwrite_checkbutton = tk.Checkbutton(
             self.settings_frame, text="Overwrite tags(not recommended)",
-            variable=tk_vars.get("overwrite", tk.IntVar(self)))
+            variable=settings.get("overwrite", tk.IntVar(self)))
         self.show_output_checkbutton = tk.Checkbutton(
             self.settings_frame, text="Print extracted tag names",
-            variable=tk_vars.get("show_output", tk.IntVar(self)))
+            variable=settings.get("show_output", tk.IntVar(self)))
 
         # accept/cancel
         self.accept_button = tk.Button(
@@ -1085,9 +1089,12 @@ class RefineryActionsWindow(tk.Toplevel):
             return
 
         try:
-            # make sure it's re-extracted
-            meta = self.app_root.active_map.get_meta(
-                index_ref.id.tag_table_index, True)
+            halo_map = self.settings.get("halo_map")
+            if halo_map is None:
+                print("Could not get map.")
+                return
+
+            meta = halo_map.get_meta(index_ref.id.tag_table_index, True)
             if meta is None:
                 print("Could not get meta.")
                 return
