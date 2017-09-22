@@ -220,6 +220,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
             if app_root.running:
                 return
 
+        map_name = self.active_map.map_header.map_name
         # add selection to queue
         for iid in tags_tree.selection():
             if len(tags_tree.item(iid, 'values')):
@@ -246,8 +247,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 settings['tag_index_refs'] = tag_index_refs
                 settings['title'] = item_name
                 self.queue_tree.add_to_queue(
-                    "%s: %s" % (settings['extract_mode'].get(),
-                                item_name), settings)
+                    "%s: map: %s: %s" % (settings['extract_mode'].get(),
+                                         map_name, item_name), settings)
 
     def rename_tag_index_refs(self, index_refs, old_basename, new_basename,
                               rename_in_other_trees=True):
@@ -575,6 +576,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             if app_root.running:
                 return
 
+        map_name = self.active_map.map_header.map_name
         # add selection to queue
         for iid in tags_tree.selection():
             if len(tags_tree.item(iid, 'values')):
@@ -608,8 +610,8 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
                 self.queue_tree.add_to_queue(
-                    "%s: %s" % (settings['extract_mode'].get(),
-                                item_name), settings)
+                    "%s: map: %s: %s" % (settings['extract_mode'].get(),
+                                         map_name, item_name), settings)
 
 
 class ExplorerHybridTree(ExplorerHierarchyTree):

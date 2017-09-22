@@ -6,7 +6,7 @@ from struct import unpack
 from tkinter.filedialog import asksaveasfilename
 from traceback import format_exc
 
-from refinery import halo1_methods, halo2_methods
+from refinery import halo1_methods, halo2_methods, data_extraction
 from refinery.util import is_protected_tag, fourcc
 from supyr_struct.buffer import BytearrayBuffer, BytesBuffer, PeekableMmap
 from supyr_struct.field_types import FieldType
@@ -92,7 +92,7 @@ def h2_to_h1_tag_index(map_header, tag_index):
 
 class HaloMap:
     map_data = None
-    map_data_cache_limit = 64
+    map_data_cache_limit = 50
     _map_cache_byte_count = 0
     _ids_of_tags_read = None
 
@@ -118,8 +118,11 @@ class HaloMap:
 
     handler = None
 
-    index_magic = 0
-    map_magic   = 0
+    index_magic = 0  # the offset that halo would load the tag index
+    #                  header at in virtual memory
+    map_magic   = 0  # used to convert pointers in a map into file offsets.
+    #                  subtract this from a pointer to convert it to an offset.
+    #                      map_magic = index_magic - index_header_offset
 
     bsp_magics  = ()
     bsp_sizes   = ()
@@ -145,6 +148,11 @@ class HaloMap:
 
     def __del__(self):
         self.unload_map(False)
+
+    def is_indexed(self, tag_id):
+        if self.engine in ("halo1ce", "halo1yelo"):
+            return bool(self.tag_index.tag_index_array[tag_id].indexed)
+        return False
 
     def basic_deprotection(self):
         if self.tag_index is None or self.is_resource:
@@ -244,9 +252,15 @@ class HaloMap:
                         title="Decompress '%s' to..." % map_name,
                         filetypes=(("mapfile", "*.map"),
                                    ("All", "*.*")))
+            if not(decomp_path.lower().endswith(".map") or
+                   isfile(decomp_path + ".map")):
+                decomp_path += ".map"
+
             print("    Decompressing to: %s" % decomp_path)
 
         map_data = decompress_map(comp_data, map_header, decomp_path)
+        if self.is_compressed:
+            print("    Decompressed")
         self.map_data = map_data
 
         if comp_data is not map_data: comp_data.close()
@@ -390,10 +404,14 @@ class Halo1Map(HaloMap):
         self.load_all_resource_maps(dirname(map_path))
         self.map_data.clear_cache()
 
-    def is_indexed(self, tag_index_ref):
-        if self.engine in ("halo1ce", "halo1yelo"):
-            return bool(tag_index_ref.indexed)
-        return False
+    def extract_tag_data(self, meta, tag_index_ref, **kw):
+        extractor = data_extraction.h1_data_extractors.get(
+            fourcc(tag_index_ref.class_1.data))
+        if extractor is None:
+            return True
+        return extractor(meta, tag_index_ref, halo_map=self,
+                         out_dir=kw['out_dir'].get(),
+                         overwrite=kw['overwrite'].get())
 
     def get_meta(self, tag_id, reextract=False):
         '''
@@ -426,8 +444,7 @@ class Halo1Map(HaloMap):
         if tag_cls is None:
             # couldn't determine the tag class
             return
-        elif self.is_indexed(tag_index_ref) and engine in ("halo1ce",
-                                                           "halo1yelo"):
+        elif self.is_indexed(tag_id):
             # tag exists in a resource cache
             tag_id = tag_index_ref.meta_offset
 
@@ -462,8 +479,8 @@ class Halo1Map(HaloMap):
             elif tag_cls == "matg" and self.matg_meta:
                 return self.matg_meta
 
-        h_desc = self.get_meta_descriptor(tag_cls)
-        h_block = [None]
+        desc = self.get_meta_descriptor(tag_cls)
+        block = [None]
         offset = tag_index_ref.meta_offset - magic
         if tag_cls == "sbsp":
             # bsps use their own magic because they are stored in
@@ -475,8 +492,8 @@ class Halo1Map(HaloMap):
         try:
             # read the meta data from the map
             FieldType.force_little()
-            h_desc['TYPE'].parser(
-                h_desc, parent=h_block, attr_index=0, magic=magic,
+            desc['TYPE'].parser(
+                desc, parent=block, attr_index=0, magic=magic,
                 tag_index=tag_index_array, rawdata=map_data, offset=offset)
             FieldType.force_normal()
         except Exception:
@@ -488,9 +505,9 @@ class Halo1Map(HaloMap):
         if self.map_cache_over_limit():
             self.clear_map_cache()
 
-        self.inject_rawdata(h_block[0], tag_cls, tag_index_ref)
+        self.inject_rawdata(block[0], tag_cls, tag_index_ref)
 
-        return h_block[0]
+        return block[0]
 
 
 class StubbsMap(Halo1Map):
@@ -632,13 +649,13 @@ class Halo1RsrcMap(Halo1Map):
                 tag_index_ref.class_1.enum_name)
 
         kwargs = dict(parsing_resource=True)
-        h_desc = self.get_meta_descriptor(tag_cls)
-        if h_desc is None or self.engine not in ("halo1ce", "halo1yelo"):
+        desc = self.get_meta_descriptor(tag_cls)
+        if desc is None or self.engine not in ("halo1ce", "halo1yelo"):
             return
         elif tag_cls != 'snd!':
             kwargs['magic'] = 0
 
-        h_block = [None]
+        block = [None]
 
         self.record_map_cache_read(tag_id, 0)  # cant get size quickly enough
         if self.map_cache_over_limit():
@@ -646,17 +663,17 @@ class Halo1RsrcMap(Halo1Map):
 
         try:
             FieldType.force_little()
-            h_desc['TYPE'].parser(
-                h_desc, parent=h_block, attr_index=0, rawdata=self.map_data,
+            desc['TYPE'].parser(
+                desc, parent=block, attr_index=0, rawdata=self.map_data,
                 tag_index=self.rsrc_header.tag_paths, tag_cls=tag_cls,
                 root_offset=tag_index_ref.meta_offset, **kwargs)
             FieldType.force_normal()
-            self.inject_rawdata(h_block[0], tag_cls, tag_index_ref)
+            self.inject_rawdata(block[0], tag_cls, tag_index_ref)
         except Exception:
             print(format_exc())
             return
 
-        return h_block[0]
+        return block[0]
 
 
 class Halo2Map(HaloMap):
@@ -691,3 +708,63 @@ class Halo2Map(HaloMap):
             self.load_all_resource_maps(dirname(map_path))
 
         self.map_data.clear_cache()
+
+    def extract_tag_data(self, meta, tag_index_ref, **kw):
+        extractor = data_extraction.h2_data_extractors.get(
+            fourcc(tag_index_ref.class_1.data))
+        if extractor is None:
+            return True
+        return extractor(meta, tag_index_ref, halo_map=self,
+                         out_dir=kw['out_dir'].get(),
+                         overwrite=kw['overwrite'].get())
+
+    def get_meta(self, tag_id, reextract=False):
+        if tag_id is None: return
+        scnr_id = self.orig_tag_index.scenario_tag_id[0]
+        matg_id = self.orig_tag_index.globals_tag_id[0]
+        tag_index_array = self.tag_index.tag_index
+        shared_map    = self.maps.get("shared")
+        sp_shared_map = self.maps.get("single_player_shared")
+
+        # if we are given a 32bit tag id, mask it off
+        tag_id &= 0xFFFF
+        if tag_id >= 10000 and shared_map is not self:
+            if shared_map is None: return
+            return shared_map.get_meta(tag_id, reextract)
+        elif tag_id >= len(tag_index_array) and sp_shared_map is not self:
+            if sp_shared_map is None: return
+            return sp_shared_map.get_meta(tag_id, reextract)
+
+        tag_index_ref = tag_index_array[tag_id]
+
+        tag_cls = None
+        if   tag_id == scnr_id: tag_cls = "scnr"
+        elif tag_id == matg_id: tag_cls = "matg"
+        elif tag_index_ref.class_1.enum_name not in ("<INVALID>", "NONE"):
+            tag_cls = fourcc(tag_index_ref.class_1.data)
+
+        desc = self.get_meta_descriptor(tag_cls)
+        if desc is None or tag_cls is None:        return
+        elif reextract:                            pass
+        elif tag_id == scnr_id and self.scnr_meta: return self.scnr_meta
+        elif tag_id == matg_id and self.matg_meta: return self.matg_meta
+
+        block = [None]
+        offset = tag_index_ref.meta_offset - self.map_magic
+
+        try:
+            # read the meta data from the map
+            desc['TYPE'].parser(
+                desc, parent=block, attr_index=0, magic=self.map_magic,
+                tag_index=tag_index_array, rawdata=self.map_data, offset=offset)
+        except Exception:
+            print(format_exc())
+            return
+
+        self.record_map_cache_read(tag_id, 0)  # cant get size quickly enough
+        if self.map_cache_over_limit():
+            self.clear_map_cache()
+
+        self.inject_rawdata(block[0], tag_cls, tag_index_ref)
+
+        return block[0]
