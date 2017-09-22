@@ -20,6 +20,22 @@ __all__ = (
     )
 
 
+def inject_sound_data(map_data, rsrc_data, rawdata_ref, map_magic):
+    if not rawdata_ref.size :
+        rawdata_ref.data = b''
+        return
+
+    if rawdata_ref.flags.data_in_resource_map:
+        data, ptr = rsrc_data, rawdata_ref.raw_pointer
+    elif rawdata_ref.pointer == 0:
+        data, ptr = map_data, rawdata_ref.raw_pointer
+    else:
+        data, ptr = map_data, rawdata_ref.pointer + map_magic
+
+    data.seek(ptr)
+    rawdata_ref.data = data.read(rawdata_ref.size)
+
+
 def inject_rawdata(self, meta, tag_cls, tag_index_ref):
     bitmaps = self.maps.get("bitmaps")
     sounds  = self.maps.get("sounds")
@@ -95,58 +111,28 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
         is_ce = engine in ("halo1ce", "halo1yelo")
         if not (is_pc or is_ce):
             return meta
+        elif sound_data is None:
+            return
 
         # ce tagpaths are in the format:  path__permutations
         #     ex: sound\sfx\impulse\coolant\enter_water__permutations
         #
         # pc tagpaths are in the format:  path__pitch_range__permutation
         #     ex: sound\sfx\impulse\coolant\enter_water__0__0
-
-        # why do ce and pc have to store shit so differently.
-        other_data = sound_data
+        other_data = map_data
+        sound_magic = 0 - magic
         if is_pc:
-            sound_magic = 0 - magic
-            other_data = map_data
-        elif not self.is_resource:
-            if sounds is None: return
-
-            sound_map = self.ce_sound_indexes_by_path
-            tag_path  = tag_index_ref.tag.tag_path
-            if sound_map is None or tag_path not in sound_map:
-                return
-
-            rsrc_tag_head = sounds.rsrc_header.tag_headers[sound_map[tag_path]]
-            sound_magic = rsrc_tag_head.offset + meta.get_size()
-        else:
+            pass
+        elif self.is_resource:
+            other_data = sound_data
             sound_magic = tag_index_ref.meta_offset + meta.get_size()
+        elif sounds is None:
+            return
 
         for pitches in meta.pitch_ranges.STEPTREE:
             for perm in pitches.permutations.STEPTREE:
-                samples = perm.samples
-                mouth_data = perm.mouth_data
-                subtitle_data = perm.subtitle_data
-
-                if is_ce and not samples.flags.data_in_resource_map:
-                    continue
-                elif sound_data is None: return
-
-                if samples.size:
-                    sound_data.seek(samples.raw_pointer)
-                    samples.data = sound_data.read(samples.size)
-                else:
-                    samples.data = b''
-
-                if mouth_data.size:
-                    other_data.seek(mouth_data.pointer + sound_magic)
-                    mouth_data.data = other_data.read(mouth_data.size)
-                else:
-                    mouth_data.data = b''
-
-                if subtitle_data.size:
-                    other_data.seek(subtitle_data.pointer + sound_magic)
-                    subtitle_data.data = other_data.read(subtitle_data.size)
-                else:
-                    subtitle_data.data = b''
+                for b in (perm.samples, perm.mouth_data, perm.subtitle_data):
+                    inject_sound_data(other_data, sound_data, b, sound_magic)
 
     elif tag_cls == "ustr":
         # might need to grab string data from resource map
@@ -590,20 +576,25 @@ def load_all_resource_maps(self, maps_dir=""):
     if not maps_dir:
         maps_dir = dirname(self.filepath)
 
-    map_paths = {i:i for i in ("bitmaps", "sounds")}
+    map_paths = {name: None for name in ("bitmaps", "sounds")}
     if self.engine in ("halo1ce", "halo1yelo"):
-        map_paths['loc'] = "loc"
+        map_paths['loc'] = None
 
     # detect/ask for the map paths for the resource maps
     for map_name in sorted(map_paths.keys()):
-        map_path = map_paths[map_name]
-        if map_path == map_name:
-            map_path = join(maps_dir, "%s.map" % map_path)
+        if self.maps.get(map_name) is not None:
+            # map already loaded
+            continue
+
+        yelo_map_path = join(maps_dir, "-%s.map" % map_name)
+        map_path      = join(maps_dir, "%s.map" % map_name)
+
+        if exists(yelo_map_path): map_path = yelo_map_path
 
         while map_path and not exists(map_path):
             map_path = askopenfilename(
                 initialdir=maps_dir,
-                title="Select the %s.map" % map_name, parent=self,
+                title="Select the %s.map" % map_name,
                 filetypes=(("%s.map" % map_name, "*.map"), ("All", "*.*")))
 
             if map_path:
@@ -614,11 +605,12 @@ def load_all_resource_maps(self, maps_dir=""):
         map_paths[map_name] = map_path
 
     for map_name in sorted(map_paths.keys()):
+        map_path = map_paths[map_name]
         try:
-            if self.maps.get(map_name) is None:
-                print("Loading %s.map..." % map_name)
-                self.load_resource_map(map_paths[map_name])
-                print("    Finished")
+            if self.maps.get(map_name) is None and map_path:
+                print("    Loading %s.map..." % map_name)
+                self.load_resource_map(map_path)
+                print("        Finished")
 
             if map_name == "sounds" and self.engine in ("halo1ce", "halo1yelo"):
                 # ce resource sounds are recognized by tag_path
