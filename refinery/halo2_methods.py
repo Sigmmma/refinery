@@ -1,3 +1,4 @@
+from arbytmap import Arbytmap
 import zlib
 
 from math import pi, sqrt
@@ -20,7 +21,7 @@ __all__ = (
     )
 
 # DO NOT CHANGE THE ORDER OF THESE
-HALO2_MAP_TYPES = ("active", "mainmenu", "shared", "single_player_shared")
+HALO2_MAP_TYPES = ("local", "mainmenu", "shared", "single_player_shared")
 
 
 def split_raw_pointer(ptr):
@@ -32,23 +33,56 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
     if tag_cls == "bitm":
         # grab bitmap data correctly from map
         new_pixels = BytearrayBuffer()
+        pix_off = 0
 
         for bitmap in meta.bitmaps.STEPTREE:
             # grab the bitmap data from the correct map
-            ptr, map_name = split_raw_pointer(bitmap.lod1_offset)
-            map_data = self.maps[map_name].map_data
-            if map_data is None:
-                # couldn't get pixels from the map
-                return
+            bitmap.pixels_offset = pix_off
 
-            map_data.seek(ptr)
-            new_pixels += zlib.decompressobj().decompress(
-                map_data.read(bitmap.lod1_size))
+            ptr, map_name = split_raw_pointer(bitmap.lod1_offset)
+            halo_map = self
+            if map_name != "local":
+                halo_map = self.maps.get(map_name)
+
+            if halo_map is None:
+                bitmap.lod1_size = 0
+                continue
+
+            halo_map.map_data.seek(ptr)
+            mip_pixels = zlib.decompress(
+                halo_map.map_data.read(bitmap.lod1_size))
+            new_pixels += mip_pixels
+            bitmap.lod1_size = len(mip_pixels)
+            pix_off += bitmap.lod1_size
 
         meta.processed_pixel_data.STEPTREE = new_pixels
 
 
 def meta_to_tag_data(self, meta, tag_cls, tag_index_ref, **kwargs):
+    engine     = self.engine
+    tag_index  = self.tag_index
+
+    if tag_cls == "bitm":
+        # set the size of the compressed plate data to nothing
+        meta.compressed_color_plate_data.STEPTREE = BytearrayBuffer()
+
+        # to enable compatibility with my bitmap converter we'll set the
+        # base address to a certain constant based on the console platform
+        is_xbox = engine in ("halo2xbox", )
+        new_pixels_offset = 0
+
+        # uncheck the prefer_low_detail flag and
+        # set up the lod1_offset correctly.
+        for bitmap in meta.bitmaps.STEPTREE:
+            bitmap.flags.prefer_low_detail = is_xbox
+            bitmap.lod1_offset = new_pixels_offset
+            new_pixels_offset += bitmap.lod1_size
+
+            bitmap.lod2_offset = bitmap.lod3_offset = bitmap.lod4_offset =\
+                                 bitmap.lod5_offset = bitmap.lod6_offset = 0
+            bitmap.lod2_size = bitmap.lod3_size = bitmap.lod4_size =\
+                               bitmap.lod5_size = bitmap.lod6_size = 0
+
     return meta
 
 

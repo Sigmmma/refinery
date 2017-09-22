@@ -30,7 +30,7 @@ if print_startup:
     print("    Importing refinery modules")
 
 from refinery.class_repair import class_repair_functions, class_bytes_by_fcc
-from refinery.data_extraction import VALID_H1_DATA_TAGS, VALID_H2_DATA_TAGS
+from refinery.data_extraction import h1_data_extractors, h2_data_extractors
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, ExplorerHierarchyTree, ExplorerClassTree,\
      ExplorerHybridTree
@@ -485,9 +485,9 @@ class Refinery(tk.Tk):
             next_mode = "tags"
             engine = self.active_map.engine
             if   "halo1" in engine or "stubbs" in engine:
-                valid_classes = VALID_H1_DATA_TAGS
+                valid_classes = h1_data_extractors.keys()
             elif "halo2" in engine:
-                valid_classes = VALID_H2_DATA_TAGS
+                valid_classes = h2_data_extractors.keys()
             else:
                 return
 
@@ -748,9 +748,9 @@ class Refinery(tk.Tk):
                 header     = active_map.map_header
                 index      = active_map.tag_index
                 orig_index = active_map.orig_tag_index
-                decomp_size = "uncompressed"
-                if active_map.is_compressed:
-                    decomp_size = len(active_map.map_data)
+                decomp_size = str(len(active_map.map_data))
+                if not active_map.is_compressed:
+                    decomp_size += "(uncompressed)"
 
                 map_type = header.map_type.enum_name
                 if active_map.is_resource: map_type = "resource cache"
@@ -771,6 +771,12 @@ class Refinery(tk.Tk):
                     "    index header offset == %s\n") %
                 (active_map.engine, header.map_name, header.build_date,
                  map_type, decomp_size, header.tag_index_header_offset))
+
+                string += ((
+                    "\nCalculated information:\n" +
+                    "    index magic    == %s\n" +
+                    "    map magic      == %s\n") %
+                (active_map.index_magic, active_map.map_magic))
 
                 tag_index_offset = index.tag_index_offset
                 if "halo2" in active_map.engine:
@@ -807,12 +813,6 @@ class Refinery(tk.Tk):
                      orig_index.root_tags_count,
                      tag_index_offset - active_map.map_magic))
                 else:
-                    string += ((
-                        "\nCalculated information:\n" +
-                        "    index magic    == %s\n" +
-                        "    map magic      == %s\n") %
-                    (active_map.index_magic, active_map.map_magic))
-
                     string += ((
                         "\nTag index:\n" +
                         "    tag count           == %s\n" +
@@ -1256,6 +1256,8 @@ class Refinery(tk.Tk):
                 extract_mode   = info['extract_mode'].get()
                 tags_list_path = info['tags_list_path'].get()
                 map_name = curr_map.map_header.map_name
+                is_halo1_tag = ("halo1" in curr_map.engine or
+                                "stubbs" in curr_map.engine)
             except Exception:
                 print(format_exc())
                 continue
@@ -1326,7 +1328,7 @@ class Refinery(tk.Tk):
                     # dont want to re-extract tags
                     if (tag_id, extract_mode) in extracted:
                         continue
-                    elif curr_map.is_indexed(tag_index_ref) and not extract_rsrc:
+                    elif curr_map.is_indexed(tag_id) and not extract_rsrc:
                         continue
                     extracted.add((tag_id, extract_mode))
                     abs_file_path = join(out_dir, file_path)
@@ -1356,26 +1358,36 @@ class Refinery(tk.Tk):
                     if tags_list_path:
                         tagslist += "%s: %s\n" % (extract_mode, file_path)
 
-                    if extract_mode == "tags":
-                        meta = curr_map.meta_to_tag_data(
-                            meta, tag_cls, tag_index_ref, **convert_kwargs)
-                        if not meta:
-                            print("    Failed to process: %s" % file_path)
-                            continue
+                    meta = curr_map.meta_to_tag_data(
+                        meta, tag_cls, tag_index_ref, **convert_kwargs)
+                    if not meta:
+                        print("    Failed to convert meta to tag")
+                        continue
 
+                    if extract_mode == "tags":
                         if not exists(dirname(abs_file_path)):
                             os.makedirs(dirname(abs_file_path))
 
-                        FieldType.force_big()
+                        if is_halo1_tag: FieldType.force_big()
                         with open(abs_file_path, "wb") as f:
                             try:
                                 f.write(curr_map.tag_headers[tag_cls])
                                 f.write(meta.serialize(calc_pointers=False))
                             except Exception:
                                 print(format_exc())
+                                print("    Failed to serialize tag")
                                 continue
                     elif extract_mode == "data":
-                        curr_map.extract_tag_data(info, meta, tag_index_ref)
+                        try:
+                            result = curr_map.extract_tag_data(
+                                meta, tag_index_ref, **info)
+                        except Exception:
+                            print(format_exc())
+                            result = True
+
+                        if result:
+                            print("    Failed to extract data")
+                            continue
                     else:
                         continue
 

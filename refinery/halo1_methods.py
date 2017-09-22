@@ -189,14 +189,10 @@ def meta_to_tag_data(self, meta, tag_cls, tag_index_ref, **kwargs):
 
         # to enable compatibility with my bitmap converter we'll set the
         # base address to a certain constant based on the console platform
-        if engine in ("halo1xbox", "stubbs"):
-            for bitmap in meta.bitmaps.STEPTREE:
-                bitmap.base_address = 1073751810
-        else:
-            for bitmap in meta.bitmaps.STEPTREE:
-                bitmap.base_address = 0
+        is_xbox = engine in ("halo1xbox", "stubbs")
+        for bitmap in meta.bitmaps.STEPTREE:
+            bitmap.base_address = 1073751810 * is_xbox
 
-        is_xbox = "xbox" in engine or engine == "stubbs"
         new_pixels_offset = 0
 
         # uncheck the prefer_low_detail flag and
