@@ -13,19 +13,12 @@ from supyr_struct.defs.util import *
 from supyr_struct.field_types import FieldType
 
 from refinery.byteswapping import raw_block_def
+from refinery.util_h2 import HALO2_MAP_TYPES
 
 
 __all__ = (
     "inject_rawdata", "meta_to_tag_data", "load_all_resource_maps",
-    "HALO2_MAP_TYPES"
     )
-
-# DO NOT CHANGE THE ORDER OF THESE
-HALO2_MAP_TYPES = ("local", "mainmenu", "shared", "single_player_shared")
-
-
-def split_raw_pointer(ptr):
-    return ptr & 0x3FffFFff, HALO2_MAP_TYPES[(ptr>>30)&3]
 
 
 def inject_rawdata(self, meta, tag_cls, tag_index_ref):
@@ -121,7 +114,7 @@ def load_all_resource_maps(self, maps_dir=""):
         try:
             if self.maps.get(map_name) is None and map_path:
                 print("    Loading %s.map..." % map_name)
-                type(self)(self.maps).load_map(map_path, False)
+                type(self)(self.maps).load_map(map_path, will_be_active=False)
                 print("        Finished")
         except Exception:
             print(format_exc())

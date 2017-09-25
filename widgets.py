@@ -35,6 +35,7 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
     settings_vars = dict(
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
         show_output=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
+        autoload_resources=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), tags_list_path=tk.StringVar(parent)
@@ -714,8 +715,8 @@ class RefinerySettingsWindow(tk.Toplevel):
     def __init__(self, *args, **kwargs):
         self.settings = settings = kwargs.pop('settings', {})
         tk.Toplevel.__init__(self, *args, **kwargs)
-        self.geometry("340x512")
-        self.minsize(width=340, height=512)
+        self.geometry("340x500")
+        self.minsize(width=340, height=500)
         self.resizable(1, 0)
         self.title("Settings")
 
@@ -732,6 +733,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         for attr in ("extract_from_ce_resources", "overwrite",
                      "rename_duplicates_in_scnr", "fix_tag_classes",
                      "use_hashcaches", "use_heuristics",
+                     "autoload_resources",
                      "extract_cheape", "show_output", "fix_tag_index_offset"):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
@@ -741,6 +743,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.extract_from_ce_resources_checkbutton = tk.Checkbutton(
             self.extract_frame, text="Extract from CE resource maps",
             variable=self.extract_from_ce_resources)
+        self.autoload_resources_checkbutton = tk.Checkbutton(
+            self.extract_frame, text="Autoload resource maps",
+            variable=self.autoload_resources)
         self.rename_duplicates_in_scnr_checkbutton = tk.Checkbutton(
             self.extract_frame, text=(
                 "Rename duplicate camera points, cutscene\n"+
@@ -804,6 +809,7 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         self.extract_from_ce_resources_checkbutton.pack(padx=4, anchor='w')
         self.rename_duplicates_in_scnr_checkbutton.pack(padx=4, anchor='w')
+        self.autoload_resources_checkbutton.pack(padx=4, anchor='w')
         self.overwrite_checkbutton.pack(padx=4, anchor='w')
         self.show_output_checkbutton.pack(padx=4, anchor='w')
 

@@ -8,6 +8,7 @@ from traceback import format_exc
 
 from refinery import halo1_methods, halo2_methods, data_extraction
 from refinery.util import is_protected_tag, fourcc
+from refinery.util_h2 import HALO2_MAP_TYPES
 from supyr_struct.buffer import BytearrayBuffer, BytesBuffer, PeekableMmap
 from supyr_struct.field_types import FieldType
 from supyr_struct.defs.frozen_dict import FrozenDict
@@ -34,6 +35,7 @@ from reclaimer.stubbs.defs.coll import fast_coll_def as stubbs_fast_coll_def
 from reclaimer.stubbs.handler   import StubbsHandler
 from reclaimer.h2.defs.bitm import bitm_meta_def as h2_bitm_meta_def
 from reclaimer.h2.defs.snd_ import snd__meta_def as h2_snd__meta_def
+from reclaimer.h2.defs.ugh_ import ugh__meta_def as h2_ugh__meta_def
 
 
 __all__ = ("HaloMap", "StubbsMap", "Halo1Map", "Halo1RsrcMap", "Halo2Map")
@@ -150,9 +152,9 @@ class HaloMap:
         self.unload_map(False)
 
     def is_indexed(self, tag_id):
-        if self.engine in ("halo1ce", "halo1yelo"):
-            return bool(self.tag_index.tag_index_array[tag_id].indexed)
-        return False
+        #if self.engine in ("halo1ce", "halo1yelo"):
+        return bool(self.tag_index.tag_index[tag_id].indexed)
+        #return False
 
     def basic_deprotection(self):
         if self.tag_index is None or self.is_resource:
@@ -223,7 +225,9 @@ class HaloMap:
     def load_all_resource_maps(self, maps_dir=""):
         pass
 
-    def load_map(self, map_path, will_be_active=True):
+    def load_map(self, map_path, **kwargs):
+        will_be_active = kwargs.get("will_be_active", True)
+
         with open(map_path, 'rb+') as f:
             comp_data = PeekableMmap(f.fileno(), 0)
 
@@ -343,10 +347,11 @@ class Halo1Map(HaloMap):
         self.defs["gelc"] = gelc_def
 
     def load_resource_map(self, map_path):
-        Halo1RsrcMap(self.maps).load_map(map_path, False)
+        Halo1RsrcMap(self.maps).load_map(map_path, will_be_active=False)
 
-    def load_map(self, map_path, will_be_active=True):
-        HaloMap.load_map(self, map_path, will_be_active)
+    def load_map(self, map_path, **kwargs):
+        autoload_resources = kwargs.get("autoload_resources", True)
+        HaloMap.load_map(self, map_path, **kwargs)
 
         tag_index = self.tag_index
         tag_index_array = tag_index.tag_index
@@ -401,7 +406,8 @@ class Halo1Map(HaloMap):
             print(format_exc())
             print("Could not read globals tag")
 
-        self.load_all_resource_maps(dirname(map_path))
+        if autoload_resources:
+            self.load_all_resource_maps(dirname(map_path))
         self.map_data.clear_cache()
 
     def extract_tag_data(self, meta, tag_index_ref, **kw):
@@ -568,12 +574,12 @@ class Halo1RsrcMap(Halo1Map):
             "font": font_def, "hmt ": hmt__def, "ustr": ustr_def
             }
 
-    def load_map(self, map_path, will_be_active=True):
+    def load_map(self, map_path, **kwargs):
+        will_be_active = kwargs.get("will_be_active", True)
         with open(map_path, 'rb+') as f:
             map_data = PeekableMmap(f.fileno(), 0)
 
         resource_type = unpack("<I", map_data.read(4))[0]; map_data.seek(0)
-
         rsrc_head = resource_def.build(rawdata=map_data)
 
         # check if this is a pc or ce cache. cant rip pc ones
@@ -677,6 +683,8 @@ class Halo1RsrcMap(Halo1Map):
 
 
 class Halo2Map(HaloMap):
+    ugh__meta = None
+
     def __init__(self, maps=None):
         HaloMap.__init__(self, maps)
 
@@ -686,7 +694,8 @@ class Halo2Map(HaloMap):
 
     def setup_defs(self):
         self.defs = {
-            "bitm": h2_bitm_meta_def, "snd!": h2_snd__meta_def,
+            "bitm": h2_bitm_meta_def,
+            "snd!": h2_snd__meta_def, "ugh!": h2_ugh__meta_def,
             }
 
     def get_meta_descriptor(self, tag_cls):
@@ -694,8 +703,10 @@ class Halo2Map(HaloMap):
         if tagdef is not None:
             return tagdef.descriptor
 
-    def load_map(self, map_path, will_be_active=True):
-        HaloMap.load_map(self, map_path, will_be_active)
+    def load_map(self, map_path, **kwargs):
+        autoload_resources = kwargs.get("autoload_resources", True)
+        will_be_active = kwargs.get("will_be_active", True)
+        HaloMap.load_map(self, map_path, **kwargs)
         tag_index = self.tag_index
         self.tag_index = h2_to_h1_tag_index(self.map_header, tag_index)
 
@@ -704,7 +715,22 @@ class Halo2Map(HaloMap):
             self.is_resource = True
             self.maps[halo2_methods.HALO2_MAP_TYPES[map_type]] = self
 
-        if will_be_active or not self.is_resource:
+        # get the sound_cache_file_gestalt meta
+        try:
+            ugh__id = None
+            for b in self.tag_index.tag_index:
+                if fourcc(b.class_1.data) == "ugh!":
+                    ugh__id = b.id.tag_table_index
+                    break
+
+            self.ugh__meta = self.get_meta(ugh__id)
+            if self.ugh__meta is None:
+                print("Could not read sound_cache_file_gestalt tag")
+        except Exception:
+            print(format_exc())
+            print("Could not read sound_cache_file_gestalt tag")
+
+        if autoload_resources and (will_be_active or not self.is_resource):
             self.load_all_resource_maps(dirname(map_path))
 
         self.map_data.clear_cache()
@@ -748,6 +774,7 @@ class Halo2Map(HaloMap):
         elif reextract:                            pass
         elif tag_id == scnr_id and self.scnr_meta: return self.scnr_meta
         elif tag_id == matg_id and self.matg_meta: return self.matg_meta
+        elif tag_cls == "ugh!" and self.ugh__meta: return self.ugh__meta
 
         block = [None]
         offset = tag_index_ref.meta_offset - self.map_magic
@@ -766,5 +793,7 @@ class Halo2Map(HaloMap):
             self.clear_map_cache()
 
         self.inject_rawdata(block[0], tag_cls, tag_index_ref)
+        if tag_cls == "ugh!":
+            self.ugh__meta = block[0]
 
         return block[0]
