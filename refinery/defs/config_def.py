@@ -17,6 +17,7 @@ config_header = Struct("header",
             ),
         Bit("debug_mode"),
         Bit("show_output"),
+        Bit("autoload_resources"),
         SIZE=4
         ),
     Bool32("extraction_flags",

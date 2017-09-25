@@ -53,7 +53,7 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
     try:   loc_data = loc.map_data
     except Exception: loc_data = None
 
-    is_not_indexed = not self.is_indexed(tag_index_ref)
+    is_not_indexed = not self.is_indexed(tag_index_ref.id[0])
     might_be_in_rsrc = engine in ("halo1pc", "halo1pcdemo",
                                   "halo1ce", "halo1yelo")
     might_be_in_rsrc &= not self.is_resource

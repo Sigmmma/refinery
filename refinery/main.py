@@ -71,7 +71,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 4, 0)
+    version = (1, 4, 1)
 
     data_extract_window = None
     settings_window     = None
@@ -118,6 +118,7 @@ class Refinery(tk.Tk):
         self.rename_duplicates_in_scnr = tk.IntVar(self)
         self.overwrite = tk.IntVar(self)
         self.recursive = tk.IntVar(self)
+        self.autoload_resources = tk.IntVar(self, 1)
         self.show_output = tk.IntVar(self, 1)
 
         self.tk_vars = dict(
@@ -130,6 +131,7 @@ class Refinery(tk.Tk):
             overwrite=self.overwrite,
             extract_cheape=self.extract_cheape,
             recursive=self.recursive,
+            autoload_resources=self.autoload_resources,
             show_output=self.show_output,
             tags_dir=self.tk_tags_dir,
             data_dir=self.tk_data_dir,
@@ -345,7 +347,7 @@ class Refinery(tk.Tk):
 
         flags = header.flags
         self._display_mode = flags.display_mode.enum_name
-        for attr_name in ("show_output", ):
+        for attr_name in ("show_output", "autoload_resources"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         flags = header.extraction_flags
@@ -387,7 +389,7 @@ class Refinery(tk.Tk):
         
         flags = header.flags
         flags.display_mode.set_to(self._display_mode)
-        for attr_name in ("show_output", ):
+        for attr_name in ("show_output", "autoload_resources"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         flags = header.extraction_flags
@@ -634,14 +636,17 @@ class Refinery(tk.Tk):
 
         self._running = True
         try:
+            print("Loading resource maps for: %s" % halo_map.map_header.map_name)
             halo_map.load_all_resource_maps()
+            self.rebuild_map_select_menu()
         except Exception:
             print(format_exc())
 
         self._running = False
 
     def load_map(self, map_path, will_be_active=True):
-        self.load_maps(self, (map_path, ), will_be_active)
+        self.load_maps(self, (map_path, ), will_be_active=will_be_active,
+                       autoload_resources=self.autoload_resources.get())
 
     def load_maps(self, map_paths, will_be_active=True):
         if self.running or not map_paths:
@@ -693,7 +698,8 @@ class Refinery(tk.Tk):
                         continue
 
                     new_map.app = self
-                    new_map.load_map(map_path, will_be_active)
+                    new_map.load_map(map_path, will_be_active=will_be_active,
+                                     autoload_resources=self.autoload_resources.get())
                     if will_be_active and not new_active_map:
                         new_active_map = map_name
                         self.tk_active_map_name.set(map_name)
@@ -1212,7 +1218,7 @@ class Refinery(tk.Tk):
         if reload_after_saving:
             print("Reloading map to apply changes...")
             if save_path:
-                self.load_map(save_path, True)
+                self.load_map(save_path, will_be_active=True)
             else:
                 self.unload_maps()
 
@@ -1239,13 +1245,16 @@ class Refinery(tk.Tk):
         cheapes_extracted = set()
         last_map_name = None
 
-        for iid in queue_items:
+        for iid in tuple(queue_items):
             if self.stop_processing:
                 print("Extraction stopped by user\n")
                 break
 
             try:
-                info = queue_info[iid]
+                info = queue_info.get(iid)
+                if not info:
+                    # item was removed during processing
+                    continue
                 curr_map       = info['halo_map']
                 tag_index_refs = info['tag_index_refs']
 
