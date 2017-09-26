@@ -29,7 +29,7 @@ from supyr_struct.defs.audio.wav import wav_def
 from supyr_struct.field_types import FieldType
 from refinery.util import is_protected_tag, fourcc, is_reserved_tag
 from refinery.util_h2 import *
-from refinery.adpcm import decode_adpcm_samples
+from reclaimer.adpcm import decode_adpcm_samples
 from reclaimer.hek.defs.objs.p8_palette import load_palette
 
 #load the palette for p-8 bump maps
@@ -50,6 +50,9 @@ def save_sound_perms(permlist, filepath_base, sample_rate,
     for i in range(len(permlist)):
         encoding, samples = permlist[i]
         filepath = filepath_base
+        if not samples:
+            continue
+
         if len(permlist) > 1: filepath += "__%s" % i
 
         if encoding in ("ogg", "wma"):
@@ -84,11 +87,13 @@ def save_sound_perms(permlist, filepath_base, sample_rate,
                                   wav_fmt.bits_per_sample *
                                   wav_fmt.channels) // 8)
 
+            samples_len = len(samples)
             if "adpcm" in encoding and decode_adpcm:
                 samples = decode_adpcm_samples(samples, channels)
 
                 wav_fmt.fmt.set_to('pcm')
                 wav_fmt.block_align = 2 * wav_fmt.channels
+                samples_len = len(samples) * 2  # UInt16 array, not bytes
             elif encoding == "none":
                 wav_fmt.fmt.set_to('pcm')
                 wav_fmt.block_align = 2 * wav_fmt.channels
@@ -97,14 +102,16 @@ def save_sound_perms(permlist, filepath_base, sample_rate,
                 wav_fmt.block_align = 36 * wav_fmt.channels
 
             wav_file.data.wav_data.audio_data = samples
-            wav_file.data.wav_header.filesize = wav_file.data.binsize - 12
+            wav_file.data.wav_data.audio_data_size = samples_len
+            wav_file.data.wav_header.filesize = 36 + samples_len
 
             wav_file.serialize(temp=False, backup=False)
 
 
 def extract_h1_sounds(meta, tag_index_ref, **kw):
     halo_map = kw['halo_map']
-    overwrite = kw['overwrite']
+    overwrite = kw.get('overwrite', True)
+    decode_adpcm = kw.get('decode_adpcm', True)
     tagpath_base = join(kw['out_dir'], tag_index_ref.tag.tag_path)
     pitch_ranges = meta.pitch_ranges.STEPTREE
     same_pr_names = {}
@@ -175,8 +182,8 @@ def extract_h1_sounds(meta, tag_index_ref, **kw):
 
 
         for name, permlist in merged_permlists.items():
-            save_sound_perms(permlist, permpath_base,
-                             sample_rate, channels, overwrite)
+            save_sound_perms(permlist, join(pitchpath_base, name),
+                             sample_rate, channels, overwrite, decode_adpcm)
 
 
 def get_sound_name(string_ids, import_names, index):
@@ -187,16 +194,14 @@ def get_sound_name(string_ids, import_names, index):
 
 def extract_h2_sounds(meta, tag_index_ref, **kw):
     halo_map = kw['halo_map']
-    overwrite = kw['overwrite']
+    overwrite = kw.get('overwrite', True)
+    decode_adpcm = kw.get('decode_adpcm', True)
     tagpath_base = join(kw['out_dir'], tag_index_ref.tag.tag_path)
     string_ids = halo_map.map_header.strings.string_id_table
 
     ugh__meta = halo_map.ugh__meta
     if ugh__meta is None:
         return True
-    elif meta.encoding.enum_name == "codec":
-        print("    USES CODEC")
-        return
 
     import_names = ugh__meta.import_names.STEPTREE
     pitch_ranges = ugh__meta.pitch_ranges.STEPTREE
@@ -208,6 +213,35 @@ def extract_h2_sounds(meta, tag_index_ref, **kw):
     channels    = {0: 1,     1: 2,     2: 6    }.get(meta.encoding.data)
     sample_rate = {0: 22050, 1: 44100, 2: 32000}.get(meta.sample_rate.data)
     compression = meta.compression.enum_name
+
+    if meta.encoding.enum_name == "codec":
+        print("    CANNOT YET EXTRACT THIS FORMAT.")
+        '''
+        The codec format seems to be encoded with wmaudio2.
+
+        Bytes:
+            0-31
+                Two nearly identical GUIDs, with the second one specifying in
+                its first 2 bytes that the audio data is encoded with wmaudio2.
+            32-39
+                Unknown, but always seems to be 01 00 00 00  00 00 00 00
+            40-43
+                Number of blocks of data(same value found in the header below)
+            44-55
+                Unknown, but I think it always seems to be the same.
+            56-87
+                wav_format header struct. sig is "ZYU\x00" instead of "fmt ",
+                length is 28 instead of 20, and fmt is(always?) 0x0161,
+                which is the format code for wmaudio2.
+                channels, sample_rate, byte_rate, block_align, and
+                bits_per_sample all seem to be set properly. the value
+                for block_align is the same as bytes 40-43
+            88-91
+                Unknown. Might be something to specify the data length?
+
+            Everything after this appears to be audio data.
+        '''
+        return
 
     pr_index = meta.pitch_range_index
     pr_count = min(meta.pitch_range_count, len(pitch_ranges) - pr_index)
@@ -260,7 +294,7 @@ def extract_h2_sounds(meta, tag_index_ref, **kw):
                 merged_data += this_map.map_data.read(size)
 
             save_sound_perms([(compression, merged_data)], permpath_base,
-                             sample_rate, channels, overwrite)
+                             sample_rate, channels, overwrite, decode_adpcm)
 
 
 def extract_bitmaps(meta, tag_index_ref, **kw):
@@ -300,7 +334,7 @@ def extract_bitmaps(meta, tag_index_ref, **kw):
         tex_infos.append(tex_info)
 
         if fmt in ("a8", "y8", "ay8", "p8"):
-            tex_info["format"] = {"a8": FORMAT_A8,   "y8": FORMAT_Y8,
+            tex_info["format"] = {"a8":  FORMAT_A8,  "y8": FORMAT_Y8,
                                   "ay8": FORMAT_AY8, "p8": FORMAT_A8}[fmt]
         elif fmt == "p8-bump":
             tex_info.update(

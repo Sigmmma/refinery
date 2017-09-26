@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 
 from os.path import dirname, basename, splitext
 from supyr_struct.defs.constants import *
@@ -26,7 +27,7 @@ meta_tag_def = TagDef("meta tag",
     )
 
 TREE_SORT_METHODS = {0: "name", 4:"pointer", 5:"pointer", 6:"index_id"}
-BAD_CLASSES = ("<INVALID>", "NONE")
+BAD_CLASSES = set(("<INVALID>", "NONE"))
 
 def ask_extract_settings(parent, def_vars=None, **kwargs):
     if def_vars is None:
@@ -35,7 +36,7 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
     settings_vars = dict(
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
         show_output=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
-        autoload_resources=tk.IntVar(parent),
+        autoload_resources=tk.IntVar(parent), decode_adpcm=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), tags_list_path=tk.StringVar(parent)
@@ -186,7 +187,14 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
     def activate_all(self, e=None):
         tags_tree = self.tags_tree
+        if self.active_map is None:
+            return
+
+        engine = self.active_map.engine
         if self.queue_tree is None:
+            return
+        elif "halo2" in engine and engine != "halo2vista":
+            print("Cannot interact with Halo 2 Xbox maps.")
             return
 
         app_root = self.app_root
@@ -211,7 +219,14 @@ class ExplorerHierarchyTree(HierarchyFrame):
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
+        if self.active_map is None:
+            return
+
+        engine = self.active_map.engine
         if self.queue_tree is None:
+            return
+        elif "halo2" in engine and engine != "halo2vista":
+            print("Cannot interact with Halo 2 Xbox maps.")
             return
 
         app_root = self.app_root
@@ -243,7 +258,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
             if settings['accept_rename'].get():
                 new_name = splitext(settings['rename_string'].get())[0]
-                self.rename_tag_index_refs(tag_index_refs, item_name, new_name)
+                self.rename_tag_index_refs(
+                    tag_index_refs, splitext(item_name)[0], new_name)
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
                 settings['title'] = item_name
@@ -275,25 +291,19 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 # resource cache tag
                 tag_id += (index_ref.id.table_index << 16)
 
-            if not tags_tree.exists(tag_id):
-                continue
-
             # when renaming only one tag, the basenames COULD BE the full names
             old_name = sanitize_path(index_ref.tag.tag_path.lower())
-            if renaming_multiple:
-                new_name = old_name.split(old_basename)
-                if len(new_name) <= 1:
-                    # tag_path doesnt have the base_name in it
-                    continue
-                elif not new_name[1]:
-                    print("Cannot rename '%s' to an empty string." % old_name)
-                    continue
-
-                new_name = new_basename + new_name[1]
-            else:
-                new_name = new_basename
-
-            if index_ref.indexed:
+            new_name = old_name.replace(old_basename, new_basename, 1)
+            if not old_name.startswith(old_basename):
+                # tag_path doesnt have the base_name in it
+                continue
+            elif not tags_tree.exists(tag_id):
+                # tag not in the tree
+                continue
+            elif not new_name:
+                print("Cannot rename '%s' to an empty string." % old_name)
+                continue
+            elif index_ref.indexed:
                 print("Cannot rename indexed tag: %s" % old_name)
                 continue
             elif len(new_name) > MAX_NAME_LEN:
@@ -607,7 +617,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     continue
                 new_name = splitext(settings['rename_string'].get())[0]
                 self.rename_tag_index_refs(
-                    tag_index_refs, path_string, new_name)
+                    tag_index_refs, splitext(path_string)[0], new_name)
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
                 self.queue_tree.add_to_queue(
@@ -715,66 +725,78 @@ class RefinerySettingsWindow(tk.Toplevel):
     def __init__(self, *args, **kwargs):
         self.settings = settings = kwargs.pop('settings', {})
         tk.Toplevel.__init__(self, *args, **kwargs)
-        self.geometry("340x500")
-        self.minsize(width=340, height=500)
+        self.geometry("340x200")
+        self.minsize(width=340, height=200)
         self.resizable(1, 0)
         self.title("Settings")
 
-        self.extract_frame   = tk.LabelFrame(self, text="Extraction settings")
-        self.deprotect_frame = tk.LabelFrame(self, text="Deprotection settings")
-        self.yelo_frame      = tk.LabelFrame(self, text="Open Sauce settings")
-        self.tags_dir_frame = tk.LabelFrame(
-            self, text="Default tags extraction folder")
-        self.data_dir_frame = tk.LabelFrame(
-            self, text="Default data extraction folder")
+        self.tabs = ttk.Notebook(self)
+        self.dirs_frame      = tk.Frame(self.tabs)
+        self.extract_frame   = tk.Frame(self.tabs)
+        self.deprotect_frame = tk.Frame(self.tabs)
+        self.other_frame     = tk.Frame(self.tabs)
+
+        self.tabs.add(self.dirs_frame, text="Directories")
+        self.tabs.add(self.extract_frame, text="Extraction")
+        self.tabs.add(self.deprotect_frame, text="Deprotection")
+        self.tabs.add(self.other_frame, text="Other")
+
+        self.tags_dir_frame  = tk.LabelFrame(
+            self.dirs_frame, text="Default tags extraction folder")
+        self.data_dir_frame  = tk.LabelFrame(
+            self.dirs_frame, text="Default data extraction folder")
         self.tags_list_frame = tk.LabelFrame(
-            self, text="Tags list log(erase to disable logging)")
+            self.dirs_frame, text="Tags list log(erase to disable logging)")
 
         for attr in ("extract_from_ce_resources", "overwrite",
                      "rename_duplicates_in_scnr", "fix_tag_classes",
                      "use_hashcaches", "use_heuristics",
-                     "autoload_resources",
+                     "autoload_resources", "decode_adpcm",
                      "extract_cheape", "show_output", "fix_tag_index_offset"):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("tags_dir", "data_dir", "tags_list_path"):
             object.__setattr__(self, attr, settings.get(attr, tk.StringVar(self)))
 
-        self.extract_from_ce_resources_checkbutton = tk.Checkbutton(
-            self.extract_frame, text="Extract from CE resource maps",
+        self.extract_from_ce_resources_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Extract from Halo CE resource maps",
             variable=self.extract_from_ce_resources)
-        self.autoload_resources_checkbutton = tk.Checkbutton(
-            self.extract_frame, text="Autoload resource maps",
-            variable=self.autoload_resources)
-        self.rename_duplicates_in_scnr_checkbutton = tk.Checkbutton(
+        self.overwrite_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Overwrite files(not recommended)",
+            variable=self.overwrite)
+        self.show_output_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Print extracted file names",
+            variable=self.show_output)
+        self.rename_duplicates_in_scnr_cbtn = tk.Checkbutton(
             self.extract_frame, text=(
                 "Rename duplicate camera points, cutscene\n"+
                 "flags, and recorded animations in scenario"),
             variable=self.rename_duplicates_in_scnr)
-        self.overwrite_checkbutton = tk.Checkbutton(
-            self.extract_frame, text="Overwrite tags(not recommended)",
-            variable=self.overwrite)
-        self.show_output_checkbutton = tk.Checkbutton(
-            self.extract_frame, text="Print extracted tag names",
-            variable=self.show_output)
+        self.decode_adpcm_cbtn = tk.Checkbutton(
+            self.extract_frame, variable=self.decode_adpcm,
+            text="Decode Xbox audio when extracting data(slow)")
 
-        self.fix_tag_classes_checkbutton = tk.Checkbutton(
+        self.fix_tag_classes_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Fix tag classes",
             variable=self.fix_tag_classes)
-        self.use_hashcaches_checkbutton = tk.Checkbutton(
+        self.use_hashcaches_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Use hashcaches",
             variable=self.use_hashcaches)
-        self.use_heuristics_checkbutton = tk.Checkbutton(
+        self.use_heuristics_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Use heuristics",
             variable=self.use_heuristics)
-        self.fix_tag_index_offset_checkbutton = tk.Checkbutton(
+        self.fix_tag_index_offset_cbtn = tk.Checkbutton(
             self.deprotect_frame, text=("Fix tag index offset when saving\n" +
                                         "WARNING: Can corrupt certain maps"),
             variable=self.fix_tag_index_offset, justify='left')
 
-        self.extract_cheape_checkbutton = tk.Checkbutton(
-            self.yelo_frame, text="Extract cheape.map from yelo maps",
-            variable=self.extract_cheape)
+        self.autoload_resources_cbtn = tk.Checkbutton(
+            self.other_frame, text=("Load resource maps automatically\n" +
+                                    "when loading a non-resource map"),
+            variable=self.autoload_resources)
+        self.extract_cheape_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.extract_cheape,
+            text="Extract cheape.map when extracting from yelo maps")
 
         # tags directory
         self.tags_dir_entry = tk.Entry(
@@ -800,35 +822,33 @@ class RefinerySettingsWindow(tk.Toplevel):
             command=self.tags_list_browse, width=6)
 
         # pack everything
-        self.tags_dir_frame.pack(padx=4, pady=2, expand=True, fill="x")
-        self.data_dir_frame.pack(padx=4, pady=2, expand=True, fill="x")
-        self.tags_list_frame.pack(padx=4, pady=2, expand=True, fill="x")
-        self.extract_frame.pack(padx=4, pady=2, expand=True, fill="x")
-        self.deprotect_frame.pack(padx=4, pady=2, expand=True, fill="x")
-        self.yelo_frame.pack(padx=4, pady=2, expand=True, fill="x")
+        self.tabs.pack(fill="both", expand=True)
+        for w in (self.dirs_frame, self.extract_frame, self.deprotect_frame,
+                  self.other_frame):
+            pass#w.pack(fill="both", expand=True)
 
-        self.extract_from_ce_resources_checkbutton.pack(padx=4, anchor='w')
-        self.rename_duplicates_in_scnr_checkbutton.pack(padx=4, anchor='w')
-        self.autoload_resources_checkbutton.pack(padx=4, anchor='w')
-        self.overwrite_checkbutton.pack(padx=4, anchor='w')
-        self.show_output_checkbutton.pack(padx=4, anchor='w')
+        for w in (self.tags_dir_frame, self.data_dir_frame,
+                  self.tags_list_frame):
+            w.pack(padx=4, pady=2, expand=True, fill="x")
 
-        self.fix_tag_classes_checkbutton.pack(padx=4, anchor='w')
-        self.use_hashcaches_checkbutton.pack(padx=4, anchor='w')
-        self.use_heuristics_checkbutton.pack(padx=4, anchor='w')
-        self.fix_tag_index_offset_checkbutton.pack(padx=4, anchor='w')
+        for w in (self.extract_from_ce_resources_cbtn,
+                  self.overwrite_cbtn, self.show_output_cbtn,
+                  self.rename_duplicates_in_scnr_cbtn, self.decode_adpcm_cbtn):
+            w.pack(padx=4, anchor='w')
 
-        self.extract_cheape_checkbutton.pack(padx=4, anchor='w')
+        for w in (self.fix_tag_classes_cbtn, self.fix_tag_index_offset_cbtn,
+                  #self.use_hashcaches_cbtn, self.use_heuristics_cbtn
+                  ):
+            w.pack(padx=4, anchor='w')
 
-        self.tags_dir_entry.pack(
-            padx=(4, 0), pady=2, side='left', expand=True, fill='x')
-        self.tags_dir_browse_button.pack(padx=(0, 4), pady=2, side='left')
-        self.data_dir_entry.pack(
-            padx=(4, 0), pady=2, side='left', expand=True, fill='x')
-        self.data_dir_browse_button.pack(padx=(0, 4), pady=2, side='left')
-        self.tags_list_entry.pack(
-            padx=(4, 0), pady=2, side='left', expand=True, fill='x')
-        self.browse_tags_list_button.pack(padx=(0, 4), pady=2, side='left')
+        for w in (self.autoload_resources_cbtn, self.extract_cheape_cbtn, ):
+            w.pack(padx=4, anchor='w')
+
+        for w1, w2 in ((self.tags_dir_entry, self.tags_dir_browse_button),
+                       (self.data_dir_entry, self.data_dir_browse_button),
+                       (self.tags_list_entry, self.browse_tags_list_button)):
+            w1.pack(padx=(4, 0), pady=2, side='left', expand=True, fill='x')
+            w2.pack(padx=(0, 4), pady=2, side='left')
 
         # make the window not show up on the start bar
         self.transient(self.master)
@@ -944,7 +964,7 @@ class RefineryActionsWindow(tk.Toplevel):
             self.rename_frame, textvariable=self.rename_string)
         self.rename_button = tk.Button(
             self.rename_frame, text="Rename", command=self.rename, width=6)
-        self.recursive_rename_checkbutton = tk.Checkbutton(
+        self.recursive_rename_cbtn = tk.Checkbutton(
             self.rename_frame, text="Recursive", variable=self.recursive_rename)
 
         # tags list
@@ -961,13 +981,13 @@ class RefineryActionsWindow(tk.Toplevel):
             command=self.extract_to_browse)
 
         # settings
-        self.recursive_checkbutton = tk.Checkbutton(
+        self.recursive_cbtn = tk.Checkbutton(
             self.settings_frame, text="Recursive extraction",
             variable=settings.get("recursive", tk.IntVar(self)))
-        self.overwrite_checkbutton = tk.Checkbutton(
+        self.overwrite_cbtn = tk.Checkbutton(
             self.settings_frame, text="Overwrite tags(not recommended)",
             variable=settings.get("overwrite", tk.IntVar(self)))
-        self.show_output_checkbutton = tk.Checkbutton(
+        self.show_output_cbtn = tk.Checkbutton(
             self.settings_frame, text="Print extracted tag names",
             variable=settings.get("show_output", tk.IntVar(self)))
 
@@ -996,7 +1016,7 @@ class RefineryActionsWindow(tk.Toplevel):
         # rename
         self.rename_entry.pack(padx=4, side='left', fill='x', expand=True)
         self.rename_button.pack(padx=4, side='left', fill='x')
-        #self.recursive_rename_checkbutton.pack(padx=4, side='left', fill='x')
+        #self.recursive_rename_cbtn.pack(padx=4, side='left', fill='x')
 
         # extract to
         self.extract_to_entry.pack(padx=4, side='left', fill='x', expand=True)
@@ -1008,9 +1028,9 @@ class RefineryActionsWindow(tk.Toplevel):
 
         # settings
         # WONT DO ANYTHING YET
-        #self.recursive_checkbutton.pack(padx=4, anchor='w')
-        self.overwrite_checkbutton.pack(padx=4, anchor='w')
-        self.show_output_checkbutton.pack(padx=4, anchor='w')
+        #self.recursive_cbtn.pack(padx=4, anchor='w')
+        self.overwrite_cbtn.pack(padx=4, anchor='w')
+        self.show_output_cbtn.pack(padx=4, anchor='w')
 
         # accept/cancel
         self.accept_button.pack(side='right')
@@ -1043,8 +1063,8 @@ class RefineryActionsWindow(tk.Toplevel):
             # directory of tags
             new_name += PATHDIV
 
-        self.rename_string.set(new_name)
         new_name = splitext(new_name)[0]
+        self.rename_string.set(new_name)
         str_len = len(new_name)
         if str_len > MAX_NAME_LEN:
             messagebox.showerror(

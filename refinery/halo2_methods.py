@@ -13,7 +13,7 @@ from supyr_struct.defs.util import *
 from supyr_struct.field_types import FieldType
 
 from refinery.byteswapping import raw_block_def
-from refinery.util_h2 import HALO2_MAP_TYPES
+from refinery.util_h2 import HALO2_MAP_TYPES, split_raw_pointer
 
 
 __all__ = (
