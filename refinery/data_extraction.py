@@ -293,6 +293,7 @@ def extract_h2_sounds(meta, tag_index_ref, **kw):
                 this_map.map_data.seek(ptr)
                 merged_data += this_map.map_data.read(size)
 
+            permpath_base = permpath_base.replace('|', '')
             save_sound_perms([(compression, merged_data)], permpath_base,
                              sample_rate, channels, overwrite, decode_adpcm)
 
