@@ -608,13 +608,8 @@ def load_all_resource_maps(self, maps_dir=""):
                 self.load_resource_map(map_path)
                 print("        Finished")
 
-            if map_name == "sounds" and self.engine in ("halo1ce", "halo1yelo"):
-                # ce resource sounds are recognized by tag_path
-                # so we must cache their offsets by their paths
-                i = 0
-                for tag_header in self.maps["sounds"].rsrc_header.tag_paths:
-                    self.ce_sound_indexes_by_path[tag_header.tag_path] = i
-                    i += 1
+            if map_name == "sounds":
+                self.ensure_sound_maps_valid()
 
         except Exception:
             self.maps.pop(map_name, None)

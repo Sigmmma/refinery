@@ -305,8 +305,10 @@ class HaloMap:
 
 
 class Halo1Map(HaloMap):
-    ce_sound_indexes_by_path = None
+    ce_rsrc_sound_indexes_by_path = None
+    ce_tag_indexs_by_paths = None
     tag_headers = None
+    sound_rsrc_id = None
 
     meta_to_tag_data       = halo1_methods.meta_to_tag_data
     inject_rawdata         = halo1_methods.inject_rawdata
@@ -314,7 +316,8 @@ class Halo1Map(HaloMap):
 
     def __init__(self, maps=None):
         HaloMap.__init__(self, maps)
-        self.ce_sound_indexes_by_path = {}
+        self.ce_rsrc_sound_indexes_by_path = {}
+        self.ce_tag_indexs_by_paths  = {}
         self.setup_tag_headers()
 
     def setup_tag_headers(self):
@@ -330,6 +333,71 @@ class Halo1Map(HaloMap):
             tag_headers[def_id] = bytes(
                 h_block[0].serialize(buffer=BytearrayBuffer(),
                                      calc_pointers=False))
+
+    def ensure_sound_maps_valid(self):
+        sounds = self.maps.get("sounds")
+        if not sounds or self.is_resource:
+            return
+
+        if id(sounds) != self.sound_rsrc_id:
+            pass
+        elif not(self.ce_rsrc_sound_indexes_by_path and
+                 self.ce_tag_indexs_by_paths):
+            pass
+        else:
+            return
+
+        self.sound_rsrc_id = id(sounds)
+        if self.engine in ("halo1ce", "halo1yelo"):
+            # ce resource sounds are recognized by tag_path
+            # so we must cache their offsets by their paths
+            rsrc_snd_map = self.ce_rsrc_sound_indexes_by_path = {}
+            inv_snd_map  = self.ce_tag_indexs_by_paths = {}
+
+            if sounds is not None:
+                i = 0
+                for tag_header in sounds.rsrc_header.tag_paths:
+                    rsrc_snd_map[tag_header.tag_path] = i
+                    i += 1
+
+            i = 0
+            for tag_header in self.tag_index.tag_index:
+                inv_snd_map[tag_header.tag.tag_path] = i
+                i += 1
+
+    def get_dependencies(self, meta, tag_id, tag_cls):
+        if self.is_indexed(tag_id):
+            if tag_cls != "snd!":
+                return ()
+
+            rsrc_id = meta.promotion_sound.id[0]
+            if rsrc_id == 0xFFFF: return ()
+
+            sounds = self.maps.get("sounds")
+            rsrc_id = rsrc_id // 2
+            if   sounds is None: return ()
+            elif rsrc_id >= len(sounds.tag_index.tag_index): return ()
+
+            tag_path = sounds.tag_index.tag_index[rsrc_id].tag.tag_path
+            inv_snd_map = getattr(self, 'ce_tag_indexs_by_paths', {})
+            tag_id = inv_snd_map.get(tag_path, 0xFFFF)
+            if tag_id >= len(self.tag_index.tag_index): return ()
+
+            return [self.tag_index.tag_index[tag_id]]
+
+        if self.handler is None: return ()
+
+        dependency_cache = self.handler.tag_ref_cache.get(tag_cls)
+        if not dependency_cache: return ()
+
+        nodes = self.handler.get_nodes_by_paths(dependency_cache, (None, meta))
+        dependencies = []
+
+        for node in nodes:
+            if node.id[0] == 0xFFFF:
+                continue
+            dependencies.append(node)
+        return dependencies
 
     def setup_defs(self):
         if Halo1Map.defs is None:
@@ -446,6 +514,8 @@ class Halo1Map(HaloMap):
         if self.get_meta_descriptor(tag_cls) is None:
             return
 
+        self.ensure_sound_maps_valid()
+
         if tag_cls is None:
             # couldn't determine the tag class
             return
@@ -455,7 +525,7 @@ class Halo1Map(HaloMap):
 
             if tag_cls == "snd!":
                 rsrc_map = self.maps.get("sounds")
-                sound_mapping = self.ce_sound_indexes_by_path
+                sound_mapping = self.ce_rsrc_sound_indexes_by_path
                 tag_path = tag_index_ref.tag.tag_path
                 if sound_mapping is None or tag_path not in sound_mapping:
                     return
