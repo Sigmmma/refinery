@@ -71,7 +71,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 4, 3)
+    version = (1, 4, 5)
 
     data_extract_window = None
     settings_window     = None
@@ -531,6 +531,7 @@ class Refinery(tk.Tk):
         self.place_window_relative(self.rename_window)
 
     def destroy(self, e=None):
+        self._running = False
         self.unload_maps(None, None)
         FieldType.force_normal()
         try:
@@ -602,7 +603,9 @@ class Refinery(tk.Tk):
             self.reload_explorers()
 
     def unload_maps(self, map_type=False, maps_to_unload=("active", )):
-        if maps_to_unload is None:
+        if self._running:
+            return
+        elif maps_to_unload is None:
             maps_to_unload = tuple(self.maps.keys())
 
         active_map = self.active_map
@@ -707,16 +710,17 @@ class Refinery(tk.Tk):
                         new_active_map = map_name
                         self.tk_active_map_name.set(map_name)
                 print("    Finished")
+                self._running = False
             except Exception:
                 try:
                     self.display_map_info(
                         "Could not load map.\nCheck console window for error.")
+                    self._running = False
                     self.unload_maps()
                 except Exception:
                     print(format_exc())
                 print(format_exc())
 
-        self._running = False
         self.rebuild_map_select_menu()
         if will_be_active:
             self.maps.pop("active", None)  # self.set_active_map must set this
