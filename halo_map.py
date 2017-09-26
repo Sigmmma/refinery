@@ -333,11 +333,11 @@ class Halo1Map(HaloMap):
 
     def setup_defs(self):
         if Halo1Map.defs is None:
-            print("Loading Halo 1 OSv4 tag definitions...")
+            print("    Loading Halo 1 OSv4 tag definitions...")
             Halo1Map.handler = OsV4HaloHandler(build_reflexive_cache=False,
                                                build_raw_data_cache=False)
             Halo1Map.defs = FrozenDict(Halo1Map.handler.defs)
-            print("    Finished")
+            print("        Finished")
 
         # make a shallow copy for this instance to manipulate
         self.defs = dict(self.defs)
@@ -415,9 +415,8 @@ class Halo1Map(HaloMap):
             fourcc(tag_index_ref.class_1.data))
         if extractor is None:
             return True
-        return extractor(meta, tag_index_ref, halo_map=self,
-                         out_dir=kw['out_dir'].get(),
-                         overwrite=kw['overwrite'].get())
+        kw['halo_map'] = self
+        return extractor(meta, tag_index_ref, **kw)
 
     def get_meta(self, tag_id, reextract=False):
         '''
@@ -717,15 +716,16 @@ class Halo2Map(HaloMap):
 
         # get the sound_cache_file_gestalt meta
         try:
-            ugh__id = None
-            for b in self.tag_index.tag_index:
-                if fourcc(b.class_1.data) == "ugh!":
-                    ugh__id = b.id.tag_table_index
-                    break
+            if self.engine == "halo2vista":
+                ugh__id = None
+                for b in self.tag_index.tag_index:
+                    if fourcc(b.class_1.data) == "ugh!":
+                        ugh__id = b.id.tag_table_index
+                        break
 
-            self.ugh__meta = self.get_meta(ugh__id)
-            if self.ugh__meta is None:
-                print("Could not read sound_cache_file_gestalt tag")
+                self.ugh__meta = self.get_meta(ugh__id)
+                if self.ugh__meta is None:
+                    print("Could not read sound_cache_file_gestalt tag")
         except Exception:
             print(format_exc())
             print("Could not read sound_cache_file_gestalt tag")
@@ -740,9 +740,8 @@ class Halo2Map(HaloMap):
             fourcc(tag_index_ref.class_1.data))
         if extractor is None:
             return True
-        return extractor(meta, tag_index_ref, halo_map=self,
-                         out_dir=kw['out_dir'].get(),
-                         overwrite=kw['overwrite'].get())
+        kw['halo_map'] = self
+        return extractor(meta, tag_index_ref, **kw)
 
     def get_meta(self, tag_id, reextract=False):
         if tag_id is None: return

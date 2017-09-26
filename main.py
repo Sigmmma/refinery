@@ -71,7 +71,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 4, 1)
+    version = (1, 4, 2)
 
     data_extract_window = None
     settings_window     = None
@@ -119,7 +119,8 @@ class Refinery(tk.Tk):
         self.overwrite = tk.IntVar(self)
         self.recursive = tk.IntVar(self)
         self.autoload_resources = tk.IntVar(self, 1)
-        self.show_output = tk.IntVar(self, 1)
+        self.show_output  = tk.IntVar(self, 1)
+        self.decode_adpcm = tk.IntVar(self, 1)
 
         self.tk_vars = dict(
             fix_tag_classes=self.fix_tag_classes,
@@ -136,7 +137,8 @@ class Refinery(tk.Tk):
             tags_dir=self.tk_tags_dir,
             data_dir=self.tk_data_dir,
             tags_list_path=self.tags_list_path,
-            extract_mode=self.extract_mode
+            extract_mode=self.extract_mode,
+            decode_adpcm=self.decode_adpcm
             )
 
         if self.config_file is not None:
@@ -353,7 +355,7 @@ class Refinery(tk.Tk):
         flags = header.extraction_flags
         for attr_name in ("extract_cheape", "overwrite",
                           "extract_from_ce_resources", "recursive",
-                          "rename_duplicates_in_scnr", ):
+                          "rename_duplicates_in_scnr", "decode_adpcm"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         flags = header.deprotection_flags
@@ -395,7 +397,7 @@ class Refinery(tk.Tk):
         flags = header.extraction_flags
         for attr_name in ("extract_cheape", "overwrite",
                           "extract_from_ce_resources", "recursive",
-                          "rename_duplicates_in_scnr", ):
+                          "rename_duplicates_in_scnr", "decode_adpcm"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         flags = header.deprotection_flags
@@ -639,6 +641,7 @@ class Refinery(tk.Tk):
             print("Loading resource maps for: %s" % halo_map.map_header.map_name)
             halo_map.load_all_resource_maps()
             self.rebuild_map_select_menu()
+            print("    Finished")
         except Exception:
             print(format_exc())
 
@@ -1234,6 +1237,9 @@ class Refinery(tk.Tk):
         elif not queue_tree.get_children():
             self.queue_add_all()
 
+        if not queue_tree.get_children():
+            return
+
         print("Starting extraction...")
         self._running = True
         self.stop_processing = False
@@ -1267,8 +1273,17 @@ class Refinery(tk.Tk):
                 map_name = curr_map.map_header.map_name
                 is_halo1_tag = ("halo1" in curr_map.engine or
                                 "stubbs" in curr_map.engine)
+
+                extract_kw = dict(out_dir=out_dir, overwrite=overwrite,
+                                  decode_adpcm=info['decode_adpcm'].get())
             except Exception:
                 print(format_exc())
+                continue
+
+            if extract_mode == "tags" and not is_halo1_tag:
+                # cant extract anything other than halo 1 tags yet
+                try: queue_tree.delete(iid)
+                except Exception: pass
                 continue
 
             if curr_map.is_resource and "halo1pc" in curr_map.engine:
@@ -1389,7 +1404,7 @@ class Refinery(tk.Tk):
                     elif extract_mode == "data":
                         try:
                             result = curr_map.extract_tag_data(
-                                meta, tag_index_ref, **info)
+                                meta, tag_index_ref, **extract_kw)
                         except Exception:
                             print(format_exc())
                             result = True

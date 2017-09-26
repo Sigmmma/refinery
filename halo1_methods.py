@@ -109,7 +109,7 @@ def inject_rawdata(self, meta, tag_cls, tag_index_ref):
         # might need to get samples and permutations from the resource map
         is_pc = engine in ("halo1pc", "halo1pcdemo")
         is_ce = engine in ("halo1ce", "halo1yelo")
-        if not (is_pc or is_ce):
+        if not(is_pc or is_ce):
             return meta
         elif sound_data is None:
             return
@@ -582,7 +582,7 @@ def load_all_resource_maps(self, maps_dir=""):
             # map already loaded
             continue
 
-        yelo_map_path = join(maps_dir, "-%s.map" % map_name)
+        yelo_map_path = join(maps_dir, "data_files", "-%s.map" % map_name)
         map_path      = join(maps_dir, "%s.map" % map_name)
 
         if exists(yelo_map_path): map_path = yelo_map_path
