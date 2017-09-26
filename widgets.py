@@ -748,7 +748,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.tags_list_frame = tk.LabelFrame(
             self.dirs_frame, text="Tags list log(erase to disable logging)")
 
-        for attr in ("extract_from_ce_resources", "overwrite",
+        for attr in ("extract_from_ce_resources", "overwrite", "recursive",
                      "rename_duplicates_in_scnr", "fix_tag_classes",
                      "use_hashcaches", "use_heuristics",
                      "autoload_resources", "decode_adpcm",
@@ -764,6 +764,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.overwrite_cbtn = tk.Checkbutton(
             self.extract_frame, text="Overwrite files(not recommended)",
             variable=self.overwrite)
+        self.recursive_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Recursive extraction",
+            variable=settings.get("recursive", tk.IntVar(self)))
         self.show_output_cbtn = tk.Checkbutton(
             self.extract_frame, text="Print extracted file names",
             variable=self.show_output)
@@ -831,8 +834,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                   self.tags_list_frame):
             w.pack(padx=4, pady=2, expand=True, fill="x")
 
-        for w in (self.extract_from_ce_resources_cbtn,
-                  self.overwrite_cbtn, self.show_output_cbtn,
+        for w in (self.extract_from_ce_resources_cbtn, self.overwrite_cbtn,
+                  self.recursive_cbtn, self.show_output_cbtn,
                   self.rename_duplicates_in_scnr_cbtn, self.decode_adpcm_cbtn):
             w.pack(padx=4, anchor='w')
 
@@ -919,9 +922,9 @@ class RefineryActionsWindow(tk.Toplevel):
         tk.Toplevel.__init__(self, *args, **kwargs)
         self.bind('<Escape>', lambda e=None, s=self, *a, **kw: s.destroy())
 
-        height = 270
+        height = 280
         if self.tag_index_ref is not None:
-            height += 25
+            height += 30
         self.geometry("300x%s" % height)
         self.minsize(width=300, height=height)
 
@@ -1027,8 +1030,7 @@ class RefineryActionsWindow(tk.Toplevel):
         self.browse_tags_list_button.pack(padx=4, side='left', fill='x')
 
         # settings
-        # WONT DO ANYTHING YET
-        #self.recursive_cbtn.pack(padx=4, anchor='w')
+        self.recursive_cbtn.pack(padx=4, anchor='w')
         self.overwrite_cbtn.pack(padx=4, anchor='w')
         self.show_output_cbtn.pack(padx=4, anchor='w')
 

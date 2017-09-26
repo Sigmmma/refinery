@@ -71,7 +71,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 4, 2)
+    version = (1, 4, 3)
 
     data_extract_window = None
     settings_window     = None
@@ -1271,11 +1271,13 @@ class Refinery(tk.Tk):
                 extract_mode   = info['extract_mode'].get()
                 tags_list_path = info['tags_list_path'].get()
                 map_name = curr_map.map_header.map_name
-                is_halo1_tag = ("halo1" in curr_map.engine or
+                is_halo1_tag = ("halo1"  in curr_map.engine or
                                 "stubbs" in curr_map.engine)
+                recursive &= is_halo1_tag
 
                 extract_kw = dict(out_dir=out_dir, overwrite=overwrite,
                                   decode_adpcm=info['decode_adpcm'].get())
+
             except Exception:
                 print(format_exc())
                 continue
@@ -1334,92 +1336,123 @@ class Refinery(tk.Tk):
             convert_kwargs = dict(
                 rename_scnr_dups=self.rename_duplicates_in_scnr.get())
 
-            for tag_index_ref in tag_index_refs:
-                file_path = "<Could not get filepath>"
-                try:
-                    file_path = sanitize_path("%s.%s" %
-                        (tag_index_ref.tag.tag_path,
-                         tag_index_ref.class_1.enum_name))
-                    self.update()
-                    if self.stop_processing:
-                        break
+            while tag_index_refs:
+                next_refs = []
 
-                    tag_id = tag_index_ref.id.tag_table_index
-                    if not map_magic:
-                        # resource cache tag
-                        tag_id += (tag_index_ref.id.table_index << 16)
+                for tag_index_ref in tag_index_refs:
+                    file_path = "<Could not get filepath>"
+                    try:
+                        file_path = sanitize_path("%s.%s" %
+                            (tag_index_ref.tag.tag_path,
+                             tag_index_ref.class_1.enum_name))
+                        self.update()
+                        if self.stop_processing:
+                            break
 
-                    # dont want to re-extract tags
-                    if (tag_id, extract_mode) in extracted:
-                        continue
-                    elif curr_map.is_indexed(tag_id) and not extract_rsrc:
-                        continue
-                    extracted.add((tag_id, extract_mode))
-                    abs_file_path = join(out_dir, file_path)
+                        tag_id = tag_index_ref.id.tag_table_index
+                        if not map_magic:
+                            # resource cache tag
+                            tag_id += (tag_index_ref.id.table_index << 16)
 
-                    if tag_index_ref.class_1.enum_name in ("<INVALID>", "NONE"):
-                        print(("Unknown tag class for '%s'\n" +
-                               "    Run deprotection to fix this.") %
-                              file_path)
-                        continue
+                        # dont want to re-extract tags
+                        if (tag_id, extract_mode) in extracted:
+                            continue
+                        elif curr_map.is_indexed(tag_id) and not extract_rsrc:
+                            continue
+                        extracted.add((tag_id, extract_mode))
+                        abs_file_path = join(out_dir, file_path)
 
-                    if not overwrite and (extract_mode == "tags" and
-                                          isfile(abs_file_path)):
-                        # not overwriting, and we are about to
-                        continue
+                        if tag_index_ref.class_1.enum_name in ("<INVALID>", "NONE"):
+                            print(("Unknown tag class for '%s'\n" +
+                                   "    Run deprotection to fix this.") %
+                                  file_path)
+                            continue
 
-                    tag_cls = fourcc(tag_index_ref.class_1.data)
+                        # determine if not overwriting and we are about to
+                        dont_extract = not overwrite and (
+                            extract_mode == "tags" and isfile(abs_file_path))
 
-                    if show_output:
-                        print("%s: %s" % (extract_mode, file_path))
+                        if dont_extract and not recursive:
+                            continue
 
-                    meta = curr_map.get_meta(tag_id, True)
-                    self.update()
-                    if not meta:
-                        print("    Could not get meta")
-                        continue
+                        tag_cls = fourcc(tag_index_ref.class_1.data)
 
-                    if tags_list_path:
-                        tagslist += "%s: %s\n" % (extract_mode, file_path)
+                        if show_output and not dont_extract:
+                            print("%s: %s" % (extract_mode, file_path))
 
-                    meta = curr_map.meta_to_tag_data(
-                        meta, tag_cls, tag_index_ref, **convert_kwargs)
-                    if not meta:
-                        print("    Failed to convert meta to tag")
-                        continue
+                        meta = curr_map.get_meta(tag_id, True)
+                        self.update()
+                        if not meta:
+                            print("    Could not get meta")
+                            continue
 
-                    if extract_mode == "tags":
-                        if not exists(dirname(abs_file_path)):
-                            os.makedirs(dirname(abs_file_path))
+                        if tags_list_path:
+                            tagslist += "%s: %s\n" % (extract_mode, file_path)
 
-                        if is_halo1_tag: FieldType.force_big()
-                        with open(abs_file_path, "wb") as f:
+                        if recursive:
+                            # add dependencies to list to be extracted
+                            index_len = len(tag_index_array)
+                            refs = ()
                             try:
-                                f.write(curr_map.tag_headers[tag_cls])
-                                f.write(meta.serialize(calc_pointers=False))
+                                refs = curr_map.get_dependencies(
+                                    meta, tag_id, tag_cls)
                             except Exception:
                                 print(format_exc())
-                                print("    Failed to serialize tag")
+                                print("    Could not recursively extract.")
+
+                            extracting = set(extracted)
+                            for ref in refs:
+                                index = ref.id.tag_table_index
+                                key = (index, extract_mode)
+                                if key not in extracting and index < index_len:
+                                    extracting.add(key)
+                                    next_refs.append(tag_index_array[index])
+
+                            if dont_extract:
                                 continue
-                    elif extract_mode == "data":
-                        try:
-                            result = curr_map.extract_tag_data(
-                                meta, tag_index_ref, **extract_kw)
-                        except Exception:
-                            print(format_exc())
-                            result = True
 
-                        if result:
-                            print("    Failed to extract data")
+
+                        meta = curr_map.meta_to_tag_data(
+                            meta, tag_cls, tag_index_ref, **convert_kwargs)
+                        if not meta:
+                            print("    Failed to convert meta to tag")
                             continue
-                    else:
-                        continue
 
-                    local_total += 1
-                    del meta
-                except Exception:
-                    print(format_exc())
-                    print("Error ocurred while extracting '%s'" % file_path)
+                        if extract_mode == "tags":
+                            if not exists(dirname(abs_file_path)):
+                                os.makedirs(dirname(abs_file_path))
+
+                            if is_halo1_tag: FieldType.force_big()
+                            with open(abs_file_path, "wb") as f:
+                                try:
+                                    f.write(curr_map.tag_headers[tag_cls])
+                                    f.write(meta.serialize(calc_pointers=False))
+                                except Exception:
+                                    print(format_exc())
+                                    print("    Failed to serialize tag")
+                                    continue
+                        elif extract_mode == "data":
+                            try:
+                                result = curr_map.extract_tag_data(
+                                    meta, tag_index_ref, **extract_kw)
+                            except Exception:
+                                print(format_exc())
+                                result = True
+
+                            if result:
+                                print("    Failed to extract data")
+                                continue
+                        else:
+                            continue
+
+                        local_total += 1
+                        del meta
+                    except Exception:
+                        print(format_exc())
+                        print("Error ocurred while extracting '%s'" % file_path)
+
+                tag_index_refs = next_refs
+
 
             if last_map_name != map_name:
                 curr_map.clear_map_cache()
