@@ -5,7 +5,7 @@ from threading import Thread
 from tkinter.filedialog import askdirectory
 from traceback import format_exc
 
-from refinery.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS
+from reclaimer.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS
 from reclaimer.os_v4_hek.handler import OsV4HaloHandler
 from supyr_struct.defs.constants import *
 from supyr_struct.defs.util import *
