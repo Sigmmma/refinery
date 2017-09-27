@@ -9,11 +9,11 @@ from traceback import format_exc
 
 from refinery.hashcacher_window import sanitize_filename, HashcacherWindow
 from refinery.meta_window import MetaWindow
-from refinery.util import sanitize_path, is_protected_tag, fourcc, is_reserved_tag
 
-from mozzarilla.tools.shared_widgets import HierarchyFrame
 from reclaimer.common_descs import blam_header, QStruct
+from reclaimer.util import sanitize_path, is_protected_tag, fourcc, is_reserved_tag
 from supyr_struct.defs.tag_def import TagDef
+from mozzarilla.tools.shared_widgets import HierarchyFrame
 
 no_op = lambda *a, **kw: None
 
@@ -1146,8 +1146,10 @@ class RefineryActionsWindow(tk.Toplevel):
 
 
 class RefineryRenameWindow(tk.Toplevel):
+    active_map = None
 
     def __init__(self, *args, **kwargs):
+        self.active_map = kwargs.pop('active_map', None)
         tk.Toplevel.__init__(self, *args, **kwargs)
 
         self.geometry("300x80")
@@ -1155,7 +1157,8 @@ class RefineryRenameWindow(tk.Toplevel):
         self.resizable(0, 0)
 
         self.rename_string = tk.StringVar(self)
-        self.rename_string.set(self.master.map_header.map_name)
+        if self.active_map:
+            self.rename_string.set(self.active_map.map_header.map_name)
 
         # frames
         self.rename_frame = tk.LabelFrame(self, text="Rename to")
@@ -1211,7 +1214,7 @@ class RefineryRenameWindow(tk.Toplevel):
                 "Invalid name",
                 "The entered string cannot be empty.", parent=self)
         else:
-            self.master.map_header.map_name = new_name
+            self.active_map.map_header.map_name = new_name
             self.master.display_map_info()
             self.destroy()
 
