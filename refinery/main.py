@@ -29,7 +29,8 @@ from supyr_struct.field_types import FieldType
 if print_startup:
     print("    Importing refinery modules")
 
-from refinery.class_repair import class_repair_functions, class_bytes_by_fcc
+from reclaimer.meta.class_repair import class_repair_functions,\
+     class_bytes_by_fcc
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, ExplorerHierarchyTree, ExplorerClassTree,\
      ExplorerHybridTree
@@ -74,7 +75,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 4, 6)
+    version = (1, 5, 0)
 
     data_extract_window = None
     settings_window     = None
