@@ -75,7 +75,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 5, 0)
+    version = (1, 5, 1)
 
     data_extract_window = None
     settings_window     = None
@@ -658,8 +658,7 @@ class Refinery(tk.Tk):
         self._running = False
 
     def load_map(self, map_path, will_be_active=True):
-        self.load_maps(self, (map_path, ), will_be_active=will_be_active,
-                       autoload_resources=self.autoload_resources.get())
+        self.load_maps((map_path, ), will_be_active=will_be_active)
 
     def load_maps(self, map_paths, will_be_active=True):
         if self.running or not map_paths:
@@ -957,10 +956,9 @@ class Refinery(tk.Tk):
     def deprotect(self, e=None):
         if not self.map_loaded: return
 
-        active_map = self.active_map
-        if self.running or active_map.is_resource:
+        if self.running or self.active_map.is_resource:
             return
-        elif "halo1" not in active_map.engine:
+        elif "halo1" not in self.active_map.engine:
             return
 
         save_path = asksaveasfilename(
@@ -981,6 +979,8 @@ class Refinery(tk.Tk):
         self.stop_processing = False
         self._running = True
 
+        # get the active map AFTER saving because it WILL have changed
+        active_map      = self.active_map
         tag_index       = active_map.tag_index
         tag_index_array = tag_index.tag_index
         map_data = active_map.map_data
@@ -1128,7 +1128,10 @@ class Refinery(tk.Tk):
             # print("Renaming tags using heuristics...")
             # print("    Finished")
 
-        active_map.tag_index = get_tag_index(map_data, active_map.map_header)
+        print("Reloading map to apply changes...")
+        self.unload_maps(None)
+        self.load_map(save_path, will_be_active=True)
+
         self.display_map_info()
         self.reload_explorers()
 
@@ -1168,6 +1171,7 @@ class Refinery(tk.Tk):
 
         self._running = True
         print("Saving map...")
+        print("    %s" % save_path)
         try:
             out_file = open(save_path, 'wb')
             map_file = active_map.map_data
@@ -1229,12 +1233,10 @@ class Refinery(tk.Tk):
             pass
         self._running = False
 
-        if reload_after_saving:
+        if reload_after_saving and save_path:
             print("Reloading map to apply changes...")
-            if save_path:
-                self.load_map(save_path, will_be_active=True)
-            else:
-                self.unload_maps()
+            self.unload_maps(None)
+            self.load_map(save_path, will_be_active=True)
 
         return save_path
 
