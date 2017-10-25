@@ -716,17 +716,16 @@ class Refinery(tk.Tk):
                         new_active_map = map_name
                         self.tk_active_map_name.set(map_name)
                 print("    Finished")
-                self._running = False
             except Exception:
                 try:
                     self.display_map_info(
                         "Could not load map.\nCheck console window for error.")
-                    self._running = False
                     self.unload_maps()
                 except Exception:
                     print(format_exc())
                 print(format_exc())
 
+        self._running = False
         self.rebuild_map_select_menu()
         if will_be_active:
             self.maps.pop("active", None)  # self.set_active_map must set this
