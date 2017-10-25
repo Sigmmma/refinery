@@ -1132,6 +1132,7 @@ class RefineryActionsWindow(tk.Toplevel):
             meta_tag = meta_tag_def.build()
             meta_tag.data.tagdata = meta
             tag_path = index_ref.tag.tag_path
+            meta_tag.filepath = tag_path
             if index_ref.class_1.enum_name not in BAD_CLASSES:
                 ext = ".%s" % index_ref.class_1.enum_name
             else:
