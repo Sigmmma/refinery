@@ -75,7 +75,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 5, 1)
+    version = (1, 5, 3)
 
     data_extract_window = None
     settings_window     = None
@@ -1445,14 +1445,14 @@ class Refinery(tk.Tk):
                                     continue
                         elif extract_mode == "data":
                             try:
-                                result = curr_map.extract_tag_data(
+                                error_str = curr_map.extract_tag_data(
                                     meta, tag_index_ref, **extract_kw)
                             except Exception:
-                                print(format_exc())
-                                result = True
+                                error_str = ("%s\nFailed to extract data" %
+                                             format_exc())
 
-                            if result:
-                                print("    Failed to extract data")
+                            if error_str:
+                                print(error_str)
                                 continue
                         else:
                             continue
