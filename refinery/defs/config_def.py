@@ -6,10 +6,10 @@ def get():
     return config_def
 
 config_header = Struct("header",
-    LUEnum32("id", ('rppr', 'rppr'), VISIBLE=False, DEFAULT='rppr'),
+    UEnum32("id", ('rppr', 'rppr'), VISIBLE=False, DEFAULT='rppr'),
     UInt32("version", DEFAULT=1, VISIBLE=False, EDITABLE=False),
     BitStruct("flags",
-        BitUEnum("display_mode",
+        UBitEnum("display_mode",
             ("hierarchy", 1),
             ("class",     2),
             ("hybrid",    3),
@@ -38,8 +38,8 @@ config_header = Struct("header",
 
     Pad(128 - 5*4 - 2*4),
 
-    Timestamp("date_created", EDITABLE=False),
-    Timestamp("date_modified", EDITABLE=False),
+    Timestamp32("date_created", EDITABLE=False),
+    Timestamp32("date_modified", EDITABLE=False),
 
     SIZE=128
     )
