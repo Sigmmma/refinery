@@ -44,6 +44,7 @@ from reclaimer.meta.objs.halo1_map import Halo1Map
 from reclaimer.meta.objs.halo1_rsrc_map import Halo1RsrcMap
 from reclaimer.meta.objs.halo2_map import Halo2Map
 from reclaimer.meta.objs.stubbs_map import StubbsMap
+from reclaimer.meta.objs.shadowrun_map import ShadowrunMap
 from reclaimer.util import sanitize_path, fourcc, is_reserved_tag
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
      get_tag_index
@@ -75,7 +76,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 5, 4)
+    version = (1, 6, 0)
 
     data_extract_window = None
     settings_window     = None
@@ -492,7 +493,8 @@ class Refinery(tk.Tk):
         else:
             next_mode = "tags"
             engine = self.active_map.engine
-            if   "halo1" in engine or "stubbs" in engine:
+            if   ("halo1" in engine or "stubbs" in engine or
+                  "shadowrun" in engine):
                 valid_classes = h1_data_extractors.keys()
             elif "halo2" in engine:
                 valid_classes = h2_data_extractors.keys()
@@ -649,6 +651,7 @@ class Refinery(tk.Tk):
         self._running = True
         try:
             print("Loading resource maps for: %s" % halo_map.map_header.map_name)
+            self.update()
             halo_map.load_all_resource_maps()
             self.rebuild_map_select_menu()
             print("    Finished")
@@ -700,6 +703,8 @@ class Refinery(tk.Tk):
                         continue
                     elif "stubbs" in engine:
                         new_map = StubbsMap(self.maps)
+                    elif "shadowrun" in engine:
+                        new_map = ShadowrunMap(self.maps)
                     elif "halo1" in engine:
                         new_map = Halo1Map(self.maps)
                     elif "halo2" in engine:
@@ -989,7 +994,8 @@ class Refinery(tk.Tk):
         bsp_headers        = active_map.bsp_headers
         bsp_header_offsets = active_map.bsp_header_offsets
 
-        if self.fix_tag_classes.get() and "stubbs" not in active_map.engine:
+        if self.fix_tag_classes.get() and not("stubbs" in active_map.engine or
+                                              "shadowrun" in active_map.engine):
             print("Repairing tag classes...")
             #print("STILL NEED TO IMPLEMENT RENAMING BITMAP, USTR, AND FONT "
             #      "TAGS IN THE RESOURCE MAPS USING CACHED NAMES.")
@@ -1284,7 +1290,8 @@ class Refinery(tk.Tk):
                 tags_list_path = info['tags_list_path'].get()
                 map_name = curr_map.map_header.map_name
                 is_halo1_tag = ("halo1"  in curr_map.engine or
-                                "stubbs" in curr_map.engine)
+                                "stubbs" in curr_map.engine or
+                                "shadowrun" in curr_map.engine)
                 recursive &= is_halo1_tag
 
                 extract_kw = dict(out_dir=out_dir, overwrite=overwrite,
