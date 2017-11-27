@@ -37,6 +37,7 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
         show_output=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
         autoload_resources=tk.IntVar(parent), decode_adpcm=tk.IntVar(parent),
+        generate_comp_verts=tk.IntVar(parent), generate_uncomp_verts=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), tags_list_path=tk.StringVar(parent)
@@ -733,11 +734,13 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.tabs = ttk.Notebook(self)
         self.dirs_frame      = tk.Frame(self.tabs)
         self.extract_frame   = tk.Frame(self.tabs)
+        self.data_fixing_frame = tk.Frame(self.tabs)
         self.deprotect_frame = tk.Frame(self.tabs)
         self.other_frame     = tk.Frame(self.tabs)
 
         self.tabs.add(self.dirs_frame, text="Directories")
         self.tabs.add(self.extract_frame, text="Extraction")
+        self.tabs.add(self.data_fixing_frame, text="Data fixing")
         self.tabs.add(self.deprotect_frame, text="Deprotection")
         self.tabs.add(self.other_frame, text="Other")
 
@@ -749,10 +752,11 @@ class RefinerySettingsWindow(tk.Toplevel):
             self.dirs_frame, text="Tags list log(erase to disable logging)")
 
         for attr in ("extract_from_ce_resources", "overwrite", "recursive",
-                     "rename_duplicates_in_scnr", "fix_tag_classes",
-                     "use_hashcaches", "use_heuristics",
-                     "autoload_resources", "decode_adpcm",
-                     "extract_cheape", "show_output", "fix_tag_index_offset"):
+                     "rename_duplicates_in_scnr", "decode_adpcm",
+                     "generate_comp_verts", "generate_uncomp_verts",
+                     "fix_tag_classes", "use_hashcaches", "use_heuristics",
+                     "autoload_resources", "extract_cheape",
+                     "show_output", "fix_tag_index_offset"):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("tags_dir", "data_dir", "tags_list_path"):
@@ -770,13 +774,20 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.show_output_cbtn = tk.Checkbutton(
             self.extract_frame, text="Print extracted file names",
             variable=self.show_output)
+
         self.rename_duplicates_in_scnr_cbtn = tk.Checkbutton(
-            self.extract_frame, text=(
+            self.data_fixing_frame, text=(
                 "Rename duplicate camera points, cutscene\n"+
                 "flags, and recorded animations in scenario"),
             variable=self.rename_duplicates_in_scnr)
+        self.generate_comp_verts_cbtn = tk.Checkbutton(
+            self.data_fixing_frame, text="Generate compressed vertices",
+            variable=self.generate_comp_verts)
+        self.generate_uncomp_verts_cbtn = tk.Checkbutton(
+            self.data_fixing_frame, text="Generate uncompressed vertices",
+            variable=self.generate_uncomp_verts)
         self.decode_adpcm_cbtn = tk.Checkbutton(
-            self.extract_frame, variable=self.decode_adpcm,
+            self.data_fixing_frame, variable=self.decode_adpcm,
             text="Decode Xbox audio when extracting data(slow)")
 
         self.fix_tag_classes_cbtn = tk.Checkbutton(
@@ -826,8 +837,8 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         # pack everything
         self.tabs.pack(fill="both", expand=True)
-        for w in (self.dirs_frame, self.extract_frame, self.deprotect_frame,
-                  self.other_frame):
+        for w in (self.dirs_frame, self.extract_frame, self.data_fixing_frame,
+                  self.deprotect_frame, self.other_frame):
             pass#w.pack(fill="both", expand=True)
 
         for w in (self.tags_dir_frame, self.data_dir_frame,
@@ -835,8 +846,13 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, pady=2, expand=True, fill="x")
 
         for w in (self.extract_from_ce_resources_cbtn, self.overwrite_cbtn,
-                  self.recursive_cbtn, self.show_output_cbtn,
-                  self.rename_duplicates_in_scnr_cbtn, self.decode_adpcm_cbtn):
+                  self.recursive_cbtn, self.show_output_cbtn):
+            w.pack(padx=4, anchor='w')
+
+        for w in (self.rename_duplicates_in_scnr_cbtn,
+                  self.generate_uncomp_verts_cbtn,
+                  self.generate_comp_verts_cbtn,
+                  self.decode_adpcm_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.fix_tag_index_offset_cbtn,

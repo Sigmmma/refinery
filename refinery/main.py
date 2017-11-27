@@ -76,7 +76,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 6, 0)
+    version = (1, 6, 1)
 
     data_extract_window = None
     settings_window     = None
@@ -126,6 +126,8 @@ class Refinery(tk.Tk):
         self.autoload_resources = tk.IntVar(self, 1)
         self.show_output  = tk.IntVar(self, 1)
         self.decode_adpcm = tk.IntVar(self, 1)
+        self.generate_comp_verts = tk.IntVar(self, 0)
+        self.generate_uncomp_verts = tk.IntVar(self, 1)
 
         self.tk_vars = dict(
             fix_tag_classes=self.fix_tag_classes,
@@ -143,7 +145,9 @@ class Refinery(tk.Tk):
             data_dir=self.tk_data_dir,
             tags_list_path=self.tags_list_path,
             extract_mode=self.extract_mode,
-            decode_adpcm=self.decode_adpcm
+            decode_adpcm=self.decode_adpcm,
+            generate_comp_verts=self.generate_comp_verts,
+            generate_uncomp_verts=self.generate_uncomp_verts,
             )
 
         if self.config_file is not None:
@@ -360,7 +364,8 @@ class Refinery(tk.Tk):
         flags = header.extraction_flags
         for attr_name in ("extract_cheape", "overwrite",
                           "extract_from_ce_resources", "recursive",
-                          "rename_duplicates_in_scnr", "decode_adpcm"):
+                          "rename_duplicates_in_scnr", "decode_adpcm",
+                          "generate_uncomp_verts", "generate_comp_verts", ):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         flags = header.deprotection_flags
@@ -402,7 +407,8 @@ class Refinery(tk.Tk):
         flags = header.extraction_flags
         for attr_name in ("extract_cheape", "overwrite",
                           "extract_from_ce_resources", "recursive",
-                          "rename_duplicates_in_scnr", "decode_adpcm"):
+                          "rename_duplicates_in_scnr", "decode_adpcm",
+                          "generate_uncomp_verts", "generate_comp_verts", ):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         flags = header.deprotection_flags
@@ -1353,7 +1359,10 @@ class Refinery(tk.Tk):
             extracted = set()
             local_total = 0
             convert_kwargs = dict(
-                rename_scnr_dups=self.rename_duplicates_in_scnr.get())
+                rename_scnr_dups=self.rename_duplicates_in_scnr.get(),
+                generate_uncomp_verts=self.generate_uncomp_verts.get(),
+                generate_comp_verts=self.generate_comp_verts.get()
+                )
 
             while tag_index_refs:
                 next_refs = []
