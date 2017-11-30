@@ -76,7 +76,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 1
-    version = (1, 6, 1)
+    version = (1, 6, 2)
 
     data_extract_window = None
     settings_window     = None

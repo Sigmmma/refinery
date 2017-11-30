@@ -10,6 +10,7 @@ from traceback import format_exc
 from refinery.hashcacher_window import sanitize_filename, HashcacherWindow
 from refinery.meta_window import MetaWindow
 
+from binilla.widgets import ScrollMenu
 from reclaimer.common_descs import blam_header, QStruct
 from reclaimer.util import sanitize_path, is_protected_tag, fourcc, is_reserved_tag
 from supyr_struct.defs.tag_def import TagDef
@@ -29,6 +30,37 @@ meta_tag_def = TagDef("meta tag",
 TREE_SORT_METHODS = {0: "name", 4:"pointer", 5:"pointer", 6:"index_id"}
 BAD_CLASSES = set(("<INVALID>", "NONE"))
 
+superclasses = dict(
+    shader_environment=("shader", "NONE"),
+    shader_model=("shader", "NONE"),
+    shader_transparent_generic=("shader", "NONE"),
+    shader_transparent_chicago=("shader", "NONE"),
+    shader_transparent_chicago_extended=("shader", "NONE"),
+    shader_plasma=("shader", "NONE"),
+    shader_meter=("shader", "NONE"),
+    shader_water=("shader", "NONE"),
+    shader_glass=("shader", "NONE"),
+
+    biped=("unit", "object"),
+    vehicle=("unit", "object"),
+
+    weapon=("item", "object"),
+    equipment=("item", "object"),
+    garbage=("item", "object"),
+
+    device_machine=("device", "object"),
+    device_control=("device", "object"),
+    device_light_fixture=("device", "object"),
+
+    projectile=("object", "NONE"),
+    scenery=("object", "NONE"),
+    placeholder=("object", "NONE"),
+    sound_scenery=("object", "NONE"),
+
+    effect_postprocess_generic=("effect_postprocess", "NONE"),
+    shader_postprocess_generic=("shader_postprocess", "NONE"),
+    )
+
 def ask_extract_settings(parent, def_vars=None, **kwargs):
     if def_vars is None:
         def_vars = {}
@@ -40,7 +72,8 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         generate_comp_verts=tk.IntVar(parent), generate_uncomp_verts=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
-        rename_string=tk.StringVar(parent), tags_list_path=tk.StringVar(parent)
+        rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
+        tags_list_path=tk.StringVar(parent)
         )
 
     settings_vars['rename_string'].set(def_vars.pop('rename_string', ''))
@@ -258,9 +291,11 @@ class ExplorerHierarchyTree(HierarchyFrame):
                                             tag_index_ref=tag_index_ref)
 
             if settings['accept_rename'].get():
-                new_name = splitext(settings['rename_string'].get())[0]
+                #new_name = splitext(settings['rename_string'].get())[0]
+                new_name = settings['rename_string'].get()
+                new_type = settings['newtype_string'].get()
                 self.rename_tag_index_refs(
-                    tag_index_refs, splitext(item_name)[0], new_name)
+                    tag_index_refs, splitext(item_name)[0], new_name, new_type)
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
                 settings['title'] = item_name
@@ -268,14 +303,12 @@ class ExplorerHierarchyTree(HierarchyFrame):
                     "%s: map: %s: %s" % (settings['extract_mode'].get(),
                                          map_name, item_name), settings)
 
-    def rename_tag_index_refs(self, index_refs, old_basename, new_basename,
-                              rename_in_other_trees=True):
+    def rename_tag_index_refs(self, index_refs, old_basename,
+                              new_basename, new_cls, rename_other_trees=True):
         if self.active_map is None: return
 
         old_basename = old_basename.lower()
         new_basename = new_basename.lower()
-        if old_basename == new_basename:
-            return
 
         tags_tree = self.tags_tree
         map_magic = self.active_map.map_magic
@@ -284,13 +317,23 @@ class ExplorerHierarchyTree(HierarchyFrame):
         child_items = []
         renamed_index_refs = []
         renaming_multiple = len(index_refs) > 1
+        if renaming_multiple:
+            new_cls = None
+
+        if (old_basename == new_basename) and not new_cls:
+            return
 
         for index_ref in index_refs:
-            tag_cls = index_ref.class_1.data
-            tag_id  = index_ref.id.tag_table_index
+            tag_cls_val = index_ref.class_1.data
+            tag_id      = index_ref.id.tag_table_index
             if not map_magic:
                 # resource cache tag
                 tag_id += (index_ref.id.table_index << 16)
+            if new_cls:
+                try:
+                    tag_cls_val = index_ref.class_1.get_value(new_cls)
+                except Exception:
+                    new_cls = None
 
             # when renaming only one tag, the basenames COULD BE the full names
             old_name = sanitize_path(index_ref.tag.tag_path.lower())
@@ -324,7 +367,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 elif sibling_index_ref is index_ref:
                     # this is the thing we're renaming. no worry
                     continue
-                elif tag_cls != sibling_index_ref.class_1.data:
+                elif tag_cls_val != sibling_index_ref.class_1.data:
                     # classes are different. no worry
                     continue
                 elif sibling_index_ref.tag.tag_path != new_name:
@@ -337,8 +380,18 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 print("'%s' already exists in map. Cannot rename." % new_name)
                 continue
 
-            if rename_in_other_trees:
+            if rename_other_trees:
                 index_ref.tag.tag_path = new_name
+                try:
+                    old_cls = index_ref.class_1.enum_name
+                except Exception:
+                    old_cls = None
+
+                if new_cls and new_cls != old_cls:
+                    index_ref.class_1.set_to(new_cls)
+                    cls_2, cls_3 = superclasses.get(new_cls, ("NONE", "NONE"))
+                    index_ref.class_2.set_to(cls_2)
+                    index_ref.class_3.set_to(cls_3)
 
             # add this child to the list to be removed
             child_items.append(tag_id)
@@ -355,13 +408,13 @@ class ExplorerHierarchyTree(HierarchyFrame):
         # add the newly named tags back to the tree
         self.add_tag_index_refs(renamed_index_refs)
 
-        if not rename_in_other_trees:
+        if not rename_other_trees:
             return
 
         for tree in self.sibling_tree_frames.values():
             if tree is not self and hasattr(tree, 'rename_tag_index_refs'):
                 tree.rename_tag_index_refs(renamed_index_refs, old_basename,
-                                           new_basename, False)
+                                           new_basename, new_cls, False)
 
     def add_tag_index_refs(self, index_refs, presorted=False):
         if self.active_map is None: return
@@ -616,9 +669,12 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     # selecting a tag_class
                     print("Cannot rename by tag class.")
                     continue
-                new_name = splitext(settings['rename_string'].get())[0]
+                #new_name = splitext(settings['rename_string'].get())[0]
+                new_name = settings['rename_string'].get()
+                new_type = settings['newtype_string'].get()
                 self.rename_tag_index_refs(
-                    tag_index_refs, splitext(path_string)[0], new_name)
+                    tag_index_refs, splitext(path_string)[0],
+                    new_name, new_type)
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
                 self.queue_tree.add_to_queue(
@@ -928,6 +984,7 @@ class RefineryActionsWindow(tk.Toplevel):
     tag_index_ref = None
 
     rename_string = None
+    newtype_string = None
     recursive_rename = None
 
     def __init__(self, *args, **kwargs):
@@ -938,9 +995,7 @@ class RefineryActionsWindow(tk.Toplevel):
         tk.Toplevel.__init__(self, *args, **kwargs)
         self.bind('<Escape>', lambda e=None, s=self, *a, **kw: s.destroy())
 
-        height = 280
-        if self.tag_index_ref is not None:
-            height += 30
+        height = 310 + bool(self.tag_index_ref)*30
         self.geometry("300x%s" % height)
         self.minsize(width=300, height=height)
 
@@ -950,6 +1005,7 @@ class RefineryActionsWindow(tk.Toplevel):
         self.accept_rename   = settings.get('accept_rename', tk.IntVar(self))
         self.accept_settings = settings.get('accept_settings', tk.IntVar(self))
         self.rename_string   = settings.get('rename_string', tk.StringVar(self))
+        self.newtype_string  = settings.get('newtype_string', tk.StringVar(self))
         self.extract_to_dir  = settings.get('out_dir', tk.StringVar(self))
         self.tags_list_path  = settings.get('tags_list_path', tk.StringVar(self))
         self.extract_mode    = settings.get('extract_mode', tk.StringVar(self))
@@ -963,12 +1019,15 @@ class RefineryActionsWindow(tk.Toplevel):
         self.title(title)
 
         self.rename_string.set(splitext(self.rename_string.get())[0])
+        self.newtype_string.set("")
 
         self.accept_rename.set(0)
         self.accept_settings.set(0)
 
         # frames
-        self.rename_frame     = tk.LabelFrame(self, text="Rename to")
+        self.rename_frame        = tk.LabelFrame(self, text="Rename to")
+        self.rename_frame_inner0 = tk.Frame(self.rename_frame)
+        self.rename_frame_inner1 = tk.Frame(self.rename_frame)
         self.tags_list_frame  = tk.LabelFrame(
             self, text="Tags list log(erase to disable logging)")
         self.extract_to_frame = tk.LabelFrame(self, text="Directory to extract to")
@@ -979,12 +1038,25 @@ class RefineryActionsWindow(tk.Toplevel):
         self.cancel_frame = tk.Frame(self.button_frame)
 
         # rename
-        self.rename_entry = tk.Entry(
-            self.rename_frame, textvariable=self.rename_string)
-        self.rename_button = tk.Button(
-            self.rename_frame, text="Rename", command=self.rename, width=6)
+        self.rename_entry = tk.Entry(self.rename_frame_inner0,
+                                     textvariable=self.rename_string)
+        self.rename_button = tk.Button(self.rename_frame_inner0, text="Rename",
+                                       command=self.rename, width=6)
+        self.class_scroll_menu = ScrollMenu(self.rename_frame_inner1,
+                                            menu_width=35)
         self.recursive_rename_cbtn = tk.Checkbutton(
-            self.rename_frame, text="Recursive", variable=self.recursive_rename)
+            self.rename_frame_inner1, text="Recursive",
+            variable=self.recursive_rename)
+
+        if self.tag_index_ref:
+            # populate the class_scroll_menu options
+            opts = sorted([n for n in self.tag_index_ref.class_1.NAME_MAP])
+            self.class_scroll_menu.set_options(opts)
+            try:
+                self.class_scroll_menu.sel_index = opts.index(
+                    self.tag_index_ref.class_1.enum_name)
+            except ValueError:
+                pass
 
         # tags list
         self.tags_list_entry = tk.Entry(
@@ -1024,6 +1096,8 @@ class RefineryActionsWindow(tk.Toplevel):
         # frames
         if self.renamable:
             self.rename_frame.pack(padx=4, pady=2, expand=True, fill="x")
+        self.rename_frame_inner0.pack(expand=True, fill="x")
+        self.rename_frame_inner1.pack(expand=True, fill="x")
         self.tags_list_frame.pack(padx=4, pady=2, expand=True, fill="x")
         self.extract_to_frame.pack(padx=4, pady=2, expand=True, fill="x")
         self.settings_frame.pack(padx=4, pady=2, expand=True, fill="x")
@@ -1035,6 +1109,8 @@ class RefineryActionsWindow(tk.Toplevel):
         # rename
         self.rename_entry.pack(padx=4, side='left', fill='x', expand=True)
         self.rename_button.pack(padx=4, side='left', fill='x')
+        if self.tag_index_ref:
+            self.class_scroll_menu.pack(padx=4, side='left', fill='x')
         #self.recursive_rename_cbtn.pack(padx=4, side='left', fill='x')
 
         # extract to
@@ -1081,7 +1157,18 @@ class RefineryActionsWindow(tk.Toplevel):
             # directory of tags
             new_name += PATHDIV
 
-        new_name = splitext(new_name)[0]
+        old_class = new_class = None
+        try:
+            old_class = self.tag_index_ref.class_1.enum_name
+        except Exception:
+            pass
+
+        try:
+            new_class = self.class_scroll_menu.get_option()
+        except Exception:
+            new_class = ""
+
+        #new_name = splitext(new_name)[0]
         self.rename_string.set(new_name)
         str_len = len(new_name)
         if str_len > MAX_NAME_LEN:
@@ -1102,6 +1189,11 @@ class RefineryActionsWindow(tk.Toplevel):
                 "The entered string cannot be empty.", parent=self)
             return
         self.accept_rename.set(1)
+
+        # change the type if applicable
+        if new_class and new_class != old_class:
+            self.newtype_string.set(new_class)
+
         self.destroy()
 
     def tags_list_browse(self):
