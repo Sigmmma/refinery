@@ -55,7 +55,7 @@ from reclaimer.meta.class_repair import class_repair_functions,\
      class_bytes_by_fcc
 
 try:
-    import crc_setter
+    from refinery import crc_setter
 except Exception:
     pass
 

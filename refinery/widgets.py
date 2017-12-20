@@ -1343,8 +1343,7 @@ class RefineryChecksumEditorWindow(tk.Toplevel):
         self.checksum_string = tk.StringVar(self, 'Checksum functions unavailable')
 
         # frames
-        self.checksum_frame = tk.LabelFrame(
-            self, text="New random checksum")
+        self.checksum_frame = tk.LabelFrame(self, text="Current random checksum")
         self.button_frame = tk.Frame(self)
 
         # rename
@@ -1400,6 +1399,13 @@ class RefineryChecksumEditorWindow(tk.Toplevel):
         except Exception:
             return
         self.active_map.force_checksum = True
+        messagebox.showinfo(
+            "Note about checksums",
+            "Halo Custom Edition authenticates more than just the maps checksum. "
+            "In order to get a client-server map pack to work together, both maps "
+            "must also have the same name and filesize. You can rename the maps in "
+            "Refinery and resize the smaller one in a hex editor. Resizing changes the "
+            "checksum, so you will need to run this again after everything matches.", parent=self)
 
         self.destroy()
 
