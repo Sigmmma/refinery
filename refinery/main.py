@@ -16,7 +16,6 @@ from tkinter.font import Font
 from tkinter import messagebox
 from tkinter.filedialog import askopenfilename, askopenfilenames,\
      asksaveasfilename
-from tkinter.font import Font
 from traceback import format_exc
      
 
@@ -33,9 +32,9 @@ if print_startup:
     print("    Importing refinery modules")
 
 
-from refinery import crc_functions
-from refinery.widgets import QueueTree, RefinerySettingsWindow,\
-     RefineryRenameWindow, RefineryChecksumEditorWindow,\
+from refinery import crc_functions, util
+from refinery.widgets import QueueTree,\
+     RefinerySettingsWindow, RefineryRenameWindow,\
      ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
 from refinery.defs.config_def import config_def
 
@@ -51,8 +50,9 @@ from reclaimer.meta.objs.shadowrun_map import ShadowrunMap
 from reclaimer.util import sanitize_path, fourcc, is_reserved_tag
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
      get_tag_index
-from reclaimer.meta.class_repair import class_repair_functions,\
-     class_bytes_by_fcc
+from reclaimer.meta.class_repair import class_repair_functions
+from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
+from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 
 try:
     from refinery import crc_setter
@@ -75,6 +75,57 @@ def run():
     return Refinery()
 
 
+def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
+                   vertex_data_expansion=0, triangle_data_expansion=0):
+    map_file   = halo_map.map_data
+    map_header = halo_map.map_header
+    tag_index  = halo_map.tag_index
+    tag_index_array = tag_index.tag_index
+    index_header_offset = map_header.tag_index_header_offset
+
+    raw_data_end    = tag_index.model_data_offset
+    vertex_data_end = tag_index.vertex_data_size + raw_data_end
+    index_data_end  = tag_index.model_data_size  + raw_data_end
+    tag_index.tag_index = tag_index_array
+
+    expansions = ((raw_data_end,    raw_data_expansion),
+                  (vertex_data_end, vertex_data_expansion),
+                  (index_data_end,  triangle_data_expansion),
+                  (map_file.tell(), meta_data_expansion))
+
+    # expand the map's sections
+    map_file.seek(0, 2)
+    map_end = util.inject_file_padding(map_file, *expansions)
+    diffs_by_offsets, diff = dict(expansions), 0
+    for off in sorted(diffs_by_offsets):
+        diff += diffs_by_offsets[off]
+        diffs_by_offsets[off] = diff
+
+    meta_ptr_diff = diff - meta_data_expansion
+
+    # update the map_header and tag_index_header's offsets and sizes
+    tag_index.model_data_offset   += raw_data_expansion
+    tag_index.vertex_data_size    += vertex_data_expansion
+    tag_index.model_data_size     += (vertex_data_expansion +
+                                      triangle_data_expansion)
+    halo_map.map_magic                 -= meta_ptr_diff
+    map_header.tag_index_header_offset += meta_ptr_diff
+    map_header.tag_index_meta_len      += meta_data_expansion
+    map_header.decomp_len = map_end
+
+    # adjust rawdata pointers in various tags if the index header moved
+    if meta_ptr_diff:
+        for ref in tag_index_array:
+            func = rawdata_ref_move_functions.get(fourcc(ref.class_1.data))
+            if func is None or ref.indexed:
+                continue
+            func(ref.id.tag_table_index, tag_index_array, map_file,
+                 halo_map.map_magic, halo_map.engine, diffs_by_offsets)
+
+    map_file.flush()
+    return map_end
+
+
 class Refinery(tk.Tk):
     tk_active_map_name = None
     tk_map_path = None
@@ -86,7 +137,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 6, 3)
+    version = (1, 6, 5)
 
     data_extract_window = None
     settings_window     = None
@@ -199,8 +250,6 @@ class Refinery(tk.Tk):
 
         self.edit_menu.add_command(
             label="Rename map", command=self.show_rename)
-        self.edit_menu.add_command(
-            label="Change map checksum", command=self.show_checksum_edit)
 
         self.menubar.add_cascade(label="File", menu=self.file_menu)
         self.menubar.add_cascade(label="Edit", menu=self.edit_menu)
@@ -556,20 +605,6 @@ class Refinery(tk.Tk):
         self.rename_window.update()
         self.place_window_relative(self.rename_window)
 
-    def show_checksum_edit(self, e=None):
-        if self.checksum_window is not None or not self.map_loaded:
-            return
-        elif self.running:
-            return
-        elif self.active_map.is_resource:
-            return
-
-        self.checksum_window = RefineryChecksumEditorWindow(
-            self, active_map=self.active_map)
-        # make sure the window gets a chance to set its size
-        self.checksum_window.update()
-        self.place_window_relative(self.checksum_window)
-
     def destroy(self, e=None):
         self._running = False
         self.unload_maps(None, None)
@@ -889,8 +924,11 @@ class Refinery(tk.Tk):
                     else:
                         string += ((
                             "    vertex data size    == %s\n" +
-                            "    index  data size    == %s\n") %
-                        (index.vertex_data_size, index.index_data_size))
+                            "    index  data size    == %s\n" +
+                            "    model  data size    == %s\n") %
+                        (index.vertex_data_size,
+                         index.model_data_size - index.vertex_data_size,
+                         index.model_data_size))
 
                 if active_map.engine == "halo1yelo":
                     yelo    = header.yelo_header
@@ -1007,7 +1045,7 @@ class Refinery(tk.Tk):
             print("Deprotection cancelled.")
             return
 
-        if not self.save_map_as(save_path=save_path):
+        if not self.save_map(save_path):
             return
 
         start = time()
@@ -1016,6 +1054,7 @@ class Refinery(tk.Tk):
 
         # get the active map AFTER saving because it WILL have changed
         active_map      = self.active_map
+        map_header      = active_map.map_header
         tag_index       = active_map.tag_index
         tag_index_array = tag_index.tag_index
         map_data = active_map.map_data
@@ -1077,9 +1116,8 @@ class Refinery(tk.Tk):
 
                     # DEBUG
                     # print('    %s %s' % (tag_id, tag_cls))
-                    if tag_cls not in class_repair_functions:
-                        continue
-                    elif tag_index_array[tag_id].indexed:
+                    if (tag_cls not in class_repair_functions or
+                            tag_index_array[tag_id].indexed):
                         continue
 
                     if tag_cls == "sbsp":
@@ -1111,19 +1149,14 @@ class Refinery(tk.Tk):
                             return
 
                         tag_id = b.id.tag_table_index
-                        if tag_id in repaired:
+                        if (b.class_1.enum_name in ("<INVALID>", "NONE") or
+                                tag_id in repaired):
                             continue
 
-                        if b.class_1.enum_name not in ("<INVALID>", "NONE"):
-                            tag_cls = fourcc(b.class_1.data)
-                        else:
-                            continue
-
+                        tag_cls = fourcc(b.class_1.data)
                         if tag_index_array[tag_id].indexed:
                             repaired[tag_id] = tag_cls
-                            continue
-
-                        if tag_cls in ("Soul", "tagc", "yelo", "gelo", "gelc"):
+                        elif tag_cls in ("Soul", "tagc", "yelo", "gelo", "gelc"):
                             repair[tag_id] = tag_cls
 
             print("    Finished")
@@ -1164,15 +1197,15 @@ class Refinery(tk.Tk):
 
         # calculate the maps new checksum
         map_data.seek(2048)
-        crc32 = 0
+        crc32, chunk = 0, True
         while chunk:
-            chunk = map_data.read(1024*1024*4)  # calculate in 4Mb chunks
-            crc32 = zlib.crc32(chunk, crc32)
+            chunk = map_data.read(4*1024**2)  # calculate in 4Mb chunks
+            crc32 = zlib.crc32(chunk, crc32^0xFFffFFff)^0xFFffFFff
             gc.collect()
 
-        map_data.seek(active_map.map_header.get_desc('OFFSET', 'crc32'))
-        map_data.write(int.to_bytes(crc32^0xFFffFFff, 4, 'little'))
-
+        map_header.crc32 = crc32
+        map_data.seek(0)
+        map_data.write(map_header.serialize(calc_pointers=False))
         map_data.flush()
 
         print("Reloading map to apply changes...")
@@ -1189,7 +1222,7 @@ class Refinery(tk.Tk):
         self._running = False
         print("Completed. Took %s seconds." % round(time()-start, 1))
 
-    def save_map_as(self, e=None, save_path=None, reload_after_saving=True):
+    def save_map_as(self, e=None):
         if not self.map_loaded: return
 
         active_map = self.active_map
@@ -1202,20 +1235,42 @@ class Refinery(tk.Tk):
             print("Cannot save this kind of map.")
             return
 
-        if not save_path:
-            save_path = asksaveasfilename(
-                initialdir=dirname(self.tk_map_path.get()), parent=self,
-                title="Choose where to save the map",
-                filetypes=(("Halo mapfile", "*.map"),
-                           ("Halo mapfile(extra sauce)", "*.yelo"),
-                           ("All", "*")))
+        save_path = asksaveasfilename(
+            initialdir=dirname(self.tk_map_path.get()), parent=self,
+            title="Choose where to save the map",
+            filetypes=(("Halo mapfile", "*.map"),
+                       ("Halo mapfile(extra sauce)", "*.yelo"),
+                       ("All", "*")))
 
         if not save_path:
             return
 
+        self.save_map(save_path)
+
+    def save_map(self, save_path=None, map_name="active", *, reload_window=True,
+                 meta_data_expansion=0, raw_data_expansion=0,
+                 vertex_data_expansion=0, triangle_data_expansion=0):
+        assert meta_data_expansion     >= 0
+        assert raw_data_expansion      >= 0
+        assert vertex_data_expansion   >= 0
+        assert triangle_data_expansion >= 0
+
+        halo_map = self.maps.get(map_name)
+        if halo_map is None or self.running:
+            return
+        elif halo_map.is_resource:
+            print("Cannot save resource maps.")
+            return
+        elif halo_map.engine not in ("halo1ce", "halo1yelo"):
+            print("Cannot save this kind of map.")
+            return
+        elif not save_path:
+            save_path = halo_map.filepath
+
         save_dir  = dirname(save_path)
         save_path, ext = splitext(save_path)
-        save_path = sanitize_path(save_path + (ext if ext else '.map'))
+        save_path = sanitize_path(save_path + (ext if ext else (
+            '.yelo' if 'yelo' in halo_map.engine else '.map')))
         if not exists(save_dir):
             os.makedirs(save_dir)
 
@@ -1223,24 +1278,25 @@ class Refinery(tk.Tk):
         print("Saving map...")
         print("    %s" % save_path)
         try:
-            map_file = active_map.map_data
-            if save_path.lower() == active_map.filepath.lower():
-                out_file = map_file
-            else:
+            out_file = map_file = halo_map.map_data
+            if save_path.lower() != halo_map.filepath.lower():
                 out_file = open(save_path, 'wb+')
 
-            orig_tag_paths = active_map.orig_tag_paths
-            map_magic    = active_map.map_magic
-            index_magic  = active_map.index_magic
-            map_header   = active_map.map_header
-            tag_index    = active_map.tag_index
-            index_offset = tag_index.tag_index_offset
-            index_array  = tag_index.tag_index
+            map_header = halo_map.map_header
+            index_off_diff = (raw_data_expansion +
+                              vertex_data_expansion + triangle_data_expansion)
 
-            # copy the map to the new save location
-            map_file.seek(0, 2)
-            map_file.seek(2048)  # dont copy the header
-            out_file.seek(2048)
+            orig_tag_paths = halo_map.orig_tag_paths
+            map_magic      = halo_map.map_magic
+            index_magic    = halo_map.index_magic
+            tag_index      = halo_map.tag_index
+            index_offset   = tag_index.tag_index_offset
+            index_array    = tag_index.tag_index
+            index_header_offset = map_header.tag_index_header_offset
+
+            if index_off_diff:
+                index_header_offset += index_off_diff
+                map_magic = get_map_magic(map_header)
 
             g, l, do, de = globals(), locals(), eval, str
             try:
@@ -1248,59 +1304,90 @@ class Refinery(tk.Tk):
             except Exception:
                 func = None
             calc = do(de(b'\xa9\x93\x89\x82K\x83\x99\x83\xf3\xf2', '037'), g, l)
-            edi  = do(de(b'\x81\x83\xa3\x89\xa5\x85m\x94\x81\x97K\x86\x96'
-                         b'\x99\x83\x85m\x83\x88\x85\x83\x92\xa2\xa4\x94', '037'), g, l)
+            edi  = do(de(b'\x88\x81\x93\x96m\x94\x81\x97K\x86\x96\x99'
+                         b'\x83\x85m\x83\x88\x85\x83\x92\xa2\xa4\x94', '037'), g, l)
             edi &= func is not None
+
+            # copy the map to the new save location
+            map_file.seek(2048)  # dont copy the header
+            out_file.seek(2048)
             map_size, chunk = 2048, True
             while chunk:
-                chunk = map_file.read(1024*1024*4)  # work with 4Mb chunks
+                chunk = map_file.read(4*1024**2)  # work with 4Mb chunks
                 map_size += len(chunk)
                 if map_file is not out_file:
                     out_file.write(chunk)
                 gc.collect()
 
-            # move the tag_index array back to where it SHOULD be
-            index_header_size = tag_index.get_size()
-            if self.fix_tag_index_offset.get():
-                tag_index.tag_index_offset = index_magic + index_header_size
-
             # recalculate pointers for the strings if they were changed
+            strings_size, string_offs = 0, {}
             for i in range(len(index_array)):
                 tag_path = index_array[i].tag.tag_path
                 if orig_tag_paths[i].lower() == tag_path.lower():
                     # path wasnt changed
                     continue
-                # change the pointer to the end of the map
-                index_array[i].path_offset = map_size + map_magic
-                # increment map size by the size of the string
-                map_size += len(tag_path) + 1
 
-            # adding additional strings to the end will cause
-            # seek errors if we don't resize the file first
-            if isinstance(out_file, mmap.mmap):
-                out_file.resize(map_size)
+                # put the new string at the end of the metadata
+                string_offs[i] = map_size + map_magic + strings_size
+                strings_size += len(tag_path) + 1
 
-            # write the tag_index_header, tag_index and
-            # all the tag_paths to their locations
-            tag_index.serialize(
-                buffer=out_file, calc_pointers=False, magic=map_magic,
-                offset=map_header.tag_index_header_offset)
+            # make sure the user wants to expand the map more if needed
+            if strings_size > meta_data_expansion:
+                if not messagebox.askyesno(
+                    "Metadata size expansion required",
+                    ("Tag paths were edited, requiring the map be expanded to "
+                     "accommodate the new strings.\n\nMap must be expanded by "
+                     "%s more bytes. Allow this?") % strings_size,
+                    icon='warning', parent=self):
+                    print("    Save cancelled")
+                    self._running = False
+                    if map_file is not out_file:
+                        out_file.close()
+                    return ""
+
+                # move the new tag_path offsets to the end of the metadata
+                for i in string_offs:
+                    string_offs[i] += meta_data_expansion
+
+                meta_data_expansion += strings_size
+
+            # change each tag_path's pointer to its new value
+            for i, off in string_offs.items():
+                index_array[i].path_offset = off
+
+            # move the tag_index array back to where it SHOULD be
+            if self.fix_tag_index_offset.get():
+                tag_index.tag_index_offset = index_magic + tag_index.get_size()
+
+            # update the map_data and expand the map's sections if necessary
+            halo_map.map_data = out_file
+            if map_file is not out_file and hasattr(map_file, "close"):
+                map_file.close()
+            expand_halomap(halo_map, raw_data_expansion, meta_data_expansion,
+                           vertex_data_expansion, triangle_data_expansion)
+
+            # get the tag_index_header_offset and map_magic if they changed
+            index_header_offset = map_header.tag_index_header_offset
+            map_magic = halo_map.map_magic
+
+            # serialize the tag_index_header, tag_index and all the tag_paths
+            tag_index.serialize(buffer=out_file, calc_pointers=False,
+                                magic=map_magic, offset=index_header_offset)
 
             c, chunk = 0, True
             out_file.seek(2048)
             while chunk:
-                chunk = out_file.read(1024*1024*4)  # work with 4Mb chunks
-                c = calc(chunk, c)
+                chunk = out_file.read(4*1024**2)  # work with 4Mb chunks
+                c = calc(chunk, c^0xFFffFFff)^0xFFffFFff
                 gc.collect()
 
             # change the decompressed size
-            map_header.decomp_len = map_size
             if edi:
-                func([c, out_file, map_header.tag_index_header_offset +
+                func([c, out_file, index_header_offset +
                       tag_index.tag_index_offset - index_magic +
                       32*tag_index.scenario_tag_id[0] + 28])
             else:
-                map_header['curyco312'[::2]] = (c^4294967295)&4294967295
+                map_header['curyco312'[::2]] = c^0xFFffFFff
 
             # write the header to the beginning of the map
             out_file.seek(0)
@@ -1310,15 +1397,13 @@ class Refinery(tk.Tk):
         except Exception:
             print(format_exc())
             print("Could not save map")
-            save_path = None
+            save_path = ""
+            if map_file is not out_file:
+                out_file.close()
 
-        try:
-            out_file.close()
-        except Exception:
-            pass
         self._running = False
 
-        if reload_after_saving and save_path:
+        if reload_window and save_path:
             print("Reloading map to apply changes...")
             self.unload_maps(None)
             self.load_map(save_path, will_be_active=True)

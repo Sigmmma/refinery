@@ -5,24 +5,10 @@ from threading import Thread
 from tkinter.filedialog import askdirectory
 from traceback import format_exc
 
-from reclaimer.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS
 from reclaimer.os_v4_hek.handler import OsV4HaloHandler
 from refinery import hashcacher
+from refinery.util import *
 from supyr_struct.defs.constants import *
-from supyr_struct.defs.util import *
-
-
-def sanitize_filename(name):
-    # make sure to rename reserved windows filenames to a valid one
-    if name in RESERVED_WINDOWS_FILENAME_MAP:
-        return RESERVED_WINDOWS_FILENAME_MAP[name]
-    final_name = ''
-    for c in name:
-        if c not in INVALID_PATH_CHARS:
-            final_name += c
-    if final_name == '':
-        raise Exception('BAD %s CHAR FILENAME' % len(name))
-    return final_name
 
 
 class HashcacherWindow(tk.Toplevel):

@@ -14,7 +14,7 @@ from refinery import crc_functions
 
 from binilla.widgets import ScrollMenu
 from reclaimer.common_descs import blam_header, QStruct
-from reclaimer.util import sanitize_path, is_protected_tag, fourcc, is_reserved_tag
+from refinery.util import sanitize_path, is_protected_tag, fourcc, is_reserved_tag
 from supyr_struct.defs.tag_def import TagDef
 from mozzarilla.tools.shared_widgets import HierarchyFrame
 
@@ -31,7 +31,6 @@ meta_tag_def = TagDef("meta tag",
 
 TREE_SORT_METHODS = {0: "name", 4:"pointer", 5:"pointer", 6:"index_id"}
 BAD_CLASSES = set(("<INVALID>", "NONE"))
-
 superclasses = dict(
     shader_environment=("shader", "NONE"),
     shader_model=("shader", "NONE"),
@@ -62,6 +61,7 @@ superclasses = dict(
     effect_postprocess_generic=("effect_postprocess", "NONE"),
     shader_postprocess_generic=("shader_postprocess", "NONE"),
     )
+
 
 def ask_extract_settings(parent, def_vars=None, **kwargs):
     if def_vars is None:
@@ -1327,87 +1327,6 @@ class RefineryRenameWindow(tk.Toplevel):
             self.active_map.map_header.map_name = new_name
             self.master.display_map_info()
             self.destroy()
-
-
-class RefineryChecksumEditorWindow(tk.Toplevel):
-    active_map = None
-
-    def __init__(self, *args, **kwargs):
-        self.active_map = kwargs.pop('active_map', None)
-        tk.Toplevel.__init__(self, *args, **kwargs)
-
-        self.geometry("300x80")
-        self.title("Change map checksum")
-        self.resizable(0, 0)
-
-        self.checksum_string = tk.StringVar(self, 'Checksum functions unavailable')
-
-        # frames
-        self.checksum_frame = tk.LabelFrame(self, text="Current random checksum")
-        self.button_frame = tk.Frame(self)
-
-        # rename
-        self.checksum_entry = tk.Entry(
-            self.checksum_frame, textvariable=self.checksum_string,
-            justify='center', state='disabled')
-
-        # accept/cancel
-        self.generate_button = tk.Button(
-            self.button_frame, text="Generate new checksum",
-            command=lambda e=None: self.change_checksum(214), width=20)
-        self.apply_button = tk.Button(
-            self.button_frame, text="Apply to current map",
-            command=self.apply_checksum, width=20)
-
-        # pack everything
-        self.checksum_frame.pack(padx=4, expand=True, fill="x", pady=2)
-        self.button_frame.pack(expand=True, fill="x")
-
-        self.checksum_entry.pack(padx=4, pady=3, side='left',
-                                 fill='x', expand=True)
-        self.generate_button.pack(side='left', padx=5)
-        self.apply_button.pack(side='left', padx=5)
-
-        # make the window not show up on the start bar
-        self.transient(self.master)
-        self.change_checksum(197)
-
-    def destroy(self):
-        try: self.master.checksum_window = None
-        except AttributeError: pass
-        tk.Toplevel.destroy(self)
-
-    def change_checksum(self, *args):
-        if self.active_map is None:
-            return
-
-        try:
-            v = "%08x" % crc_functions.__dict__[bytes(args).decode('ibm1026')]([1,0,-1])
-        except Exception:
-            return
-
-        v = ''.join("%s " % v[i: i+2] for i in range(0, 8, 2))[:-1]
-        self.checksum_string.set(v)
-
-    def apply_checksum(self, e=None):
-        crc = self.checksum_string.get().replace(' ', '')
-        if self.active_map is None or not crc:
-            return
-
-        try:
-            self.active_map.map_header.crc32 = int(crc, 16)
-        except Exception:
-            return
-        self.active_map.force_checksum = True
-        # NOTE:
-        # Will need to move tag index header by injecting padding between it and
-        # everything before it in the map so all maps have the index header at the
-        # same location. This will also move the metadata properly if the map was
-        # not protected. Afterwards, the smaller map needs to be padded to the size
-        # of the larger one, and the metadata length and filesize specified in the
-        # header needs to be set to the same larger value for both. Finally, both
-        # maps can have their checksums set to the new value.
-        self.destroy()
 
 
 class RefineryEditActionsWindow(RefineryActionsWindow):
