@@ -137,7 +137,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 6, 5)
+    version = (1, 6, 6)
 
     data_extract_window = None
     settings_window     = None
@@ -745,7 +745,7 @@ class Refinery(tk.Tk):
                     continue
 
                 self._running = True
-                with open(map_path, 'rb+') as f:
+                with open(map_path, 'r+b') as f:
                     comp_data  = PeekableMmap(f.fileno(), 0)
                     head_sig   = unpack("<I", comp_data.peek(4))[0]
                     map_header = get_map_header(comp_data, True)
@@ -1280,7 +1280,14 @@ class Refinery(tk.Tk):
         try:
             out_file = map_file = halo_map.map_data
             if save_path.lower() != halo_map.filepath.lower():
-                out_file = open(save_path, 'wb+')
+                # use r+ mode rather than w if the file exists
+                # since it might be hidden. apparently on windows
+                # the w mode will fail to open hidden files.
+                if isfile(save_path):
+                    out_file = open(save_path, 'r+b')
+                    out_file.truncate(0)
+                else:
+                    out_file = open(save_path, 'w+b')
 
             map_header = halo_map.map_header
             index_off_diff = (raw_data_expansion +
@@ -1499,7 +1506,9 @@ class Refinery(tk.Tk):
 
                     curr_map.map_data.seek(cheape.offset)
                     cheape_data = curr_map.map_data.read(size)
-                    with open(abs_tag_path, "wb") as f:
+                    mode = 'r+b' if isfile(abs_tag_path) else 'w+b'
+                    with open(abs_tag_path, mode) as f:
+                        f.truncate(0)
                         if decomp_size and decomp_size != size:
                             cheape_data = zlib.decompress(cheape_data)
                         f.write(cheape_data)
@@ -1610,8 +1619,10 @@ class Refinery(tk.Tk):
                                 os.makedirs(dirname(abs_file_path))
 
                             if is_halo1_tag: FieldType.force_big()
-                            with open(abs_file_path, "wb") as f:
+                            mode = 'r+b' if isfile(abs_file_path) else 'w+b'
+                            with open(abs_file_path, mode) as f:
                                 try:
+                                    f.truncate(0)
                                     f.write(curr_map.tag_headers[tag_cls])
                                     f.write(meta.serialize(calc_pointers=False))
                                 except Exception:
@@ -1656,7 +1667,10 @@ class Refinery(tk.Tk):
                     try:
                         f = open(tags_list_path, 'a')
                     except Exception:
-                        f = open(tags_list_path, 'w')
+                        try:
+                            f = open(tags_list_path, 'w')
+                        except Exception:
+                            f = open(tags_list_path, 'r+')
 
                     f.write("%s tags in: %s\n" % (local_total, out_dir))
                     f.write(tagslist)
