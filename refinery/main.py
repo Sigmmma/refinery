@@ -71,10 +71,6 @@ VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
 VALID_EXTRACT_MODES = frozenset(("tags", "data"))
 
 
-def run():
-    return Refinery()
-
-
 def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
                    vertex_data_expansion=0, triangle_data_expansion=0):
     map_file   = halo_map.map_data
@@ -137,7 +133,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 6, 6)
+    version = (1, 6, 7)
 
     data_extract_window = None
     settings_window     = None
@@ -1726,12 +1722,3 @@ class Refinery(tk.Tk):
         fps = tuple(sanitize_path(fp) for fp in fps)
         self.last_dir = dirname(fps[0])
         self.load_maps(fps, self.active_map is None)
-
-
-if __name__ == "__main__":
-    try:
-        extractor = run()
-        extractor.mainloop()
-    except Exception:
-        print(format_exc())
-        input()
