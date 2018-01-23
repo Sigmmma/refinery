@@ -24,7 +24,6 @@ if print_startup:
 
 from supyr_struct.buffer import BytearrayBuffer, PeekableMmap
 from supyr_struct.defs.constants import *
-from supyr_struct.defs.util import *
 from supyr_struct.field_types import FieldType
 
 
@@ -32,7 +31,8 @@ if print_startup:
     print("    Importing refinery modules")
 
 
-from refinery import crc_functions, util
+from refinery import crc_functions
+from refinery.util import *
 from refinery.widgets import QueueTree,\
      RefinerySettingsWindow, RefineryRenameWindow,\
      ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
@@ -47,7 +47,6 @@ from reclaimer.meta.objs.halo1_rsrc_map import Halo1RsrcMap
 from reclaimer.meta.objs.halo2_map import Halo2Map
 from reclaimer.meta.objs.stubbs_map import StubbsMap
 from reclaimer.meta.objs.shadowrun_map import ShadowrunMap
-from reclaimer.util import sanitize_path, fourcc, is_reserved_tag
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
      get_tag_index
 from reclaimer.meta.class_repair import class_repair_functions
@@ -64,7 +63,7 @@ if print_startup:
     print("    Initializing Refinery")
 
 
-this_dir = dirname(__file__)
+this_dir = get_cwd(__file__)
 default_config_path = join(this_dir, 'refinery.cfg')
 
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
@@ -91,7 +90,7 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
 
     # expand the map's sections
     map_file.seek(0, 2)
-    map_end = util.inject_file_padding(map_file, *expansions)
+    map_end = inject_file_padding(map_file, *expansions)
     diffs_by_offsets, diff = dict(expansions), 0
     for off in sorted(diffs_by_offsets):
         diff += diffs_by_offsets[off]
