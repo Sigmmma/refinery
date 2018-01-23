@@ -2,6 +2,7 @@ import gc
 import mmap
 
 from reclaimer.util import *
+from binilla.util import get_cwd
 
 
 def inject_file_padding(file, *off_padsize_pairs, padchar=b'\xCA'):
