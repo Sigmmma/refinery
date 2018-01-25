@@ -1647,6 +1647,9 @@ class Refinery(tk.Tk):
 
                         local_total += 1
                         del meta
+                    except PermissionError:
+                        print("Refinery does not have permission to save here.\n"
+                              "Run Refinery as admin to potentially fix this.\n")
                     except Exception:
                         print(format_exc())
                         print("Error ocurred while extracting '%s'" % file_path)
@@ -1672,13 +1675,21 @@ class Refinery(tk.Tk):
                         try:
                             f = open(tags_list_path, 'w')
                         except Exception:
-                            f = open(tags_list_path, 'r+')
+                            try:
+                                f = open(tags_list_path, 'r+')
+                            except Exception:
+                                f = None
 
-                    f.write("%s tags in: %s\n" % (local_total, out_dir))
-                    f.write(tagslist)
-                    f.write('\n\n')
+                    if f is not None:
+                        f.write("%s tags in: %s\n" % (local_total, out_dir))
+                        f.write(tagslist)
+                        f.write('\n\n')
 
-                    f.close()
+                        f.close()
+                    else:
+                        print("Could not create\open tagslist. Either run "
+                              "Refinery as admin, or choose a a directory "
+                              "you have permission to edit/make files in.")
                 except Exception:
                     print(format_exc())
                     print("Could not save tagslist.")
@@ -1686,6 +1697,12 @@ class Refinery(tk.Tk):
             total += local_total
             local_total = 0
             last_map_name = map_name
+
+
+        if total == 0:
+            print(
+                "No tags were extracted. This might be a permissions issue.\n"
+                "Close Refinery and run it as admin to potentially fix this.")
 
         self._running = False
         print("Extracted %s tags. Took %s seconds\n" %
