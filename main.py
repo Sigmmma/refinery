@@ -63,8 +63,8 @@ if print_startup:
     print("    Initializing Refinery")
 
 
-this_dir = get_cwd(__file__)
-default_config_path = join(this_dir, 'refinery.cfg')
+curr_dir = get_cwd(__file__)
+default_config_path = join(curr_dir, 'refinery.cfg')
 
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
 VALID_EXTRACT_MODES = frozenset(("tags", "data"))
@@ -126,13 +126,13 @@ class Refinery(tk.Tk):
     tk_map_path = None
     tk_tags_dir = None
     tk_data_dir = None
-    last_dir = this_dir
+    last_dir = curr_dir
 
     config_path = default_config_path
     config_file = None
 
     config_version = 2
-    version = (1, 6, 8)
+    version = (1, 7, 0)
 
     data_extract_window = None
     settings_window     = None
@@ -155,6 +155,13 @@ class Refinery(tk.Tk):
 
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self, *args, **kwargs)
+        try:
+            try:
+                self.iconbitmap(join(curr_dir, 'refinery.ico'))
+            except Exception:
+                self.iconbitmap(join(curr_dir, 'icons', 'refinery.ico'))
+        except Exception:
+            print(format_exc())
 
         self.title("Refinery v%s.%s.%s" % self.version)
         self.minsize(width=500, height=300)
@@ -165,11 +172,11 @@ class Refinery(tk.Tk):
         self.tk_map_path = tk.StringVar(self)
         self.tk_active_map_name = tk.StringVar(self)
         self.tk_tags_dir = tk.StringVar(
-            self, join(this_dir, "tags", ""))
+            self, join(curr_dir, "tags", ""))
         self.tk_data_dir = tk.StringVar(
-            self, join(this_dir, "data", ""))
+            self, join(curr_dir, "data", ""))
         self.tags_list_path = tk.StringVar(
-            self, join(this_dir, "tags", "tagslist.txt"))
+            self, join(curr_dir, "tags", "tagslist.txt"))
         self.extract_mode = tk.StringVar(self, "tags")
         self.fix_tag_classes = tk.IntVar(self, 1)
         self.fix_tag_index_offset = tk.IntVar(self)
