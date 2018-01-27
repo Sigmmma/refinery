@@ -161,7 +161,7 @@ class Refinery(tk.Tk):
             except Exception:
                 self.iconbitmap(join(curr_dir, 'icons', 'refinery.ico'))
         except Exception:
-            print(format_exc())
+            print("Could not load window icon.")
 
         self.title("Refinery v%s.%s.%s" % self.version)
         self.minsize(width=500, height=300)
