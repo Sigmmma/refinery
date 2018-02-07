@@ -773,8 +773,8 @@ class Refinery(tk.Tk):
                 if ask_close_open and not do_load:
                     do_load = messagebox.askyesno(
                         "A map with that name is already loaded!",
-                        ('A map with the name "%s" is already loaded. '
-                         "Close it and load this one?") % map_name,
+                        ('A map with the name "%s" is already loaded.\n'
+                         "Close that map and load this one instead?") % map_name,
                         icon='warning', parent=self)
 
                     if do_load:
@@ -1460,6 +1460,15 @@ class Refinery(tk.Tk):
         if self.running:
             return
 
+        queue_tree = self.queue_tree.tags_tree
+
+        if not self.map_loaded:
+            return
+        elif not queue_tree.get_children():
+            self.queue_add_all()
+            if not queue_tree.get_children():
+                return
+
         self._running = True
         try:
             self._start_extraction()
@@ -1469,14 +1478,6 @@ class Refinery(tk.Tk):
 
     def _start_extraction(self):
         queue_tree = self.queue_tree.tags_tree
-
-        if not self.map_loaded:
-            return
-        elif not queue_tree.get_children():
-            self.queue_add_all()
-
-        if not queue_tree.get_children():
-            return
 
         print("Starting extraction...")
         self.stop_processing = False
