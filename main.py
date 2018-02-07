@@ -132,7 +132,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 7, 0)
+    version = (1, 7, 1)
 
     data_extract_window = None
     settings_window     = None
@@ -237,13 +237,13 @@ class Refinery(tk.Tk):
         self.file_menu.add_separator()
         self.file_menu.add_command(
             label="Unload active map",
-            command=lambda s=self: s.unload_maps(None))
+            command=lambda s=self: s.unload_maps_clicked(None))
         self.file_menu.add_command(
             label="Unload all maps",
-            command=lambda s=self: s.unload_maps(False, None))
+            command=lambda s=self: s.unload_maps_clicked(False, None))
         self.file_menu.add_command(
             label="Unload resource maps",
-            command=lambda s=self: s.unload_maps(True, None))
+            command=lambda s=self: s.unload_maps_clicked(True, None))
         self.file_menu.add_separator()
         self.file_menu.add_command(
             label="Save map as", command=self.save_map_as)
@@ -678,11 +678,22 @@ class Refinery(tk.Tk):
             self.maps["active"] = next_map
             self.display_map_info()
             self.reload_explorers()
+        else:
+            print('"%s" is not loaded.' % map_name)
 
-    def unload_maps(self, map_type=False, maps_to_unload=("active", )):
+    def unload_maps_clicked(self, map_type=False, maps_to_unload=("active", )):
         if self._running:
             return
-        elif maps_to_unload is None:
+        self._running = True
+
+        try:
+            self.unload_maps(map_type, maps_to_unload)
+        except Exception:
+            print(format_exc())
+        self._running = False
+
+    def unload_maps(self, map_type=False, maps_to_unload=("active", )):
+        if maps_to_unload is None:
             maps_to_unload = tuple(self.maps.keys())
 
         active_map = self.active_map
@@ -699,7 +710,6 @@ class Refinery(tk.Tk):
         self.rebuild_map_select_menu()
         if self.map_loaded: return
 
-        self._running = False
         self.stop_processing = True
 
         self.display_map_info()
@@ -731,8 +741,8 @@ class Refinery(tk.Tk):
     def load_map(self, map_path, will_be_active=True):
         self.load_maps((map_path, ), will_be_active=will_be_active)
 
-    def load_maps(self, map_paths, will_be_active=True):
-        if self.running or not map_paths:
+    def load_maps(self, map_paths, will_be_active=True, ask_close_open=False):
+        if not map_paths:
             return
 
         new_active_map = ''
@@ -746,7 +756,6 @@ class Refinery(tk.Tk):
                     print("    Map does not exist")
                     continue
 
-                self._running = True
                 with open(map_path, 'r+b') as f:
                     comp_data  = PeekableMmap(f.fileno(), 0)
                     head_sig   = unpack("<I", comp_data.peek(4))[0]
@@ -759,8 +768,22 @@ class Refinery(tk.Tk):
                 else:
                     map_name = map_header.map_name
 
-                map_with_this_name = self.maps.get(map_name)
-                if map_with_this_name is None:
+                do_load = self.maps.get(map_name) is None
+
+                if ask_close_open and not do_load:
+                    do_load = messagebox.askyesno(
+                        "A map with that name is already loaded!",
+                        ('A map with the name "%s" is already loaded. '
+                         "Close it and load this one?") % map_name,
+                        icon='warning', parent=self)
+
+                    if do_load:
+                        if self.active_map is self.maps.get(map_name):
+                            will_be_active = True
+                            new_active_map = map_name
+                        self.unload_maps(None, (map_name, ))
+
+                if do_load:
                     if head_sig in (1, 2, 3):
                         new_map = Halo1RsrcMap(self.maps)
                     elif map_header is None:
@@ -798,11 +821,11 @@ class Refinery(tk.Tk):
                     print(format_exc())
                 print(format_exc())
 
-        self._running = False
         self.rebuild_map_select_menu()
         if will_be_active:
             self.maps.pop("active", None)  # self.set_active_map must set this
-            self.set_active_map(new_active_map)
+            self.tk_active_map_name.set(new_active_map)
+            self.set_active_map()
 
     def rebuild_map_select_menu(self):
         if getattr(self, "map_select_menu", None) is not None:
@@ -839,7 +862,17 @@ class Refinery(tk.Tk):
                 header     = active_map.map_header
                 index      = active_map.tag_index
                 orig_index = active_map.orig_tag_index
-                decomp_size = str(len(active_map.map_data))
+                if hasattr(active_map.map_data, '__len__'):
+                    decomp_size = str(len(active_map.map_data))
+                elif (hasattr(active_map.map_data, 'seek') and
+                      hasattr(active_map.map_data, 'tell')):
+                    curr_pos = active_map.map_data.tell()
+                    active_map.map_data.seek(0, 2)
+                    decomp_size = str(active_map.map_data.tell())
+                    active_map.map_data.seek(curr_pos)
+                else:
+                    decomp_size = "unknown"
+
                 if not active_map.is_compressed:
                     decomp_size += "(uncompressed)"
 
@@ -1036,6 +1069,15 @@ class Refinery(tk.Tk):
         elif "halo1" not in self.active_map.engine:
             return
 
+        self._running = True
+        try:
+            self._deprotect()
+        except Exception:
+            print(format_exc())
+
+        self._running = False
+
+    def _deprotect(self):
         save_path = asksaveasfilename(
             initialdir=dirname(self.tk_map_path.get()), parent=self,
             title="Choose where to save the deprotected map",
@@ -1052,15 +1094,14 @@ class Refinery(tk.Tk):
 
         start = time()
         self.stop_processing = False
-        self._running = True
 
         # get the active map AFTER saving because it WILL have changed
         active_map      = self.active_map
+        map_data        = active_map.map_data
         map_header      = active_map.map_header
         tag_index       = active_map.tag_index
         tag_index_array = tag_index.tag_index
-        map_data = active_map.map_data
-        engine   = active_map.engine
+        engine             = active_map.engine
         map_magic          = active_map.map_magic
         bsp_magics         = active_map.bsp_magics
         bsp_headers        = active_map.bsp_headers
@@ -1069,15 +1110,12 @@ class Refinery(tk.Tk):
         if self.fix_tag_classes.get() and not("stubbs" in active_map.engine or
                                               "shadowrun" in active_map.engine):
             print("Repairing tag classes...")
-            #print("STILL NEED TO IMPLEMENT RENAMING BITMAP, USTR, AND FONT "
-            #      "TAGS IN THE RESOURCE MAPS USING CACHED NAMES.")
 
             # locate the tags to start deprotecting with
             repair = {}
             for b in tag_index_array:
                 if self.stop_processing:
                     print("    Deprotection stopped by user.")
-                    self._running = False
                     return
 
                 tag_id = b.id.tag_table_index
@@ -1113,7 +1151,6 @@ class Refinery(tk.Tk):
 
                     if self.stop_processing:
                         print("    Deprotection stopped by user.")
-                        self._running = False
                         return
 
                     # DEBUG
@@ -1147,7 +1184,6 @@ class Refinery(tk.Tk):
                     for b in tag_index_array:
                         if self.stop_processing:
                             print("    Deprotection stopped by user.")
-                            self._running = False
                             return
 
                         tag_id = b.id.tag_table_index
@@ -1167,16 +1203,18 @@ class Refinery(tk.Tk):
                    1000*len(repaired)//len(tag_index_array)/10))
 
             print()
-            print("These tags could not be deprotected:\n"
-                  "    [ id,  offset,  path ]\n")
+            print("The deprotector could not find these tags:\n"
+                  "  (These may not be protected however.)\n"
+                  "  [ id,  offset,  type,  path ]\n")
             for i in range(len(tag_index_array)):
                 if i not in repaired:
                     b = tag_index_array[i]
                     try:
-                        print("    [ %s, %s, %s ]" % (
-                            i, b.meta_offset - map_magic, b.tag.tag_path))
+                        print("  [ %s, %s, %s, %s ]" % (
+                            i, b.meta_offset - map_magic,
+                            b.class_1.enum_name, b.tag.tag_path))
                     except Exception:
-                        print("    [ %s, %s, %s ]" % (
+                        print("  [ %s, %s, %s ]" % (
                             i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
             print()
 
@@ -1221,7 +1259,6 @@ class Refinery(tk.Tk):
         active_map.orig_tag_paths = tuple(
             b.tag.tag_path for b in active_map.tag_index.tag_index)
 
-        self._running = False
         print("Completed. Took %s seconds." % round(time()-start, 1))
 
     def save_map_as(self, e=None):
@@ -1247,7 +1284,12 @@ class Refinery(tk.Tk):
         if not save_path:
             return
 
-        self.save_map(save_path)
+        self._running = True
+        try:
+            self.save_map(save_path)
+        except Exception:
+            print(format_exc())
+        self._running = False
 
     def save_map(self, save_path=None, map_name="active", *, reload_window=True,
                  meta_data_expansion=0, raw_data_expansion=0,
@@ -1258,7 +1300,7 @@ class Refinery(tk.Tk):
         assert triangle_data_expansion >= 0
 
         halo_map = self.maps.get(map_name)
-        if halo_map is None or self.running:
+        if halo_map is None:
             return
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
@@ -1276,7 +1318,6 @@ class Refinery(tk.Tk):
         if not exists(save_dir):
             os.makedirs(save_dir)
 
-        self._running = True
         print("Saving map...")
         print("    %s" % save_path)
         try:
@@ -1349,7 +1390,6 @@ class Refinery(tk.Tk):
                      "%s more bytes. Allow this?") % strings_size,
                     icon='warning', parent=self):
                     print("    Save cancelled")
-                    self._running = False
                     if map_file is not out_file:
                         out_file.close()
                     return ""
@@ -1410,21 +1450,27 @@ class Refinery(tk.Tk):
             if map_file is not out_file:
                 out_file.close()
 
-        self._running = False
-
         if reload_window and save_path:
             print("Reloading map to apply changes...")
-            self.unload_maps(None)
             self.load_map(save_path, will_be_active=True)
 
         return save_path
 
     def start_extraction(self, e=None):
+        if self.running:
+            return
+
+        self._running = True
+        try:
+            self._start_extraction()
+        except Exception:
+            print(format_exc())
+        self._running = False
+
+    def _start_extraction(self):
         queue_tree = self.queue_tree.tags_tree
 
         if not self.map_loaded:
-            return
-        elif self.running:
             return
         elif not queue_tree.get_children():
             self.queue_add_all()
@@ -1433,7 +1479,6 @@ class Refinery(tk.Tk):
             return
 
         print("Starting extraction...")
-        self._running = True
         self.stop_processing = False
         start = time()
 
@@ -1684,7 +1729,6 @@ class Refinery(tk.Tk):
                         f.write("%s tags in: %s\n" % (local_total, out_dir))
                         f.write(tagslist)
                         f.write('\n\n')
-
                         f.close()
                     else:
                         print("Could not create\open tagslist. Either run "
@@ -1704,7 +1748,6 @@ class Refinery(tk.Tk):
                 "No tags were extracted. This might be a permissions issue.\n"
                 "Close Refinery and run it as admin to potentially fix this.")
 
-        self._running = False
         print("Extracted %s tags. Took %s seconds\n" %
               (total, round(time()-start, 1)))
 
@@ -1744,4 +1787,10 @@ class Refinery(tk.Tk):
 
         fps = tuple(sanitize_path(fp) for fp in fps)
         self.last_dir = dirname(fps[0])
-        self.load_maps(fps, self.active_map is None)
+
+        self._running = True
+        try:
+            self.load_maps(fps, self.active_map is None, ask_close_open=True)
+        except Exception:
+            print(format_exc())
+        self._running = False
