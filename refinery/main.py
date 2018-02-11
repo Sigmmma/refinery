@@ -132,7 +132,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 7, 1)
+    version = (1, 7, 2)
 
     data_extract_window = None
     settings_window     = None
@@ -768,49 +768,54 @@ class Refinery(tk.Tk):
                 else:
                     map_name = map_header.map_name
 
-                do_load = self.maps.get(map_name) is None
+                do_load = (self.maps.get(map_name) is None or
+                           not ask_close_open)
 
-                if ask_close_open and not do_load:
+                if not do_load:
                     do_load = messagebox.askyesno(
                         "A map with that name is already loaded!",
                         ('A map with the name "%s" is already loaded.\n'
                          "Close that map and load this one instead?") % map_name,
                         icon='warning', parent=self)
 
-                    if do_load:
-                        if self.active_map is self.maps.get(map_name):
-                            will_be_active = True
-                            new_active_map = map_name
-                        self.unload_maps(None, (map_name, ))
+                if not do_load:
+                    print("    Skipped")
+                    continue
+                
+                if self.active_map is self.maps.get(map_name):
+                    will_be_active = True
+                    new_active_map = map_name
 
-                if do_load:
-                    if head_sig in (1, 2, 3):
-                        new_map = Halo1RsrcMap(self.maps)
-                    elif map_header is None:
-                        print("    Could not read map header.")
-                        continue
-                    elif engine is None:
-                        print("    Could not determine map version.")
-                        continue
-                    elif "stubbs" in engine:
-                        new_map = StubbsMap(self.maps)
-                    elif "shadowrun" in engine:
-                        new_map = ShadowrunMap(self.maps)
-                    elif "halo1" in engine:
-                        new_map = Halo1Map(self.maps)
-                    elif "halo2" in engine:
-                        new_map = Halo2Map(self.maps)
-                    else:
-                        print("    Cant let you do that.")
-                        map_header.pprint(printout=True)
-                        continue
+                if self.maps.get(map_name) is not None:
+                    self.unload_maps(None, (map_name, ))
 
-                    new_map.app = self
-                    new_map.load_map(map_path, will_be_active=will_be_active,
-                                     autoload_resources=self.autoload_resources.get())
-                    if will_be_active and not new_active_map:
-                        new_active_map = map_name
-                        self.tk_active_map_name.set(map_name)
+                if head_sig in (1, 2, 3):
+                    new_map = Halo1RsrcMap(self.maps)
+                elif map_header is None:
+                    print("    Could not read map header.")
+                    continue
+                elif engine is None:
+                    print("    Could not determine map version.")
+                    continue
+                elif "stubbs" in engine:
+                    new_map = StubbsMap(self.maps)
+                elif "shadowrun" in engine:
+                    new_map = ShadowrunMap(self.maps)
+                elif "halo1" in engine:
+                    new_map = Halo1Map(self.maps)
+                elif "halo2" in engine:
+                    new_map = Halo2Map(self.maps)
+                else:
+                    print("    Cant let you do that.")
+                    map_header.pprint(printout=True)
+                    continue
+
+                new_map.app = self
+                new_map.load_map(map_path, will_be_active=will_be_active,
+                                 autoload_resources=self.autoload_resources.get())
+                if will_be_active and not new_active_map:
+                    new_active_map = map_name
+                    self.tk_active_map_name.set(map_name)
                 print("    Finished")
             except Exception:
                 try:
@@ -822,7 +827,7 @@ class Refinery(tk.Tk):
                 print(format_exc())
 
         self.rebuild_map_select_menu()
-        if will_be_active:
+        if will_be_active and new_active_map:
             self.maps.pop("active", None)  # self.set_active_map must set this
             self.tk_active_map_name.set(new_active_map)
             self.set_active_map()
