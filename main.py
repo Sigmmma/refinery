@@ -908,7 +908,15 @@ class Refinery(tk.Tk):
                 (active_map.index_magic, active_map.map_magic))
 
                 tag_index_offset = index.tag_index_offset
-                if "halo2" in active_map.engine:
+                if active_map.engine == "halo2alpha":
+                    string += ((
+                        "\nTag index:\n" +
+                        "    tag count           == %s\n" +
+                        "    scenario tag id     == %s\n" +
+                        "    index array pointer == %s\n") %
+                    (orig_index.tag_count,
+                     orig_index.scenario_tag_id[0], tag_index_offset))
+                elif "halo2" in active_map.engine:
                     used_tag_count = 0
                     local_tag_count = 0
                     for index_ref in index.tag_index:
