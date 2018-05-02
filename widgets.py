@@ -2,7 +2,7 @@ import tkinter as tk
 import refinery
 from tkinter import ttk
 
-from os.path import dirname, basename, splitext
+from os.path import join, dirname, basename, splitext
 from supyr_struct.defs.constants import *
 from tkinter import messagebox
 from tkinter.filedialog import asksaveasfilename, askdirectory
@@ -14,10 +14,13 @@ from refinery import crc_functions
 
 from binilla.widgets import ScrollMenu
 from reclaimer.common_descs import blam_header, QStruct
-from refinery.util import sanitize_path, is_protected_tag, fourcc, is_reserved_tag
+from refinery.util import get_cwd, sanitize_path, is_protected_tag, fourcc,\
+     is_reserved_tag
 from supyr_struct.defs.tag_def import TagDef
 from mozzarilla.tools.shared_widgets import HierarchyFrame
 
+
+curr_dir = get_cwd(__file__)
 no_op = lambda *a, **kw: None
 
 # max number of characters long a tag name can be before halo wont accept it
@@ -784,6 +787,14 @@ class RefinerySettingsWindow(tk.Toplevel):
     def __init__(self, *args, **kwargs):
         self.settings = settings = kwargs.pop('settings', {})
         tk.Toplevel.__init__(self, *args, **kwargs)
+        try:
+            try:
+                self.iconbitmap(join(curr_dir, 'refinery.ico'))
+            except Exception:
+                self.iconbitmap(join(curr_dir, 'icons', 'refinery.ico'))
+        except Exception:
+            print("Could not load window icon.")
+
         self.geometry("340x200")
         self.minsize(width=340, height=200)
         self.resizable(1, 0)
@@ -995,6 +1006,15 @@ class RefineryActionsWindow(tk.Toplevel):
         self.settings = settings = kwargs.pop('settings', {})
         self.tag_index_ref = kwargs.pop('tag_index_ref', self.tag_index_ref)
         tk.Toplevel.__init__(self, *args, **kwargs)
+
+        try:
+            try:
+                self.iconbitmap(join(curr_dir, 'refinery.ico'))
+            except Exception:
+                self.iconbitmap(join(curr_dir, 'icons', 'refinery.ico'))
+        except Exception:
+            print("Could not load window icon.")
+
         self.bind('<Escape>', lambda e=None, s=self, *a, **kw: s.destroy())
 
         height = 310 + bool(self.tag_index_ref)*30
@@ -1262,6 +1282,14 @@ class RefineryRenameWindow(tk.Toplevel):
     def __init__(self, *args, **kwargs):
         self.active_map = kwargs.pop('active_map', None)
         tk.Toplevel.__init__(self, *args, **kwargs)
+        
+        try:
+            try:
+                self.iconbitmap(join(curr_dir, 'refinery.ico'))
+            except Exception:
+                self.iconbitmap(join(curr_dir, 'icons', 'refinery.ico'))
+        except Exception:
+            print("Could not load window icon.")
 
         self.geometry("300x80")
         self.title("Rename map")
@@ -1339,3 +1367,111 @@ class RefineryEditActionsWindow(RefineryActionsWindow):
         self.geometry("300x200")
         self.minsize(width=300, height=200)
         self.title("Edit: %s" % self.title())
+
+
+class RefineryChecksumEditorWindow(tk.Toplevel):
+    active_map = None
+    validating = False
+
+    def __init__(self, *args, **kwargs):
+        self.active_map = kwargs.pop('active_map', None)
+        tk.Toplevel.__init__(self, *args, **kwargs)
+
+        try:
+            try:
+                self.iconbitmap(join(curr_dir, 'refinery.ico'))
+            except Exception:
+                self.iconbitmap(join(curr_dir, 'icons', 'refinery.ico'))
+        except Exception:
+            print("Could not load window icon.")
+
+        self.geometry("300x80")
+        self.title("Change map checksum")
+        self.resizable(0, 0)
+
+        self.cs = tk.StringVar(self, 'Checksum functions unavailable')
+        self.cs.trace("w", self.validate)
+
+        # frames
+        self.checksum_frame = tk.LabelFrame(self, text="Current random checksum")
+        self.button_frame = tk.Frame(self)
+
+        # rename
+        self.checksum_entry = tk.Entry(
+            self.checksum_frame, textvariable=self.cs, justify='center')
+
+        self.apply_button = tk.Button(
+            self.button_frame, text="Apply to current map",
+            command=self.apply, width=20)
+
+        # pack everything
+        self.checksum_frame.pack(padx=4, expand=True, fill="x", pady=2)
+        self.button_frame.pack(expand=True, fill="x")
+
+        self.checksum_entry.pack(padx=4, pady=3, side='left',
+                                 fill='x', expand=True)
+        self.apply_button.pack(side='left', expand=True, padx=4)
+
+        # make the window not show up on the start bar
+        self.transient(self.master)
+
+        if self.active_map:
+            s = ""
+            for c in "%08x" % self.active_map.map_header.crc32:
+                s += c
+                if len(s) % 3 == 2:
+                    s += " "
+            self.cs.set(s[: 11])
+
+    def destroy(self):
+        try: self.master.checksum_window = None
+        except AttributeError: pass
+        tk.Toplevel.destroy(self)
+
+    def validate(self, *a):
+        if self.active_map is None or self.validating:
+            return
+
+        self.validating = True
+        try:
+            s, ts = self.cs.get(), ""
+            test = set("0123456789abcdefABCDEF")
+            for c in s:
+                if c in test:
+                    ts += c
+                if len(ts) % 3 == 2:
+                    ts += " "
+
+            ts = ts[: 11]
+            if len(ts.replace(" ", "")) == 8:
+                c = int(ts.replace(" ", ""), 16)
+                self.checksum_entry.config(bg="white")
+                crc_functions.E.__defaults__[0][:] = [0, 0x800000000 - c, c]
+            else:
+                self.checksum_entry.config(bg="red")
+
+            self.cs.set(ts)
+        except Exception:
+            print(format_exc())
+
+        self.validating = False
+
+    def apply(self, e=None):
+        c = self.cs.get().replace(' ', '')
+        if self.active_map is None or not c:
+            return
+
+        try:
+            self.active_map.map_header.crc32 = int(c, 16)
+        except Exception:
+            return
+        self.active_map.force_checksum = True
+        # NOTE:
+        # Will need to move tag index header by injecting padding between it and
+        # everything before it in the map so all maps have the index header at the
+        # same location. This will also move the metadata properly if the map was
+        # not protected. Afterwards, the smaller map needs to be padded to the size
+        # of the larger one, and the metadata length and filesize specified in the
+        # header needs to be set to the same larger value for both. Finally, both
+        # maps can have their checksums set to the new value.
+        self.destroy()

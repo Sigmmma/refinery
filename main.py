@@ -53,10 +53,9 @@ from reclaimer.meta.class_repair import class_repair_functions
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 
-try:
-    from refinery import crc_setter
-except Exception:
-    pass
+from refinery.widgets import QueueTree, RefinerySettingsWindow,\
+     RefineryRenameWindow, RefineryChecksumEditorWindow,\
+     ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
 
 
 if print_startup:
@@ -132,7 +131,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 7, 2)
+    version = (1, 7, 3)
 
     data_extract_window = None
     settings_window     = None
@@ -252,6 +251,8 @@ class Refinery(tk.Tk):
 
         self.edit_menu.add_command(
             label="Rename map", command=self.show_rename)
+        self.edit_menu.add_command(
+            label="Change map checksum", command=self.show_checksum_edit)
 
         self.menubar.add_cascade(label="File", menu=self.file_menu)
         self.menubar.add_cascade(label="Edit", menu=self.edit_menu)
@@ -606,6 +607,20 @@ class Refinery(tk.Tk):
         # make sure the window gets a chance to set its size
         self.rename_window.update()
         self.place_window_relative(self.rename_window)
+
+    def show_checksum_edit(self, e=None):
+        if self.checksum_window is not None or not self.map_loaded:
+            return
+        elif self.running:
+            return
+        elif self.active_map.is_resource:
+            return
+
+        self.checksum_window = RefineryChecksumEditorWindow(
+            self, active_map=self.active_map)
+        # make sure the window gets a chance to set its size
+        self.checksum_window.update()
+        self.place_window_relative(self.checksum_window)
 
     def destroy(self, e=None):
         self._running = False
