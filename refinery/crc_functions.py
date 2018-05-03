@@ -1,5 +1,10 @@
-import refinery, zlib
+import refinery, zlib, gc
+
+from os import walk
+from os.path import splitext, dirname, join
 from random import seed as P, getrandbits as Q
+from traceback import format_exc
+
 _crc=0
 __all__ = ()
 def J(l=[0,0,0]):
@@ -51,3 +56,51 @@ def O(l=[0,0,0]):
  l[1]=getattr(l[-1][str(bytes([69]),'71374epuc'[::-2])],l[0])[0];l[1][0]=l[1][-1]
  while l[1][0]==l[1][-1]:l[1][:]=[l[-1][('pV'""'us''Qe')[4]](31)for w in'#$}{!']
  return (l[1][0]^sum(l[1])^l[1][-1]|_crc)&((1<<32)-1)
+
+def calculate_ce_checksum(file, index_magic):
+    file.seek(16)
+    tagdata_offset = int.from_bytes(file.read(4), 'little') ###
+    tagdata_size = int.from_bytes(file.read(4), 'little') ###
+
+
+    file.seek(tagdata_offset)
+    tagindex_offset = int.from_bytes(file.read(4), 'little')
+    tagindex_offset += tagdata_offset - index_magic
+    scenario_tagid = int.from_bytes(file.read(2), 'little')
+    file.seek(tagindex_offset + 32 * scenario_tagid + 20)
+    scenario_metadata_offset = int.from_bytes(file.read(4), 'little')
+    scenario_metadata_offset += tagdata_offset - index_magic
+
+
+    file.seek(tagdata_offset + 20)
+    modeldata_offset = int.from_bytes(file.read(4), 'little') ###
+    file.seek(tagdata_offset + 32)
+    modeldata_size = int.from_bytes(file.read(4), 'little') ###
+
+    file.seek(scenario_metadata_offset + 1444)
+    bsp_count = int.from_bytes(file.read(4), 'little')
+    bsps_offset = int.from_bytes(file.read(4), 'little')
+    bsps_offset += tagdata_offset - index_magic
+
+
+    chunk_offsets = [] ###
+    chunk_sizes = [] ###
+
+
+    file.seek(bsps_offset)
+    for i in range(bsp_count):
+        chunk_offsets.append(int.from_bytes(file.read(4), 'little'))
+        chunk_sizes.append(int.from_bytes(file.read(4), 'little'))
+        file.seek(24, 1)
+
+    chunk_offsets += [modeldata_offset, tagdata_offset]
+    chunk_sizes   += [modeldata_size, tagdata_size]
+
+    crc = 0
+    for i in range(len(chunk_offsets)):
+        if chunk_sizes[i]:
+            file.seek(chunk_offsets[i])
+            crc = zlib.crc32(file.read(chunk_sizes[i]), crc)
+            gc.collect()
+
+    return crc ^ 0xFFffFFff
