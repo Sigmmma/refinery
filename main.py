@@ -130,7 +130,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 7, 5)
+    version = (1, 7, 6)
 
     data_extract_window = None
     settings_window     = None
@@ -1129,6 +1129,7 @@ class Refinery(tk.Tk):
         tag_index       = active_map.tag_index
         tag_index_array = tag_index.tag_index
         engine             = active_map.engine
+        index_magic        = active_map.index_magic
         map_magic          = active_map.map_magic
         bsp_magics         = active_map.bsp_magics
         bsp_headers        = active_map.bsp_headers
@@ -1263,14 +1264,7 @@ class Refinery(tk.Tk):
             # print("    Finished")
 
         # calculate the maps new checksum
-        map_data.seek(2048)
-        crc32, chunk = 0, True
-        while chunk:
-            chunk = map_data.read(4*1024**2)  # calculate in 4Mb chunks
-            crc32 = zlib.crc32(chunk, crc32^0xFFffFFff)^0xFFffFFff
-            gc.collect()
-
-        map_header.crc32 = crc32
+        map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
         map_data.seek(0)
         map_data.write(map_header.serialize(calc_pointers=False))
         map_data.flush()
@@ -1376,20 +1370,18 @@ class Refinery(tk.Tk):
                 map_magic = get_map_magic(map_header)
 
             func = crc_functions.U
-            calc = zlib.crc32
             do_spoof  = halo_map.force_checksum and func is not None
 
             # copy the map to the new save location
-            map_file.seek(2048)  # dont copy the header
-            out_file.seek(2048)
-            map_size, chunk = 2048, True
-            crc = 0
+            map_size, chunk = 0, True
+            crc = crc_functions.calculate_ce_checksum(map_file, index_magic)
+            map_file.seek(0)  # DO copy the header(crc calculator reads from it)
+            out_file.seek(0)
             while chunk:
                 chunk = map_file.read(4*1024**2)  # work with 4Mb chunks
                 map_size += len(chunk)
                 if map_file is not out_file:
                     out_file.write(chunk)
-                crc = calc(chunk, crc)
                 gc.collect()
 
             # recalculate pointers for the strings if they were changed
@@ -1446,20 +1438,15 @@ class Refinery(tk.Tk):
             tag_index.serialize(buffer=out_file, calc_pointers=False,
                                 magic=map_magic, offset=index_header_offset)
 
-            c, chunk = 0, True
-            out_file.seek(2048)
-            while chunk:
-                chunk = out_file.read(4*1024**2)  # work with 4Mb chunks
-                c = calc(chunk, c)
-                gc.collect()
+            crc = crc_functions.calculate_ce_checksum(out_file, index_magic)
 
             # change the decompressed size
             if do_spoof:
-                func([c, out_file, index_header_offset +
+                func([crc^0xFFffFFff, out_file, index_header_offset +
                       tag_index.tag_index_offset - index_magic +
                       32*tag_index.scenario_tag_id[0] + 28])
             else:
-                map_header['curyco312'[::2]] = c^0xFFffFFff
+                map_header.crc32 = crc
 
             # write the header to the beginning of the map
             out_file.seek(0)
