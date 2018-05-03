@@ -31,7 +31,6 @@ if print_startup:
     print("    Importing refinery modules")
 
 
-from refinery import crc_functions
 from refinery.util import *
 from refinery.widgets import QueueTree,\
      RefinerySettingsWindow, RefineryRenameWindow,\
@@ -52,7 +51,7 @@ from reclaimer.meta.halo_map import get_map_header, get_map_version,\
 from reclaimer.meta.class_repair import class_repair_functions
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
-
+from refinery import crc_functions
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, RefineryChecksumEditorWindow,\
      ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
@@ -131,7 +130,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 7, 4)
+    version = (1, 7, 5)
 
     data_extract_window = None
     settings_window     = None
@@ -1376,25 +1375,21 @@ class Refinery(tk.Tk):
                 index_header_offset += index_off_diff
                 map_magic = get_map_magic(map_header)
 
-            g, l, do, de = globals(), locals(), eval, str
-            try:
-                func = do(de(b'\x83\x99\x83m\x86\xa4\x95\x83\xa3\x89\x96\x95\xa2K\xe4', '037'), g, l)
-            except Exception:
-                func = None
-            calc = do(de(b'\xa9\x93\x89\x82K\x83\x99\x83\xf3\xf2', '037'), g, l)
-            edi  = do(de(b'\x88\x81\x93\x96m\x94\x81\x97K\x86\x96\x99'
-                         b'\x83\x85m\x83\x88\x85\x83\x92\xa2\xa4\x94', '037'), g, l)
-            edi &= func is not None
+            func = crc_functions.U
+            calc = zlib.crc32
+            do_spoof  = halo_map.force_checksum and func is not None
 
             # copy the map to the new save location
             map_file.seek(2048)  # dont copy the header
             out_file.seek(2048)
             map_size, chunk = 2048, True
+            crc = 0
             while chunk:
                 chunk = map_file.read(4*1024**2)  # work with 4Mb chunks
                 map_size += len(chunk)
                 if map_file is not out_file:
                     out_file.write(chunk)
+                crc = calc(chunk, crc)
                 gc.collect()
 
             # recalculate pointers for the strings if they were changed
@@ -1455,11 +1450,11 @@ class Refinery(tk.Tk):
             out_file.seek(2048)
             while chunk:
                 chunk = out_file.read(4*1024**2)  # work with 4Mb chunks
-                c = calc(chunk, c^0xFFffFFff)^0xFFffFFff
+                c = calc(chunk, c)
                 gc.collect()
 
             # change the decompressed size
-            if edi:
+            if do_spoof:
                 func([c, out_file, index_header_offset +
                       tag_index.tag_index_offset - index_magic +
                       32*tag_index.scenario_tag_id[0] + 28])
