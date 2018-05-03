@@ -9,7 +9,7 @@ curr_dir = dirname(__file__)
 
 #               YYYY.MM.DD
 release_date = "2018.05.02"  # DONT FORGET TO UPDATE THE VERSION IN main.py
-version = (1, 7, 3)
+version = (1, 7, 4)
 
 try:
     try:

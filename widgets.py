@@ -1436,13 +1436,18 @@ class RefineryChecksumEditorWindow(tk.Toplevel):
         try:
             s, ts = self.cs.get(), ""
             test = set("0123456789abcdefABCDEF")
+            spaces = 0
             for c in s:
                 if c in test:
                     ts += c
                 if len(ts) % 3 == 2:
                     ts += " "
+                    spaces += 1
 
             ts = ts[: 11]
+            index = self.checksum_entry.index(tk.INSERT)
+            self.checksum_entry.icursor(index + spaces)
+
             if len(ts.replace(" ", "")) == 8:
                 c = int(ts.replace(" ", ""), 16)
                 self.checksum_entry.config(bg="white")
