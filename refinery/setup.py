@@ -15,7 +15,8 @@ try:
     try:
         long_desc = open(join(curr_dir, "readme.rst")).read()
     except Exception:
-        long_desc = open(join(curr_dir, "readme.md")).read()
+        long_desc = "Since PyPI refuses to let me upload due to my readme being Markdown, I wont be using a readme."
+        #long_desc = open(join(curr_dir, "readme.md")).read()
 except Exception:
     long_desc = 'Could not read long description from readme.'
 

@@ -850,10 +850,10 @@ class RefinerySettingsWindow(tk.Toplevel):
                 "flags, and recorded animations in scenario"),
             variable=self.rename_duplicates_in_scnr)
         self.generate_comp_verts_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, text="Generate compressed vertices",
+            self.data_fixing_frame, text="Generate compressed lightmap vertices",
             variable=self.generate_comp_verts)
         self.generate_uncomp_verts_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, text="Generate uncompressed vertices",
+            self.data_fixing_frame, text="Generate uncompressed lightmap vertices",
             variable=self.generate_uncomp_verts)
         self.decode_adpcm_cbtn = tk.Checkbutton(
             self.data_fixing_frame, variable=self.decode_adpcm,
