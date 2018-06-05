@@ -824,7 +824,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "rename_duplicates_in_scnr", "decode_adpcm",
                      "generate_comp_verts", "generate_uncomp_verts",
                      "fix_tag_classes", "use_hashcaches", "use_heuristics",
-                     "autoload_resources", "extract_cheape",
+                     "autoload_resources", "extract_cheape", "show_all_fields",
                      "show_output", "fix_tag_index_offset"):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
@@ -880,6 +880,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.extract_cheape_cbtn = tk.Checkbutton(
             self.other_frame, variable=self.extract_cheape,
             text="Extract cheape.map when extracting from yelo maps")
+        self.show_all_fields_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.show_all_fields,
+            text="Show hidden fields when viewing metadata")
 
         # tags directory
         self.tags_dir_entry = tk.Entry(
@@ -929,7 +932,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                   ):
             w.pack(padx=4, anchor='w')
 
-        for w in (self.autoload_resources_cbtn, self.extract_cheape_cbtn, ):
+        for w in (self.autoload_resources_cbtn, self.extract_cheape_cbtn,
+                  self.show_all_fields_cbtn,):
             w.pack(padx=4, anchor='w')
 
         for w1, w2 in ((self.tags_dir_entry, self.tags_dir_browse_button),

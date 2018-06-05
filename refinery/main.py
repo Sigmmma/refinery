@@ -130,7 +130,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 7, 7)
+    version = (1, 7, 8)
 
     data_extract_window = None
     settings_window     = None
@@ -181,6 +181,7 @@ class Refinery(tk.Tk):
         self.use_hashcaches = tk.IntVar(self)
         self.use_heuristics = tk.IntVar(self)
         self.extract_cheape = tk.IntVar(self)
+        self.show_all_fields = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
         self.rename_duplicates_in_scnr = tk.IntVar(self)
         self.overwrite = tk.IntVar(self)
@@ -200,6 +201,7 @@ class Refinery(tk.Tk):
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
             extract_cheape=self.extract_cheape,
+            show_all_fields=self.show_all_fields,
             recursive=self.recursive,
             autoload_resources=self.autoload_resources,
             show_output=self.show_output,
@@ -428,7 +430,8 @@ class Refinery(tk.Tk):
         for attr_name in ("extract_cheape", "overwrite",
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
-                          "generate_uncomp_verts", "generate_comp_verts", ):
+                          "generate_uncomp_verts", "generate_comp_verts",
+                          "show_all_fields",):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         flags = header.deprotection_flags
@@ -471,7 +474,8 @@ class Refinery(tk.Tk):
         for attr_name in ("extract_cheape", "overwrite",
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
-                          "generate_uncomp_verts", "generate_comp_verts", ):
+                          "generate_uncomp_verts", "generate_comp_verts",
+                          "show_all_fields",):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         flags = header.deprotection_flags
@@ -1374,7 +1378,6 @@ class Refinery(tk.Tk):
 
             # copy the map to the new save location
             map_size, chunk = 0, True
-            crc = crc_functions.calculate_ce_checksum(map_file, index_magic)
             map_file.seek(0)  # DO copy the header(crc calculator reads from it)
             out_file.seek(0)
             while chunk:
@@ -1437,6 +1440,8 @@ class Refinery(tk.Tk):
             # serialize the tag_index_header, tag_index and all the tag_paths
             tag_index.serialize(buffer=out_file, calc_pointers=False,
                                 magic=map_magic, offset=index_header_offset)
+            out_file.flush()
+            os.fsync(out_file.fileno())
 
             crc = crc_functions.calculate_ce_checksum(out_file, index_magic)
 
@@ -1452,6 +1457,7 @@ class Refinery(tk.Tk):
             out_file.seek(0)
             out_file.write(map_header.serialize(calc_pointers=False))
             out_file.flush()
+            os.fsync(out_file.fileno())
             print("    Finished")
         except Exception:
             print(format_exc())

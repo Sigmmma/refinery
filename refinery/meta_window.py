@@ -7,7 +7,6 @@ from supyr_struct.defs.constants import *
 class MetaWindow(TagWindow):
     widget_picker = def_halo_widget_picker
     tag_path = None
-    save_as_60 = False
 
     def __init__(self, master, tag, *args, **kwargs):
         self.tag_path = kwargs.pop("tag_path", self.tag_path)
@@ -38,6 +37,17 @@ class MetaWindow(TagWindow):
 
     def unbind_hotkeys(self, hotkeys=None):
         pass
+
+    @property
+    def all_visible(self):
+        try:
+            return bool(self.app_root.show_all_fields.get())
+        except Exception:
+            return False
+
+    @property
+    def all_editable(self):
+        return self.all_visible
 
     def populate(self):
         '''
