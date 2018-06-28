@@ -130,7 +130,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 7, 8)
+    version = (1, 7, 9)
 
     data_extract_window = None
     settings_window     = None
@@ -1441,7 +1441,8 @@ class Refinery(tk.Tk):
             tag_index.serialize(buffer=out_file, calc_pointers=False,
                                 magic=map_magic, offset=index_header_offset)
             out_file.flush()
-            os.fsync(out_file.fileno())
+            if hasattr(map_file, "fileno"):
+                os.fsync(out_file.fileno())
 
             crc = crc_functions.calculate_ce_checksum(out_file, index_magic)
 
@@ -1457,7 +1458,8 @@ class Refinery(tk.Tk):
             out_file.seek(0)
             out_file.write(map_header.serialize(calc_pointers=False))
             out_file.flush()
-            os.fsync(out_file.fileno())
+            if hasattr(map_file, "fileno"):
+                os.fsync(out_file.fileno())
             print("    Finished")
         except Exception:
             print(format_exc())
