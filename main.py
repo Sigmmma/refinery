@@ -130,7 +130,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 7, 9)
+    version = (1, 8, 0)
 
     data_extract_window = None
     settings_window     = None
@@ -843,6 +843,12 @@ class Refinery(tk.Tk):
                 except Exception:
                     print(format_exc())
                 print(format_exc())
+                print("Error occurred while atempting to load map.\n"
+                      "If this is a PermissionError and the map is located in\n"
+                      "a protected location, Refinery may need to run as admin.\n"
+                      "    Make sure the map you are accessing is not read-only.\n"
+                      "Refinery opens maps in read-write mode in case edits are\n"
+                      "made, and opening in this mode fails on read-only files.\n")
 
         self.rebuild_map_select_menu()
         if will_be_active and new_active_map:
@@ -1713,7 +1719,7 @@ class Refinery(tk.Tk):
                         del meta
                     except PermissionError:
                         print("Refinery does not have permission to save here.\n"
-                              "Run Refinery as admin to potentially fix this.\n")
+                              "Try running Refinery as admin to potentially fix this.\n")
                     except Exception:
                         print(format_exc())
                         print("Error ocurred while extracting '%s'" % file_path)
