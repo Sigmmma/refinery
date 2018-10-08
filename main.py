@@ -130,7 +130,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 8, 0)
+    version = (1, 8, 1)
 
     data_extract_window = None
     settings_window     = None
@@ -1125,6 +1125,10 @@ class Refinery(tk.Tk):
         if not save_path:
             print("Deprotection cancelled.")
             return
+
+        save_path, ext = splitext(save_path)
+        save_path = sanitize_path(save_path + (ext if ext else (
+            '.yelo' if 'yelo' in self.active_map.engine else '.map')))
 
         if not self.save_map(save_path):
             return
