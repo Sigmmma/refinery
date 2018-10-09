@@ -48,7 +48,8 @@ from reclaimer.meta.objs.stubbs_map import StubbsMap
 from reclaimer.meta.objs.shadowrun_map import ShadowrunMap
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
      get_tag_index
-from reclaimer.meta.class_repair import class_repair_functions
+from reclaimer.meta.class_repair import class_repair_functions,\
+     get_tagc_refs
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 from refinery import crc_functions
@@ -1130,7 +1131,7 @@ class Refinery(tk.Tk):
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in self.active_map.engine else '.map')))
 
-        if not self.save_map(save_path):
+        if not self.save_map(save_path, prompt_strings_expand=False):
             return
 
         start = time()
@@ -1142,11 +1143,11 @@ class Refinery(tk.Tk):
         map_header      = active_map.map_header
         tag_index       = active_map.tag_index
         tag_index_array = tag_index.tag_index
-        engine             = active_map.engine
-        index_magic        = active_map.index_magic
-        map_magic          = active_map.map_magic
-        bsp_magics         = active_map.bsp_magics
-        bsp_headers        = active_map.bsp_headers
+        engine      = active_map.engine
+        index_magic = active_map.index_magic
+        map_magic   = active_map.map_magic
+        bsp_magics  = active_map.bsp_magics
+        bsp_headers = active_map.bsp_headers
         bsp_header_offsets = active_map.bsp_header_offsets
 
         if self.fix_tag_classes.get() and not("stubbs" in active_map.engine or
@@ -1168,7 +1169,7 @@ class Refinery(tk.Tk):
                 else:
                     continue
 
-                if tag_cls == "scnr":
+                if tag_cls in ("scnr", "DeLa"):
                     repair[tag_id] = tag_cls
                 elif tag_cls == "matg" and b.tag.tag_path == "globals\\globals":
                     repair[tag_id] = tag_cls
@@ -1177,6 +1178,7 @@ class Refinery(tk.Tk):
 
             # scan the tags that need repairing and repair them
             repaired = {}
+            tagc_i = 0
             while repair:
                 # DEBUG
                 # print("Repairing %s tags." % len(repair))
@@ -1229,15 +1231,68 @@ class Refinery(tk.Tk):
                             return
 
                         tag_id = b.id.tag_table_index
-                        if (b.class_1.enum_name in ("<INVALID>", "NONE") or
-                                tag_id in repaired):
+                        tag_cls = None
+                        if tag_id in repaired:
+                            continue
+                        elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
+                            tag_cls = fourcc(b.class_1.data)
+                        else:
+                            _, reffed_tag_types = get_tagc_refs(
+                                b.meta_offset, map_data, map_magic, repaired
+                                )
+                            if reffed_tag_types:
+                                tag_cls = "tagc"
+
+                        if tag_cls is None:
+                            # couldn't determine tag class
                             continue
 
-                        tag_cls = fourcc(b.class_1.data)
                         if tag_index_array[tag_id].indexed:
                             repaired[tag_id] = tag_cls
                         elif tag_cls in ("Soul", "tagc", "yelo", "gelo", "gelc"):
                             repair[tag_id] = tag_cls
+
+            # try to locate the Soul tag out of all the tags thought to be tagc
+            # and(attempt to) determine the names of each tag collection
+            map_type = map_header.map_type.enum_name
+            tagc_ids_reffed_in_other_tagc = set()
+            for b in tag_index_array:
+                tag_id = b.id.tag_table_index
+                if repaired.get(tag_id) != "tagc":
+                    continue
+
+                reffed_tag_ids, reffed_tag_types = get_tagc_refs(
+                    b.meta_offset, map_data, map_magic, repaired
+                    )
+                reffed_tag_types = set(reffed_tag_types)
+                if reffed_tag_types == set(["DeLa"]):
+                    repaired[tag_id] = "Soul"
+                    b.tag.tag_path = dict(
+                        sp="ui\\shell\\solo",
+                        mp="ui\\shell\\multiplayer",
+                        ui="ui\\shell\\main_menu"
+                        ).get(map_type, b.tag.tag_path)
+                elif tag_id not in tagc_ids_reffed_in_other_tagc:
+                    tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
+
+
+            for b in tag_index_array:
+                if tagc_i >= 2: break
+
+                tag_id = b.id.tag_table_index
+                if (repaired.get(tag_id) != "tagc" or
+                    tag_id in tagc_ids_reffed_in_other_tagc):
+                    continue
+
+                if tagc_i == 0:
+                    b.tag.tag_path = "ui\\ui_tags_loaded_all_scenario_types"
+                elif tagc_i == 1:
+                    b.tag.tag_path = dict(
+                        sp="ui\\ui_tags_loaded_solo_scenario_type",
+                        mp="ui\\ui_tags_loaded_multiplayer_scenario_type",
+                        ui="ui\\ui_tags_loaded_mainmenu_scenario_type"
+                        ).get(map_type, b.tag.tag_path)
+                tagc_i += 1
 
             print("    Finished")
             print("    Deprotected classes of %s of the %s total tags(%s%%)." %
@@ -1246,7 +1301,7 @@ class Refinery(tk.Tk):
 
             print()
             print("The deprotector could not find these tags:\n"
-                  "  (These may not be protected however.)\n"
+                  "  (This does not mean they are protected however)\n"
                   "  [ id,  offset,  type,  path ]\n")
             for i in range(len(tag_index_array)):
                 if i not in repaired:
@@ -1264,8 +1319,12 @@ class Refinery(tk.Tk):
         # tag's header in the tag index in the map buffer
         index_array_offset = tag_index.tag_index_offset - map_magic
         for tag_id, tag_cls in repaired.items():
-            map_data.seek(index_array_offset + 32*tag_id)
-            map_data.write(class_bytes_by_fcc[tag_cls])
+            tag_index_ref = tag_index_array[tag_id]
+            classes_int = int.from_bytes(class_bytes_by_fcc[tag_cls], 'little')
+            tag_index_ref.class_1.data = classes_int & 0xFFffFFff
+            tag_index_ref.class_2.data = (classes_int >> 32) & 0xFFffFFff
+            tag_index_ref.class_3.data = (classes_int >> 64) & 0xFFffFFff
+
 
         if self.use_hashcaches.get():
             print("Hashcaches are not implemented.")
@@ -1279,16 +1338,9 @@ class Refinery(tk.Tk):
 
         # calculate the maps new checksum
         map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
-        map_data.seek(0)
-        map_data.write(map_header.serialize(calc_pointers=False))
-        map_data.flush()
 
-        print("Reloading map to apply changes...")
-        self.unload_maps(None)
-        self.load_map(save_path, will_be_active=True)
-
-        self.display_map_info()
-        self.reload_explorers()
+        print("Saving deprotection changes to map...")
+        self.save_map(save_path, prompt_strings_expand=False)
 
         # record the original tag_paths so we know if any were changed
         active_map.orig_tag_paths = tuple(
@@ -1328,7 +1380,8 @@ class Refinery(tk.Tk):
 
     def save_map(self, save_path=None, map_name="active", *, reload_window=True,
                  meta_data_expansion=0, raw_data_expansion=0,
-                 vertex_data_expansion=0, triangle_data_expansion=0):
+                 vertex_data_expansion=0, triangle_data_expansion=0,
+                 prompt_strings_expand=True):
         assert meta_data_expansion     >= 0
         assert raw_data_expansion      >= 0
         assert vertex_data_expansion   >= 0
@@ -1411,7 +1464,7 @@ class Refinery(tk.Tk):
 
             # make sure the user wants to expand the map more if needed
             if strings_size > meta_data_expansion:
-                if not messagebox.askyesno(
+                if prompt_strings_expand and not messagebox.askyesno(
                     "Metadata size expansion required",
                     ("Tag paths were edited, requiring the map be expanded to "
                      "accommodate the new strings.\n\nMap must be expanded by "
