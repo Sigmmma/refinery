@@ -1,82 +1,16 @@
-from .constants import *
+from refinery.recursive_rename.constants import *
 
 
-recursive_rename_functions = dict()
-
-
-class TagPathHandler():
-    _index_map = None
-    _priorities = None
-
-    _vehicle_strings = None
-    _weapon_strings = None
-    _def_priority = 0.0
-
-    def __init__(self, tag_index_array, **kwargs):
-        self._index_map = {}
-        self._priorities = dict(kwargs.get('priorities', {}))
-        self._def_priority = dict(kwargs.get('def_priority', 0))
-
-        for i in range(len(tag_index_array)):
-            ref = tag_index_array[i]
-            path = ref.tag.tag_path.lower() + '.%s' % ref.class1.enum_name
-            self._index_map[path]  = self._index_map[i]  = ref
-            self._priorities[path] = self._priorities[i] = self._def_priority
-
-    def get_index_ref(self, index):
-        return self._index_map[index]
-
-    def get_path(self, index):
-        return self.get_index_ref(index).tag.tag_path
-
-    def get_priorities(self, index):
-        return dict(self._priorities)
-
-    def set_path(self, index, new_path, priority=None):
-        if priority is None:
-            priority = self._def_priority
-        assert isinstance(new_path, str)
-        new_path, ext = splitext(new_path)
-        new_path, ext = new_path.lower(), ext.lower()
-
-        tag_ref = self._tag_index_array[self._index_map[index]]
-        old_path = "%s.%s" % (tag_ref.tag.tag_path.lower(), ext)
-        if self._priorities[old_path] > priority:
-            return old_path
-        elif tag_ref.indexed or old_path in self._index_map:
-            return old_path
-
-        new_unique_path = new_path
-        i = 0
-        while new_unique_path in self._index_map:
-            new_unique_path = "%s_%s%s" % (new_path, i, ext)
-            i += 1
-
-        new_path = "%s_%s" % (new_path, i)
-        if len(new_path) > MAX_NAME_LEN:
-            print("'%s' is too long to use as a tagpath" % new_unique_path)
-            return
-
-        self._index_map.pop(old_path, None)
-        self._index_map[new_unique_path] = tag_ref
-        self._priorities[new_unique_path] = priority
-        tag_ref.tag.tag_path = new_path
-        return new_unique_path
-
-    def set_priority(self, index, priority):
-        self._priorities[index] = float(priority)
-
-
-def rename_scnr(tag_id, *, map_header, tag_path_handler, meta_getter,
+def rename_scnr(tag_id, halo_map, tag_path_handler,
                 root_dir='', sub_dir=levels_dir, name=None, **kwargs):
-    kwargs.update(map_header=map_header, tag_path_handler=tag_path_handler,
-                  meta_getter=meta_getter, root_dir=root_dir)
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-    meta = meta_getter(tag_id)
+    meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
     elif name is None:
-        name = sanitize_name(map_header.map_name)
+        name = sanitize_name(halo_map.map_header.map_name)
 
     level_dir = sub_dir + '%s\\' % name
 
@@ -118,20 +52,24 @@ def rename_scnr(tag_id, *, map_header, tag_path_handler, meta_getter,
 
     devices_dir = level_dir + level_devices_dir
     palette_renames = (
-        (27, devices_dir, rename_mach),
-        (29, devices_dir, rename_ctrl), (31, devices_dir, rename_lifi),
-        (33, level_dir + 'sfx_emitters\\', rename_ssce),
-        (44, level_dir + 'decals\\', rename_deca),
-        (45, level_dir + 'detail_objects\\', rename_dobc),
-        (47, characters_dir, rename_actv),
+        ("machines_palette", devices_dir, rename_mach),
+        ("controls_palette", devices_dir, rename_ctrl),
+        ("light_fixtures_palette", devices_dir, rename_lifi),
+        ("sound_sceneries_palette", level_dir + 'sfx_emitters\\', rename_ssce),
+        ("decals_palette", level_dir + 'decals\\', rename_deca),
+        ("detail_object_collection_palette", level_dir + 'detail_objects\\', rename_dobc),
+        ("actors_palette", characters_dir, rename_actv),
         )
 
     # do deep renaming
     if kwargs.get("deep_rename"):
         palette_renames += (
-            (16, scenery_dir, rename_scen), (18, characters_dir, rename_bipd),
-            (20, vehicles_dir, rename_vehi), (22, powerups_dir, rename_item),
-            (24, weapons_dir, rename_weap))
+            ("sceneries_palette", scenery_dir, rename_scen),
+            ("bipeds_palette", characters_dir, rename_bipd),
+            ("vehicles_palette", vehicles_dir, rename_vehi),
+            ("equipments_palette", powerups_dir, rename_item),
+            ("weapons_palette", weapons_dir, rename_weap)
+            )
 
         # rename player starting weapon references
         for profile in meta.player_starting_profiles.STEPTREE:
@@ -180,8 +118,8 @@ def rename_scnr(tag_id, *, map_header, tag_path_handler, meta_getter,
             i += 1
 
     # rename palette references
-    for b_index, sub_dir, renamer in palette_renames:
-        palette_array = meta[b_index].STEPTREE
+    for b_name, sub_dir, renamer in palette_renames:
+        palette_array = meta[b_name].STEPTREE
 
         for i in range(len(palette_array)):
             sub_id = get_tag_id(palette_array[i].name)
@@ -242,13 +180,13 @@ def rename_scnr(tag_id, *, map_header, tag_path_handler, meta_getter,
                 i += 1
 
 
-def rename_yelo(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    kwargs.update(tag_path_handler=tag_path_handler,
-                  meta_getter=meta_getter, root_dir=root_dir)
+def rename_yelo(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
     kwargs.setdefault('priority', INF)
 
-    meta = meta_getter(tag_id)
+    meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
     elif name is None:
@@ -288,13 +226,13 @@ def rename_yelo(tag_id, *, tag_path_handler, meta_getter,
             i += 1
 
 
-def rename_gelo(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    kwargs.update(tag_path_handler=tag_path_handler,
-                  meta_getter=meta_getter, root_dir=root_dir)
+def rename_gelo(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
     kwargs.setdefault('priority', INF)
 
-    meta = meta_getter(tag_id)
+    meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
     elif name is None:
@@ -330,13 +268,13 @@ def rename_gelo(tag_id, *, tag_path_handler, meta_getter,
             i += 1
 
 
-def rename_gelc(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    kwargs.update(tag_path_handler=tag_path_handler,
-                  meta_getter=meta_getter, root_dir=root_dir)
+def rename_gelc(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
     kwargs.setdefault('priority', INF)
 
-    meta = meta_getter(tag_id)
+    meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
     elif name is None:
@@ -350,362 +288,434 @@ def rename_gelc(tag_id, *, tag_path_handler, meta_getter,
     # I'm not typing up the rest of this right now. Might be pointless anyway.
 
 
-def rename_matg(tag_id, *, tag_path_handler, meta_getter,
+def rename_matg(tag_id, halo_map, tag_path_handler,
                 root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    kwargs.update(tag_path_handler=tag_path_handler,
-                  meta_getter=meta_getter, root_dir=root_dir)
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-    meta = meta_getter(tag_id)
+    meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
     elif name is None:
         name = 'globals'
 
-    # rename this project_yellow_globals tag
     tag_path_handler.set_path(
-        tag_id, root_dir + sub_dir + name + ".globals", kwargs['priority'])
+        tag_id, root_dir + sub_dir + name + ".globals",
+        kwargs.get('priority', 1.0))
 
     ###############################################
     ''' FINISH UP THE 65 TAG REFERENCES IN HERE '''
     ###############################################
 
 
-def rename_hudg(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_hudg(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=ui_hud_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_sbsp(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_sbsp(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_sky_(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_sky_(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_itmc(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_itmc(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_weap(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_weap(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_item(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_item(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_garb(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_garb(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_proj(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_proj(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_plac(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_plac(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_ssce(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_ssce(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_scen(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_scen(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_devi(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_devi(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_lifi(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_ctrl(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_mach(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_lifi(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_vehi(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_mach(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_bipd(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_vehi(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_actr(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_bipd(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_actv(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_actr(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_flag(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_actv(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_mod2(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_flag(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_mode(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_mod2(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_coll(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_mode(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_foot(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_coll(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_effe(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_foot(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_grhi(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_effe(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_unhi(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_grhi(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_wphi(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_unhi(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_ligh(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_wphi(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_rain(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_ligh(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_fog_(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_rain(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_avtc(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_fog_(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_atvi(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_avtc(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_atvo(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_atvi(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_efpc(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_atvo(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_efpg(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_efpc(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_shpg(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_efpg(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_sily(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_shpg(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_unic(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_sily(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_antr(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_unic(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_schi(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_antr(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_scex(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_schi(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_sotr(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_scex(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_senv(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_sotr(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
 
-def rename_sgla(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
+def rename_senv(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
+def rename_sgla(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_smet(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_smet(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_soso(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_soso(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_spla(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_spla(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_swat(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_swat(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_deca(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_deca(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_ant_(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_ant_(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_cont(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_cont(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_jpt_(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_jpt_(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_dobc(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_dobc(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_udlg(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_udlg(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_glw_(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_glw_(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_hud_(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_hud_(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_lens(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_lens(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_mgs2(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_mgs2(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_elec(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_elec(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_mply(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_mply(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_part(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_part(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_pctl(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_pctl(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_ngpr(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_ngpr(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_lsnd(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_lsnd(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_DeLa(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_DeLa(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_vcky(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_vcky(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-def rename_snd_(tag_id, *, tag_path_handler, meta_getter,
-                root_dir='', sub_dir=globals_dir, name=None, **kwargs):
-    pass
 
+def rename_snd_(tag_id, halo_map, tag_path_handler,
+                root_dir='', sub_dir=levels_dir, name=None, **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
 
-recursive_rename_functions.update(
+
+recursive_rename_functions = dict(
     scenario = rename_scnr,
 
     project_yellow = rename_yelo,
@@ -713,7 +723,8 @@ recursive_rename_functions.update(
     project_yellow_globals_cv = rename_gelc, #
     globals = rename_matg, #
     hud_globals = rename_hudg, #
-
+    )
+'''
     scenario_structure_bsp = rename_sbsp, #
     sky = rename_sky_, #
 
@@ -800,4 +811,4 @@ recursive_rename_functions.update(
     virtual_keyboard = rename_vcky, #
 
     sound = rename_snd_, #
-    )
+    )'''
