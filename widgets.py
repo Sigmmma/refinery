@@ -928,7 +928,8 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.fix_tag_index_offset_cbtn,
-                  #self.use_hashcaches_cbtn, self.use_heuristics_cbtn
+                  #self.use_hashcaches_cbtn,
+                  self.use_heuristics_cbtn
                   ):
             w.pack(padx=4, anchor='w')
 

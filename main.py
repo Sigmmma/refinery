@@ -56,6 +56,8 @@ from refinery import crc_functions
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, RefineryChecksumEditorWindow,\
      ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
+from refinery.recursive_rename.tag_path_handler import TagPathHandler
+from refinery.recursive_rename.functions import recursive_rename_functions
 
 
 if print_startup:
@@ -1332,9 +1334,12 @@ class Refinery(tk.Tk):
             # print("    Finished")
 
         if self.use_heuristics.get():
-            print("Heuristics are not implemented.")
-            # print("Renaming tags using heuristics...")
-            # print("    Finished")
+            print("Renaming tags using heuristics...")
+            try:
+                self._heuristics_deprotect()
+            except Exception:
+                print(format_exc())
+            print("    Finished")
 
         # calculate the maps new checksum
         map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
@@ -1347,6 +1352,34 @@ class Refinery(tk.Tk):
             b.tag.tag_path for b in active_map.tag_index.tag_index)
 
         print("Completed. Took %s seconds." % round(time()-start, 1))
+
+    
+    def _heuristics_deprotect(self):
+        active_map = self.active_map
+        tag_index_array = active_map.tag_index.tag_index
+        matg_meta = active_map.matg_meta
+        hudg_id = 0xFFFF if not matg_meta else\
+                  matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id[0]
+        hudg_meta = active_map.get_meta(hudg_id, True)
+
+        tag_path_handler = TagPathHandler(tag_index_array)
+
+        if hudg_meta:
+            block = hudg_meta.messaging_parameters
+            items_meta = active_map.get_meta(block.item_message_text.id[0], True)
+            icons_meta = active_map.get_meta(block.alternate_icon_text.id[0], True)
+
+            if items_meta: tag_path_handler.set_item_strings(items_meta)
+            if icons_meta: tag_path_handler.set_icon_strings(icons_meta)
+
+        for i in range(len(tag_index_array)):
+            rename_func = recursive_rename_functions.get(
+                tag_index_array[i].class_1.enum_name)
+            if rename_func:
+                try:
+                    rename_func(i, active_map, tag_path_handler)
+                except Exception:
+                    print(format_exc())
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return
