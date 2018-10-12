@@ -113,7 +113,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         for b in meta.netgame_flags.STEPTREE:
             recursive_rename(
                 get_tag_id(b.weapon_group), sub_dir=item_coll_dir,
-                name="ng flag", **kwargs)
+                name="ng flag", priority=1.5, **kwargs)
             i += 1
 
         # netgame equipment
@@ -121,7 +121,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         for b in meta.netgame_equipments.STEPTREE:
             recursive_rename(
                 get_tag_id(b.item_collection), sub_dir=item_coll_dir,
-                name="ng equipment", **kwargs)
+                name="ng equipment", priority=1.5, **kwargs)
             i += 1
 
         # starting equipment
@@ -136,7 +136,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
                 recursive_rename(
                     get_tag_id(b['item collection %s' % i]),
                     sub_dir=item_coll_dir, name=profile_name,
-                    **kwargs)
+                    priority=1.5, **kwargs)
                 j += 1
             i += 1
 
@@ -145,8 +145,10 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         palette_array = meta[b_name].STEPTREE
 
         for i in range(len(palette_array)):
+            sub_name = "protected %s" % tag_id
             recursive_rename(get_tag_id(palette_array[i].name),
-                             sub_dir=sub_dir, name=str(i), **kwargs)
+                             sub_dir=sub_dir + sub_name + "\\",
+                             name=sub_name, priority=1.5, **kwargs)
 
     # rename animation references
     i = 0
@@ -157,13 +159,13 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
         recursive_rename(get_tag_id(b.animation_graph), name=anim_name,
                          sub_dir=level_dir + cinematics_dir + "animations\\",
-                         **kwargs)
+                         priority=1.5, **kwargs)
         i += 1
 
     # rename bsp references
     bsp_name = ('%s_' % name) + '%s'
     for b in meta.structure_bsps.STEPTREE:
-        recursive_rename(get_tag_id(b.structure_bsp),
+        recursive_rename(get_tag_id(b.structure_bsp), priority=2.0,
                          sub_dir=level_dir, name=bsp_name, **kwargs)
 
     # final deep renaming
@@ -181,7 +183,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
                 line = conv_name + "line %s " % j
                 for k in range(1, 7):
                     recursive_rename(
-                        get_tag_id(b['variant %s' % i]),
+                        get_tag_id(b['variant %s' % i]), priority=1.5,
                         sub_dir=conv_dir, name=line, **kwargs)
                 j += 1
             i += 1
@@ -567,7 +569,7 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
         if name:
             # up the priority if we could detect a name for
             # this in the strings for the weapon or vehicles
-            kwargs.setdefault('priority', 2.0)
+            kwargs.setdefault('priority', 4.0)
         else:
             kwargs.setdefault('priority', 1.0)
             name = "protected %s" % tag_id
@@ -649,9 +651,8 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
 
     name = tag_path_handler.get_basename(tag_id)
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
-    sub_dir = "\\".join(sub_dir.split("\\")[: -1])
-    if sub_dir:
-        sub_dir += "\\"
+    sub_dir = "\\".join(sub_dir.split("\\")[: -2])
+    if sub_dir: sub_dir += "\\"
     sub_dir += bitmaps_dir
 
     kwargs.update(halo_map=halo_map, root_dir=root_dir,
@@ -670,7 +671,7 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
     eqip_attrs = getattr(meta, "eqip_attrs", None)
     weap_attrs = getattr(meta, "weap_attrs", None)
 
-    items_dir = '\\'.join(sub_dir.split('\\')[: -1])
+    items_dir = '\\'.join(sub_dir.split('\\')[: -2])
     if items_dir: items_dir += "\\"
     recursive_rename(get_tag_id(item_attrs.material_effects),
                      sub_dir=items_dir, name="material effects", **kwargs)
@@ -876,7 +877,7 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
         recursive_rename(get_tag_id(vehi_attrs.effect),
                          sub_dir=sub_dir, name="unknown_effect", **kwargs)
 
-        vehi_dir = '\\'.join(sub_dir.split('\\')[: -1])
+        vehi_dir = '\\'.join(sub_dir.split('\\')[: -2])
         if vehi_dir: vehi_dir += "\\"
         recursive_rename(get_tag_id(vehi_attrs.material_effect),
                          sub_dir=vehi_dir, name="material_effects", **kwargs)
@@ -952,7 +953,7 @@ def rename_mode(tag_id, halo_map, tag_path_handler,
         region = meta.regions.STEPTREE[i]
         geoms = []
 
-        region_name = region.name.strip().replace("__unnamed", "").strip()
+        region_name = region.name.replace("__unnamed", "").strip().strip("_")
         if region_name: region_name += " "
 
         for j in range(len(region.permutations.STEPTREE)):
@@ -1224,6 +1225,13 @@ def rename_snde(tag_id, halo_map, tag_path_handler,
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kwargs.get('priority', 0.5))
 
+def rename_devc(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not sub_dir: sub_dir = ui_devc_def_dir
+
+    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
+                              kwargs.get('priority', 1.0))
+
 
 recursive_rename_functions = dict(
     scenario = rename_scnr,
@@ -1233,6 +1241,10 @@ recursive_rename_functions = dict(
     project_yellow_globals_cv = rename_gelc, #
     globals = rename_matg, #
     hud_globals = rename_hudg, #
+
+    input_device_defaults = rename_devc,
+    ui_widget_definition = rename_DeLa, #
+    virtual_keyboard = rename_vcky, #
 
     biped = rename_obje, #
     vehicle = rename_obje, #
@@ -1318,8 +1330,6 @@ recursive_rename_functions = dict(
     particle_system = rename_pctl, #
     preferences_network_game = rename_ngpr, #
     sound_looping = rename_lsnd, #
-    ui_widget_definition = rename_DeLa, #
-    virtual_keyboard = rename_vcky, #
 
     sound = rename_snd_, #
     )
