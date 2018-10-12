@@ -57,7 +57,7 @@ from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, RefineryChecksumEditorWindow,\
      ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
 from refinery.recursive_rename.tag_path_handler import TagPathHandler
-from refinery.recursive_rename.functions import recursive_rename_functions
+from refinery.recursive_rename.functions import recursive_rename
 
 
 if print_startup:
@@ -1152,6 +1152,8 @@ class Refinery(tk.Tk):
         bsp_headers = active_map.bsp_headers
         bsp_header_offsets = active_map.bsp_header_offsets
 
+        tag_path_handler = TagPathHandler(tag_index_array)
+
         if self.fix_tag_classes.get() and not("stubbs" in active_map.engine or
                                               "shadowrun" in active_map.engine):
             print("Repairing tag classes...")
@@ -1274,6 +1276,7 @@ class Refinery(tk.Tk):
                         mp="ui\\shell\\multiplayer",
                         ui="ui\\shell\\main_menu"
                         ).get(map_type, b.tag.tag_path)
+                    tag_path_handler.set_priority(tag_id, float("inf"))
                 elif tag_id not in tagc_ids_reffed_in_other_tagc:
                     tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
 
@@ -1288,12 +1291,14 @@ class Refinery(tk.Tk):
 
                 if tagc_i == 0:
                     b.tag.tag_path = "ui\\ui_tags_loaded_all_scenario_types"
+                    tag_path_handler.set_priority(tag_id, float("inf"))
                 elif tagc_i == 1:
                     b.tag.tag_path = dict(
                         sp="ui\\ui_tags_loaded_solo_scenario_type",
                         mp="ui\\ui_tags_loaded_multiplayer_scenario_type",
                         ui="ui\\ui_tags_loaded_mainmenu_scenario_type"
                         ).get(map_type, b.tag.tag_path)
+                    tag_path_handler.set_priority(tag_id, float("inf"))
                 tagc_i += 1
 
             print("    Finished")
@@ -1336,7 +1341,7 @@ class Refinery(tk.Tk):
         if self.use_heuristics.get():
             print("Renaming tags using heuristics...")
             try:
-                self._heuristics_deprotect()
+                self._heuristics_deprotect(tag_path_handler)
             except Exception:
                 print(format_exc())
             print("    Finished")
@@ -1354,15 +1359,13 @@ class Refinery(tk.Tk):
         print("Completed. Took %s seconds." % round(time()-start, 1))
 
     
-    def _heuristics_deprotect(self):
+    def _heuristics_deprotect(self, tag_path_handler):
         active_map = self.active_map
         tag_index_array = active_map.tag_index.tag_index
         matg_meta = active_map.matg_meta
         hudg_id = 0xFFFF if not matg_meta else\
                   matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id[0]
         hudg_meta = active_map.get_meta(hudg_id, True)
-
-        tag_path_handler = TagPathHandler(tag_index_array)
 
         if hudg_meta:
             block = hudg_meta.messaging_parameters
@@ -1372,14 +1375,49 @@ class Refinery(tk.Tk):
             if items_meta: tag_path_handler.set_item_strings(items_meta)
             if icons_meta: tag_path_handler.set_icon_strings(icons_meta)
 
+
+        vehi_ids = []
+        bipd_ids = []
+        item_ids = []
+        tagc_ids = []
+        soul_ids = []
+        misc_ids = []
+        sbsp_ids = []
+        scnr_id = matg_id = None
         for i in range(len(tag_index_array)):
-            rename_func = recursive_rename_functions.get(
-                tag_index_array[i].class_1.enum_name)
-            if rename_func:
+            tag_type = tag_index_array[i].class_1.enum_name
+            if tag_type == "scenario":
+                scnr_id = i
+            elif tag_type == "globals":
+                matg_id = i
+            elif tag_type == "vehicle":
+                vehi_ids.append(i)
+            elif tag_type == "biped":
+                bipd_ids.append(i)
+            elif tag_type in ("item", "weapon", "equipment"):
+                item_ids.append(i)
+            elif tag_type == "tag_collection":
+                tagc_ids.append(i)
+            elif tag_type == "ui_widget_collection":
+                soul_ids.append(i)
+            elif tag_type == "scenario_structure_bsp":
+                sbsp_ids.append(i)
+            else:
+                misc_ids.append(i)
+
+        for id_list in (sbsp_ids, vehi_ids, item_ids, bipd_ids, soul_ids,
+                        (hudg_id, matg_id, scnr_id), tagc_ids, misc_ids):
+            for i in id_list:
                 try:
-                    rename_func(i, active_map, tag_path_handler)
+                    recursive_rename(i, active_map, tag_path_handler)
                 except Exception:
                     print(format_exc())
+        total = 0
+        for b in tag_index_array:
+            if "\\" not in b.tag.tag_path:
+                total += 1
+
+        print("Percent protected:", round(total / len(tag_index_array), 2))
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return
