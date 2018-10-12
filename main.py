@@ -1417,7 +1417,8 @@ class Refinery(tk.Tk):
             if "\\" not in b.tag.tag_path:
                 total += 1
 
-        print("Percent protected:", round(total / len(tag_index_array), 2))
+        print("Percent protected:",
+              round(total * 100 / len(tag_index_array), 2))
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return
