@@ -9,17 +9,6 @@ INF = float('inf')
 MAX_TAG_NAME_LEN = 243
 
 
-def sanitize_name(name):
-    for c in ':*?"<>|':
-        name = name.replace(c, '')
-    return name.lower().replace(' ', '_').replace('/', '\\')
-
-def get_tag_id(tag_ref):
-    if tag_ref.id[0] == 0xFFFF and tag_ref.id[1] == 0xFFFF:
-        return None
-    return tag_ref.id[0]
-
-
 # directories inside the root_dir
 camera_dir     = "camera\\"
 characters_dir = "characters\\"
@@ -41,16 +30,34 @@ weapons_dir    = "weapons\\"
 
 # general purpose directories used in MANY things
 shaders_dir = "shaders\\"
-effects_dir = "effects\\"
 bitmaps_dir = "bitmaps\\"
 shared_dir  = "shared\\"  # for anything shared between tags
+
+
+# directories inside the levels directory
+level_bitmaps_dir = bitmaps_dir
+level_decals_dir  = "decals\\"
+level_devices_dir = "devices\\"
+level_music_dir   = "music\\"
+level_scenery_dir = "scenery\\"
+level_shaders_dir = shaders_dir
+level_item_coll_dir = item_coll_dir
+
+# directories inside ui/hud directory
+hud_bitmaps_dir = bitmaps_dir
+
+# directories inside ui/shell directory
+shell_bitmaps_dir = bitmaps_dir
+
+# directories inside the weapon directory
+weap_fp_dir = "fp\\"
 
 
 # directories inside "object" directories(weapon, vehicle, biped, scenery, etc)
 obje_shaders_dir = shaders_dir
 obje_effects_dir = effects_dir
 obje_bitmaps_dir = bitmaps_dir
-obje_actor_dir   = "%s\\"  # directory for actors and their variants.
+obje_actor_dir   = "actors\\"  # directory for actors and their variants.
 #                            insert the actors name as the directory name.
 
 
@@ -81,20 +88,6 @@ decal_vehicle_dir = effect_decals_dir + "vehicle marks\\"
 # directories inside the item collections directory
 itmc_powerups = item_coll_dir + "powerups\\"
 itmc_weapons  = item_coll_dir + "weapons\\"
-
-
-# directories inside the levels directory
-level_bitmaps_dir = bitmaps_dir
-level_decals_dir  = "decals\\"
-level_devices_dir = "devices\\"
-level_music_dir   = "music\\"
-level_scenery_dir = "scenery\\"
-level_shaders_dir = shaders_dir
-
-
-# directories inside sky directory
-sky_shaders_dir = shaders_dir
-sky_bitmaps_dir = bitmaps_dir
 
 
 # directories inside sound directory
@@ -130,17 +123,6 @@ ui_hud_dir      = ui_dir + "hud\\"
 ui_shell_dir    = ui_dir + "shell\\"
 
 
-# directories inside ui/hud directory
-hud_bitmaps_dir = bitmaps_dir
-################################################
-'''This will really need to be fleshed out a lot
-more for it to actually be useful to anyone.'''
-################################################
-
-
-# directories inside ui/shell directory
-shell_bitmaps_dir = bitmaps_dir
-
-
-# directories inside the weapon directory
-weap_fp_dir = "%s\\fp"
+# directories inside sky directory
+sky_shaders_dir = shaders_dir
+sky_bitmaps_dir = bitmaps_dir
