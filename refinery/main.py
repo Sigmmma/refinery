@@ -84,13 +84,14 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
     index_data_end  = tag_index.model_data_size  + raw_data_end
     tag_index.tag_index = tag_index_array
 
+    # seek to the end so we can measure the map
+    map_file.seek(0, 2)
     expansions = ((raw_data_end,    raw_data_expansion),
                   (vertex_data_end, vertex_data_expansion),
                   (index_data_end,  triangle_data_expansion),
                   (map_file.tell(), meta_data_expansion))
 
     # expand the map's sections
-    map_file.seek(0, 2)
     map_end = inject_file_padding(map_file, *expansions)
     diffs_by_offsets, diff = dict(expansions), 0
     for off in sorted(diffs_by_offsets):
@@ -106,8 +107,7 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
                                       triangle_data_expansion)
     halo_map.map_magic                 -= meta_ptr_diff
     map_header.tag_index_header_offset += meta_ptr_diff
-    map_header.tag_index_meta_len      += meta_data_expansion
-    map_header.decomp_len = map_end
+    map_header.tag_index_meta_len = map_end - map_header.tag_index_header_offset
 
     # adjust rawdata pointers in various tags if the index header moved
     if meta_ptr_diff:
@@ -1262,7 +1262,7 @@ class Refinery(tk.Tk):
             tagc_ids_reffed_in_other_tagc = set()
             for b in tag_index_array:
                 tag_id = b.id.tag_table_index
-                if repaired.get(tag_id) != "tagc":
+                if repaired.get(tag_id) not in ("tagc", "Soul"):
                     continue
 
                 reffed_tag_ids, reffed_tag_types = get_tagc_refs(
@@ -1277,7 +1277,15 @@ class Refinery(tk.Tk):
                         ui="ui\\shell\\main_menu"
                         ).get(map_type, b.tag.tag_path)
                     tag_path_handler.set_priority(tag_id, float("inf"))
-                elif tag_id not in tagc_ids_reffed_in_other_tagc:
+                elif reffed_tag_types == set(["devc"]):
+                    if len(reffed_tag_ids) == 4:
+                        b.tag.tag_path = "ui\\ui_default_profiles"
+                        tag_path_handler.set_priority(tag_id, float("inf"))
+                    elif len(reffed_tag_ids) == 19:
+                        b.tag.tag_path = "ui\\ui_input_device_defaults"
+                        tag_path_handler.set_priority(tag_id, float("inf"))
+
+                if tag_id not in tagc_ids_reffed_in_other_tagc:
                     tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
 
 
@@ -1377,6 +1385,7 @@ class Refinery(tk.Tk):
 
 
         vehi_ids = []
+        actv_ids = []
         bipd_ids = []
         item_ids = []
         tagc_ids = []
@@ -1392,6 +1401,8 @@ class Refinery(tk.Tk):
                 matg_id = i
             elif tag_type == "vehicle":
                 vehi_ids.append(i)
+            elif tag_type == "actor_variant":
+                actv_ids.append(i)
             elif tag_type == "biped":
                 bipd_ids.append(i)
             elif tag_type in ("item", "weapon", "equipment"):
@@ -1405,8 +1416,9 @@ class Refinery(tk.Tk):
             else:
                 misc_ids.append(i)
 
-        for id_list in (sbsp_ids, vehi_ids, item_ids, bipd_ids, soul_ids,
-                        (hudg_id, matg_id, scnr_id), tagc_ids, misc_ids):
+        for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
+                        soul_ids, (hudg_id, matg_id, scnr_id),
+                        tagc_ids, ):#misc_ids):
             for i in id_list:
                 try:
                     recursive_rename(i, active_map, tag_path_handler)
@@ -1579,13 +1591,12 @@ class Refinery(tk.Tk):
             if hasattr(map_file, "fileno"):
                 os.fsync(out_file.fileno())
 
+            # write the map header so the calculate_ce_checksum can read it
+            out_file.seek(0)
+            out_file.write(map_header.serialize(calc_pointers=False))
             crc = crc_functions.calculate_ce_checksum(out_file, index_magic)
-
-            # change the decompressed size
             if do_spoof:
-                func([crc^0xFFffFFff, out_file, index_header_offset +
-                      tag_index.tag_index_offset - index_magic +
-                      32*tag_index.scenario_tag_id[0] + 28])
+                func([crc^0xFFffFFff, out_file, index_header_offset + 8])
             else:
                 map_header.crc32 = crc
 
