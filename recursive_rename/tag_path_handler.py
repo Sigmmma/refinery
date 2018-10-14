@@ -65,7 +65,7 @@ class TagPathHandler():
     def set_icon_strings(self, strings_body):
         new_strings = []
         for b in strings_body.strings.STEPTREE:
-            string = str_to_identifier(b.data.lower()).replace("_", " ")
+            string = str_to_identifier(b.data.lower()).replace("_", " ").strip()
             if string == "need a string entry here":
                 string = ""
             new_strings.append(string.strip())
@@ -132,11 +132,12 @@ class TagPathHandler():
 
         if new_path in self._path_map:
             i = 1
-            while "%s_%s%s" % (new_path_no_ext, i, ext) in self._path_map:
+            while self._path_map.get(
+                    "%s %s%s" % (new_path_no_ext, i, ext), -1) == index:
                 i += 1
 
             if i > 1:
-                new_path_no_ext += "_%s" % i
+                new_path_no_ext += " %s" % i
 
         new_path = new_path_no_ext + ext
         if len(new_path_no_ext) > MAX_TAG_NAME_LEN:

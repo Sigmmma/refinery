@@ -13,8 +13,11 @@ MAX_TAG_NAME_LEN = 243
 camera_dir     = "camera\\"
 characters_dir = "characters\\"
 cinematics_dir = "cinematics\\"
+devices_dir    = "devices\\"
+decals_dir     = "decals\\"
 dialog_dir     = "dialog\\"
 effects_dir    = "effects\\"
+garbage_dir    = "garbage\\"
 globals_dir    = "globals\\"
 item_coll_dir  = "item collections\\"
 levels_dir     = "levels\\"
@@ -26,6 +29,7 @@ sound_dir      = "sound\\"
 ui_dir         = "ui\\"
 vehicles_dir   = "vehicles\\"
 weapons_dir    = "weapons\\"
+weather_dir    = "weather\\"
 
 
 # general purpose directories used in MANY things
@@ -36,12 +40,13 @@ shared_dir  = "shared\\"  # for anything shared between tags
 
 # directories inside the levels directory
 level_bitmaps_dir = bitmaps_dir
-level_decals_dir  = "decals\\"
-level_devices_dir = "devices\\"
+level_decals_dir  = decals_dir
+level_devices_dir = devices_dir
 level_music_dir   = "music\\"
-level_scenery_dir = "scenery\\"
+level_scenery_dir = scenery_dir
 level_shaders_dir = shaders_dir
 level_item_coll_dir = item_coll_dir
+level_weather_dir = weather_dir
 
 # directories inside ui/hud directory
 hud_bitmaps_dir = bitmaps_dir
@@ -64,7 +69,7 @@ obje_actor_dir   = "actors\\"  # directory for actors and their variants.
 # directories inside the cinematics directory
 cinematic_anims_dir   = cinematics_dir + "animations\\"
 cinematic_effects_dir = cinematics_dir + effects_dir
-cinematic_scenery_dir = cinematics_dir + "scenery\\"
+cinematic_scenery_dir = cinematics_dir + scenery_dir
 
 
 # directories inside the effects directory
@@ -86,8 +91,8 @@ decal_vehicle_dir = effect_decals_dir + "vehicle marks\\"
 
 
 # directories inside the item collections directory
-itmc_powerups = item_coll_dir + "powerups\\"
-itmc_weapons  = item_coll_dir + "weapons\\"
+itmc_powerups = item_coll_dir + powerups_dir
+itmc_weapons  = item_coll_dir + weapons_dir
 
 
 # directories inside sound directory
