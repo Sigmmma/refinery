@@ -825,6 +825,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "generate_comp_verts", "generate_uncomp_verts",
                      "fix_tag_classes", "use_hashcaches", "use_heuristics",
                      "autoload_resources", "extract_cheape", "show_all_fields",
+                     "valid_tag_paths_are_accurate",
                      "show_output", "fix_tag_index_offset"):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
@@ -868,6 +869,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.use_heuristics_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Use heuristics",
             variable=self.use_heuristics)
+        self.valid_tag_paths_are_accurate_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Do not rename non-protected tag paths",
+            variable=self.valid_tag_paths_are_accurate)
         self.fix_tag_index_offset_cbtn = tk.Checkbutton(
             self.deprotect_frame, text=("Fix tag index offset when saving\n" +
                                         "WARNING: Can corrupt certain maps"),
@@ -928,8 +932,8 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.fix_tag_index_offset_cbtn,
-                  #self.use_hashcaches_cbtn,
-                  self.use_heuristics_cbtn
+                  self.use_heuristics_cbtn, #self.use_hashcaches_cbtn,
+                  self.valid_tag_paths_are_accurate_cbtn
                   ):
             w.pack(padx=4, anchor='w')
 
