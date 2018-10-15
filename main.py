@@ -1366,8 +1366,8 @@ class Refinery(tk.Tk):
         if self.valid_tag_paths_are_accurate.get():
             for tag_id in range(len(tag_index_array)):
                 tag_index_ref = tag_index_array[tag_id]
-                tag_path = tag_index_ref.tag.tag_path.replace(" ", "_")
-                if not tag_path.startswith("protected_"):
+                tag_path = tag_index_ref.tag.tag_path
+                if not tag_path.startswith("protected"):
                     tag_path_handler.set_priority(tag_id, float("inf"))
 
         if self.use_heuristics.get():
