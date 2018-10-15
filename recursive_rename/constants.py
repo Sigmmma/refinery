@@ -73,6 +73,7 @@ cinematic_scenery_dir = cinematics_dir + scenery_dir
 
 
 # directories inside the effects directory
+effect_contrails_dir   = effects_dir + "contrails\\"
 effect_decals_dir      = effects_dir + "decals\\"
 effect_d_objects_dir   = effects_dir + "detail_objects\\"
 effect_lens_flares_dir = effects_dir + "lens flares\\"
