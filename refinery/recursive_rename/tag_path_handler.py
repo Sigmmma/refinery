@@ -120,8 +120,6 @@ class TagPathHandler():
         tag_ref = self.get_index_ref(index)
         ext = "." + tag_ref.class_1.enum_name
         new_path_no_ext, ext = sanitize_name(new_path_no_ext), ext.lower()
-
-        new_path = new_path_no_ext + ext
         old_path = tag_ref.tag.tag_path.lower() + ext
 
         if self.get_priority(index) >= priority or tag_ref.indexed:
@@ -130,14 +128,14 @@ class TagPathHandler():
         if not new_path_no_ext or new_path_no_ext[-1] == "\\":
             new_path_no_ext += "protected"
 
-        if new_path in self._path_map:
+        if self._path_map.get(new_path_no_ext + ext, None) not in (None, index):
             i = 1
-            while self._path_map.get(
-                    "%s %s%s" % (new_path_no_ext, i, ext), -1) == index:
+            while (self._path_map.get(
+                    "%s %s%s" % (new_path_no_ext, i, ext), None)
+                    not in (None, index)):
                 i += 1
 
-            if i > 1:
-                new_path_no_ext += " %s" % i
+            new_path_no_ext += " %s" % i
 
         new_path = new_path_no_ext + ext
         #if len(new_path_no_ext) > MAX_TAG_NAME_LEN:
