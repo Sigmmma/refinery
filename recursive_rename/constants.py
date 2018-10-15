@@ -73,14 +73,15 @@ cinematic_scenery_dir = cinematics_dir + scenery_dir
 
 
 # directories inside the effects directory
-effect_decals_dir    = effects_dir + "decals\\"
-effect_d_objects_dir = effects_dir + "detail_objects\\"
-effect_lights_dir    = effects_dir + "lights\\"  # general lights used for special effects
-effect_p_systems_dir = effects_dir + "particle systems\\"
-effect_particles_dir = effects_dir + "particles\\"
-effect_physics_dir   = effects_dir + "point physics\\"
-effect_vehicle_dir   = effects_dir + "vehicle effects\\"
-effect_zmaps_dir     = effects_dir + "zmaps\\"
+effect_decals_dir      = effects_dir + "decals\\"
+effect_d_objects_dir   = effects_dir + "detail_objects\\"
+effect_lens_flares_dir = effects_dir + "lens flares\\"
+effect_lights_dir      = effects_dir + "lights\\"
+effect_p_systems_dir   = effects_dir + "particle systems\\"
+effect_particles_dir   = effects_dir + "particles\\"
+effect_physics_dir     = effects_dir + "point physics\\"
+effect_vehicle_dir     = effects_dir + "vehicle effects\\"
+effect_zmaps_dir       = effects_dir + "zmaps\\"
 
 
 # directories inside the decals directory.

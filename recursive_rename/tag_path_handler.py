@@ -19,7 +19,7 @@ class TagPathHandler():
     def __init__(self, tag_index_array, **kwargs):
         self._def_priority = kwargs.get('def_priority', 0)
         self._index_map = list(tag_index_array)
-        self._shared_by = [[] for i in range(len(tag_index_array))]
+        self._shared_by = {i: [] for i in range(len(tag_index_array))}
         self._priorities = dict(kwargs.get('priorities', {}))
         self._path_map = dict()
 
@@ -84,10 +84,10 @@ class TagPathHandler():
         return ""
 
     def get_shared_by(self, index):
-        return self._shared_by[index]
+        return self._shared_by.get(index, ())
 
     def get_priority(self, index):
-        return self._priorities[index]
+        return self._priorities.get(index, float("-inf"))
 
     def get_sub_dir(self, index, root=""):
         tag_ref = self.get_index_ref(index)
@@ -140,9 +140,9 @@ class TagPathHandler():
                 new_path_no_ext += " %s" % i
 
         new_path = new_path_no_ext + ext
-        if len(new_path_no_ext) > MAX_TAG_NAME_LEN:
-            print("'%s' is too long to use as a tagpath" % new_path_no_ext)
-            return old_path
+        #if len(new_path_no_ext) > MAX_TAG_NAME_LEN:
+        #    print("'%s' is too long to use as a tagpath" % new_path_no_ext)
+        #    return old_path
 
         self._priorities[index] = priority
         if parent:

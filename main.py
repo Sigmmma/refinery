@@ -183,6 +183,7 @@ class Refinery(tk.Tk):
         self.fix_tag_index_offset = tk.IntVar(self)
         self.use_hashcaches = tk.IntVar(self)
         self.use_heuristics = tk.IntVar(self)
+        self.valid_tag_paths_are_accurate = tk.IntVar(self, 1)
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
@@ -200,6 +201,7 @@ class Refinery(tk.Tk):
             fix_tag_index_offset=self.fix_tag_index_offset,
             use_hashcaches=self.use_hashcaches,
             use_heuristics=self.use_heuristics,
+            valid_tag_paths_are_accurate=self.valid_tag_paths_are_accurate,
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
@@ -439,7 +441,8 @@ class Refinery(tk.Tk):
 
         flags = header.deprotection_flags
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
-                          "use_hashcaches", "use_heuristics", ):
+                          "use_hashcaches", "use_heuristics",
+                          "valid_tag_paths_are_accurate"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
     def update_config(self, config_file=None):
@@ -483,7 +486,8 @@ class Refinery(tk.Tk):
 
         flags = header.deprotection_flags
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
-                          "use_hashcaches", "use_heuristics", ):
+                          "use_hashcaches", "use_heuristics",
+                          "valid_tag_paths_are_accurate"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
     def save_config(self, e=None):
@@ -1265,6 +1269,10 @@ class Refinery(tk.Tk):
                 if repaired.get(tag_id) not in ("tagc", "Soul"):
                     continue
 
+                if self.stop_processing:
+                    print("    Deprotection stopped by user.")
+                    return
+
                 reffed_tag_ids, reffed_tag_types = get_tagc_refs(
                     b.meta_offset, map_data, map_magic, repaired
                     )
@@ -1297,6 +1305,10 @@ class Refinery(tk.Tk):
                     tag_id in tagc_ids_reffed_in_other_tagc):
                     continue
 
+                if self.stop_processing:
+                    print("    Deprotection stopped by user.")
+                    return
+
                 if tagc_i == 0:
                     b.tag.tag_path = "ui\\ui_tags_loaded_all_scenario_types"
                     tag_path_handler.set_priority(tag_id, float("inf"))
@@ -1315,20 +1327,25 @@ class Refinery(tk.Tk):
                    1000*len(repaired)//len(tag_index_array)/10))
 
             print()
-            print("The deprotector could not find these tags:\n"
-                  "  (This does not mean they are protected however)\n"
-                  "  [ id,  offset,  type,  path ]\n")
-            for i in range(len(tag_index_array)):
-                if i not in repaired:
-                    b = tag_index_array[i]
-                    try:
-                        print("  [ %s, %s, %s, %s ]" % (
-                            i, b.meta_offset - map_magic,
-                            b.class_1.enum_name, b.tag.tag_path))
-                    except Exception:
-                        print("  [ %s, %s, %s ]" % (
-                            i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
-            print()
+            if len(repaired) != len(tag_index_array):
+                print("The deprotector could not find these tags:\n"
+                      "  (This does not mean they are protected however)\n"
+                      "  [ id,  offset,  type,  path ]\n")
+                for i in range(len(tag_index_array)):
+                    if i not in repaired:
+                        b = tag_index_array[i]
+                        try:
+                            print("  [ %s, %s, %s, %s ]" % (
+                                i, b.meta_offset - map_magic,
+                                b.class_1.enum_name, b.tag.tag_path))
+                        except Exception:
+                            print("  [ %s, %s, %s ]" % (
+                                i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
+                print()
+
+        if self.stop_processing:
+            print("    Deprotection stopped by user.")
+            return
 
         # write the deprotected tag classes fourcc's to each
         # tag's header in the tag index in the map buffer
@@ -1346,6 +1363,13 @@ class Refinery(tk.Tk):
             # print("Renaming tags using hashcaches...")
             # print("    Finished")
 
+        if self.valid_tag_paths_are_accurate.get():
+            for tag_id in range(len(tag_index_array)):
+                tag_index_ref = tag_index_array[tag_id]
+                tag_path = tag_index_ref.tag.tag_path.replace(" ", "_")
+                if not tag_path.startswith("protected_"):
+                    tag_path_handler.set_priority(tag_id, float("inf"))
+
         if self.use_heuristics.get():
             print("Renaming tags using heuristics...")
             try:
@@ -1353,6 +1377,10 @@ class Refinery(tk.Tk):
             except Exception:
                 print(format_exc())
             print("    Finished")
+
+        if self.stop_processing:
+            print("    Deprotection stopped by user.")
+            return
 
         # calculate the maps new checksum
         map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
@@ -1383,7 +1411,6 @@ class Refinery(tk.Tk):
             if items_meta: tag_path_handler.set_item_strings(items_meta)
             if icons_meta: tag_path_handler.set_icon_strings(icons_meta)
 
-
         vehi_ids = []
         actv_ids = []
         bipd_ids = []
@@ -1394,6 +1421,10 @@ class Refinery(tk.Tk):
         sbsp_ids = []
         scnr_id = matg_id = None
         for i in range(len(tag_index_array)):
+            if self.stop_processing:
+                print("    Deprotection stopped by user.")
+                return
+
             tag_type = tag_index_array[i].class_1.enum_name
             if tag_type == "scenario":
                 scnr_id = i
@@ -1418,7 +1449,11 @@ class Refinery(tk.Tk):
 
         for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
                         soul_ids, (hudg_id, matg_id, scnr_id),
-                        tagc_ids, ):#misc_ids):
+                        tagc_ids, misc_ids):
+
+            if self.stop_processing:
+                print("    Deprotection stopped by user.")
+                return
             for i in id_list:
                 try:
                     recursive_rename(i, active_map, tag_path_handler)
@@ -1654,6 +1689,7 @@ class Refinery(tk.Tk):
         last_map_name = None
 
         for iid in tuple(queue_items):
+            self.update_idletasks()
             if self.stop_processing:
                 print("Extraction stopped by user\n")
                 break

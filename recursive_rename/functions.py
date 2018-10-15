@@ -8,7 +8,7 @@ NAMED_OBJE_PRIORITY = 4.0
 SCNR_BSPS_PRIORITY = 2.5
 HUDG_REFS_PRIORITY = 2
 SCNR_PALETTES_PRIORITY = 1.5
-MATG_REFS_PRIORITY = 1.5
+MEDIUM_HIGH_PRIORITY = 1.5
 DEFAULT_PRIORITY = 1.0
 LOW_PRIORITY = 0.5
 
@@ -316,7 +316,7 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
     if not sub_dir: sub_dir = globals_dir
 
     kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  priority=MATG_REFS_PRIORITY,
+                  priority=MEDIUM_HIGH_PRIORITY,
                   tag_path_handler=tag_path_handler)
     kwargs_no_priority = dict(kwargs)
     kwargs_no_priority.pop('priority')
@@ -833,7 +833,7 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
         elif obje_type == "ssce":
             sub_dir += "sfx emitters\\"
 
-        sub_dir += name +  "\\"
+        sub_dir += name + "\\"
 
     tag_path_handler.set_path(
         tag_id, root_dir + sub_dir + name, kwargs.get('priority')
@@ -854,10 +854,12 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
         recursive_rename(get_tag_id(b), sub_dir=sub_dir, name=name, **kwargs)
 
     recursive_rename(get_tag_id(obje_attrs.creation_effect),
-                     sub_dir=sub_dir, name="creation effect", **kwargs)
+                     sub_dir=sub_dir + effects_dir,
+                     name="creation effect", **kwargs)
 
     recursive_rename(get_tag_id(obje_attrs.modifier_shader),
-                     sub_dir=sub_dir, name="modifier shader", **kwargs)
+                     sub_dir=sub_dir + shaders_dir,
+                     name="modifier shader", **kwargs)
 
     for b in obje_attrs.attachments.STEPTREE:
         recursive_rename(get_tag_id(b.type),
@@ -866,6 +868,47 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
     for b in obje_attrs.widgets.STEPTREE:
         recursive_rename(get_tag_id(b.reference),
                          sub_dir=sub_dir + "widgets\\", **kwargs)
+       
+    proj_attrs = getattr(meta, "proj_attrs", None) 
+    if obje_type != "proj" or not proj_attrs:
+        return
+
+    recursive_rename(get_tag_id(proj_attrs.super_detonation),
+                     sub_dir=sub_dir + effects_dir,
+                     name="super detonation", **kwargs)
+    recursive_rename(get_tag_id(proj_attrs.detonation.effect),
+                     sub_dir=sub_dir + effects_dir,
+                     name="detonation", **kwargs)
+
+    recursive_rename(get_tag_id(proj_attrs.physics.detonation_started),
+                     sub_dir=sub_dir + effects_dir,
+                     name="detonation started", **kwargs)
+    recursive_rename(get_tag_id(proj_attrs.physics.flyby_sound),
+                     sub_dir=sub_dir + sound_dir,
+                     name="flyby sound", **kwargs)
+    recursive_rename(get_tag_id(proj_attrs.physics.attached_detonation_damage),
+                     sub_dir=sub_dir, name="attached detonation", **kwargs)
+    recursive_rename(get_tag_id(proj_attrs.physics.impact_damage),
+                     sub_dir=sub_dir, name="impact", **kwargs)
+
+    i = 0
+    for b in proj_attrs.material_responses.STEPTREE:
+        if i >= len(materials_list):
+            mat_name = "mat %s" % i
+        else:
+            mat_name = materials_list[i].replace("_", " ")
+
+        recursive_rename(get_tag_id(b.effect),
+                         sub_dir=sub_dir + "impact effects\\",
+                         name=mat_name, **kwargs)
+        recursive_rename(get_tag_id(b.potential_response.effect),
+                         sub_dir=sub_dir + "impact effects\\",
+                         name="alt %s" % mat_name, **kwargs)
+        recursive_rename(get_tag_id(b.detonation_effect),
+                         sub_dir=sub_dir + "impact effects\\",
+                         name="detonation %s" % mat_name, **kwargs)
+        i += 1
+    
 
 
 def rename_shdr(tag_id, halo_map, tag_path_handler,
@@ -1017,7 +1060,7 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
 
     if eqip_attrs:
         recursive_rename(get_tag_id(eqip_attrs.pickup_sound),
-                         sub_dir=sub_dir + "sounds\\",
+                         sub_dir=sub_dir + sound_dir,
                          name="pickup sound", **kwargs)
 
     if not weap_attrs:
@@ -1034,7 +1077,7 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
                      name="weap detonation", **kwargs)
 
     recursive_rename(get_tag_id(weap_attrs.melee.player_damage),
-                     sub_dir=sub_dir, name="melee damage", **kwargs)
+                     sub_dir=sub_dir, name="melee", **kwargs)
     recursive_rename(get_tag_id(weap_attrs.melee.player_response),
                      sub_dir=sub_dir, name="melee response", **kwargs)
 
@@ -1101,8 +1144,8 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
             name="%scharging" % trig_str,
             sub_dir=sub_dir + obje_effects_dir, **kwargs)
         recursive_rename(
-            get_tag_id(trig.projectile.projectile),
-            name="%sprojectile" % trig_str, sub_dir=sub_dir, **kwargs)
+            get_tag_id(trig.projectile.projectile), name="projectile",
+            sub_dir=sub_dir + "%sprojectile\\" % trig_str, **kwargs)
 
         for b in trig.misc.firing_effects.STEPTREE:
             recursive_rename(
@@ -1155,7 +1198,7 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
                      name=(name + " spawned actor").strip(), **kwargs)
 
     recursive_rename(get_tag_id(unit_attrs.melee_damage),
-                     sub_dir=sub_dir, name="melee impact damage", **kwargs)
+                     sub_dir=sub_dir, name="melee impact", **kwargs)
 
     trak_array = unit_attrs.camera_tracks.STEPTREE
     unhi_array = unit_attrs.new_hud_interfaces.STEPTREE
@@ -1283,6 +1326,15 @@ def rename_actv(tag_id, halo_map, tag_path_handler,
 
     # TODO: Check the unit and see if its priority is higher than
     # this actv. if it is, use that biped's name as the sub_dir
+    unit_id = get_tag_id(meta.unit)
+    major_id = get_tag_id(meta.major_variant)
+    if tag_path_handler.get_priority(major_id) >= kwargs['priority']:
+        kwargs['priority'] = tag_path_handler.get_priority(major_id)
+        sub_dir = tag_path_handler.get_sub_dir(major_id, root_dir)
+    elif tag_path_handler.get_priority(unit_id) >= kwargs['priority']:
+        kwargs['priority'] = tag_path_handler.get_priority(unit_id)
+        sub_dir = tag_path_handler.get_sub_dir(unit_id, root_dir)
+
 
     tag_path_handler.set_path(
         tag_id, root_dir + sub_dir + name, kwargs['priority'])
@@ -1552,7 +1604,441 @@ def rename_antr(tag_id, halo_map, tag_path_handler,
             name=sfx_names.get(i, name), sub_dir=anim_sfx_dir, **kwargs)
 
 
+def rename_deca(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+    elif not name:
+        name = 'decal %s' % tag_id
+
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name,
+        kwargs.get('priority', DEFAULT_PRIORITY))
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    recursive_rename(get_tag_id(meta.next_decal_in_chain), name=name + " next",
+                     sub_dir=sub_dir, **kwargs)
+    recursive_rename(get_tag_id(meta.shader.shader_map), name=name + " bitmaps",
+                     sub_dir=sub_dir + bitmaps_dir, **kwargs)
+
+
+def rename_ant_(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+    elif not name:
+        name = 'antenna'
+
+        if 'antenna' not in meta.attachment_marker_name:
+            name += meta.attachment_marker_name
+
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name,
+        kwargs.get('priority', DEFAULT_PRIORITY))
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    bitm_dir = '\\'.join(sub_dir.split('\\')[: -2])
+    if bitm_dir: bitm_dir += "\\"
+    bitm_dir += bitmaps_dir
+    recursive_rename(get_tag_id(meta.bitmaps), sub_dir=bitm_dir,
+                     name=name + " bitmaps", **kwargs)
+    recursive_rename(get_tag_id(meta.physics), sub_dir=sub_dir,
+                     name=name + " physics", **kwargs)
+
+
+def rename_dobc(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs.get('priority')
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    dobc_type_names = set()
+    for b in meta.detail_object_types.STEPTREE:
+        dobc_name = b.name.lower().replace("_", " ").strip()
+        if name:
+            dobc_type_names.add(dobc_name)
+
+    dobc_name = join_names(sorted(dobc_type_names), 96)
+
+    recursive_rename(
+        get_tag_id(meta.sprite_plate), halo_map, tag_path_handler,
+        root_dir, sub_dir + bitmaps_dir, name + " " + dobc_name, **kwargs)
+
+
+def rename_udlg(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs.get('priority')
+        )
+    name = tag_path_handler.get_basename(tag_id)
+    sub_dir = snd_dialog_dir + name + "\\"
+
+    for struct in (meta.idle, meta.involuntary, meta.hurting_people,
+                   meta.being_hurt, meta.killing_people, meta.actions,
+                   meta.player_kill_responses, meta.friends_dying,
+                   meta.shouting, meta.group_communication, meta.exclamations,
+                   meta.post_combat_actions, meta.post_combat_chatter):
+        snd_dir = sub_dir + "%s\\" % struct.NAME
+        for dep in struct:
+            recursive_rename(get_tag_id(dep), halo_map, tag_path_handler,
+                             root_dir, snd_dir, dep.NAME, **kwargs)
+
+
+def rename_DeLa(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+    if not name:
+        name = kwargs.get("dela_name", "").replace("_", " ").strip()
+        if not name:
+            name = sanitize_name(meta.name).replace("_", " ").strip()
+    if not sub_dir:
+        sub_dir = ui_shell_dir
+
+    kwargs.pop("dela_name", None)
+    seen = kwargs.get("seen", set())
+
+    if not name:
+        name = "protected %s" % tag_id
+    elif kwargs.get("priority", 0.0) < DEFAULT_PRIORITY:
+        kwargs["priority"] = DEFAULT_PRIORITY
+        
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    for b in meta.event_handlers.STEPTREE:
+        recursive_rename(get_tag_id(b.sound_effect),
+                         sub_dir=sub_dir + "sfx\\", **kwargs)
+
+        if (tag_path_handler.get_priority(get_tag_id(b.widget_tag)) >=
+            kwargs["priority"] and tag_id in seen):
+            continue
+        recursive_rename(get_tag_id(b.widget_tag),
+                         sub_dir=sub_dir, **kwargs)
+
+    kwargs.update(sub_dir=sub_dir + bitmaps_dir)
+    recursive_rename(get_tag_id(meta.background_bitmap),
+                     name="background bitmap", **kwargs)
+    recursive_rename(get_tag_id(meta.spinner_list.list_header_bitmap),
+                     name="list header bitmap", **kwargs)
+    recursive_rename(get_tag_id(meta.spinner_list.list_footer_bitmap),
+                     name="list footer bitmap", **kwargs)
+
+    kwargs.update(sub_dir=sub_dir + name + "\\")
+    recursive_rename(get_tag_id(meta.text_box.text_label_unicode_strings_list),
+                     name="text labels", **kwargs)
+    recursive_rename(get_tag_id(meta.text_box.text_font),
+                     name="text font", **kwargs)
+    recursive_rename(get_tag_id(meta.column_list.extended_description_widget),
+                     name="ext desc", **kwargs)
+
+    kwargs.update(sub_dir=sub_dir + name + "\\")
+    #kwargs.update(sub_dir=sub_dir + "conditional\\")
+    for b in meta.conditional_widgets.STEPTREE:
+        if (tag_path_handler.get_priority(get_tag_id(b.widget_tag)) >=
+            kwargs["priority"] and tag_id in seen):
+            continue
+        recursive_rename(get_tag_id(b.widget_tag),
+                         dela_name=sanitize_name(b.name), **kwargs)
+
+    #kwargs.update(sub_dir=sub_dir + "children\\")
+    for b in meta.child_widgets.STEPTREE:
+        if (tag_path_handler.get_priority(get_tag_id(b.widget_tag)) >=
+            kwargs["priority"] and tag_id in seen):
+            continue
+        recursive_rename(get_tag_id(b.widget_tag),
+                         dela_name=sanitize_name(b.name), **kwargs)
+
+
+def rename_snd_(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+    sub_dir2, name2 = get_sound_sub_dir_and_name(meta, sub_dir, name)
+    if not sub_dir: sub_dir = sub_dir2
+    if not name: name = name2
+
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs.get('priority')
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    recursive_rename(get_tag_id(meta.promotion_sound), halo_map,
+                     tag_path_handler, root_dir, sub_dir,
+                     name + "promo", **kwargs)
+
+
+def rename_vcky(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not sub_dir: sub_dir = ui_dir
+    if not name: name = "virtual kbd english"
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    recursive_rename(get_tag_id(meta.display_font),
+                     sub_dir=sub_dir, name="virtual kbd font", **kwargs)
+    recursive_rename(get_tag_id(meta.special_key_labels_string_list),
+                     sub_dir=sub_dir, name="virtual kbd key labels", **kwargs)
+
+    kwargs.update(sub_dir=sub_dir + "virtual kbd bitmaps\\")
+    recursive_rename(get_tag_id(meta.background_bitmap),
+                     name="background", **kwargs)
+    for b in meta.virtual_keys.STEPTREE:
+        key_name = b.keyboard_key.enum_name
+        recursive_rename(get_tag_id(b.unselected_background_bitmap),
+                         name=key_name, **kwargs)
+        recursive_rename(get_tag_id(b.selected_background_bitmap),
+                         name="highlight " + key_name, **kwargs)
+        recursive_rename(get_tag_id(b.active_background_bitmap),
+                         name="select " + key_name, **kwargs)
+        recursive_rename(get_tag_id(b.sticky_background_bitmap),
+                         name="engaged " + key_name, **kwargs)
+
+
+def rename_soul(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not sub_dir: sub_dir = ui_shell_dir
+    if not name: name = "protected %s" % tag_id
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+    for b in meta.ui_widget_definitions.STEPTREE:
+        recursive_rename(get_tag_id(b.ui_widget_definition),
+                         sub_dir=sub_dir, **kwargs)
+
+
+def rename_tagc(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not name: name = "protected %s" % tag_id
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', LOW_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    kwargs.update(sub_dir=sub_dir + name + " references\\")
+    for b in meta.tag_references.STEPTREE:
+        recursive_rename(get_tag_id(b.tag), **kwargs)
+
+
+def rename_trak(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    tag_path_handler.set_path(
+        tag_id, root_dir + (sub_dir if sub_dir else camera_dir) + name,
+        kwargs.get('priority', LOW_PRIORITY))
+
+
+def rename_snde(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    tag_path_handler.set_path(
+        tag_id, root_dir + (sub_dir if sub_dir else snd_sound_env_dir) + name,
+        kwargs.get('priority', LOW_PRIORITY))
+
+
+def rename_devc(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not sub_dir:
+        sub_dir = ui_devc_def_dir
+        kwargs.setdefault("priority", MEDIUM_HIGH_PRIORITY)
+    if not name:
+        name = tag_path_handler.get_basename(tag_id)
+
+    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
+                              kwargs.get('priority', DEFAULT_PRIORITY))
+
+
+def rename_ligh(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not name: name = "protected %s" % tag_id
+    if not sub_dir: sub_dir = effect_lights_dir
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    recursive_rename(get_tag_id(meta.lens_flare),
+                     sub_dir=sub_dir, name=name + " lens flare", **kwargs)
+
+    sub_dir = sub_dir + bitmaps_dir
+    recursive_rename(get_tag_id(meta.gel_map.primary_cube_map),
+                     sub_dir=sub_dir, name=name + " gel glow pri", **kwargs)
+    recursive_rename(get_tag_id(meta.gel_map.secondary_cube_map),
+                     sub_dir=sub_dir, name=name + " gel glow sec", **kwargs)
+
+
+def rename_glw_(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not name: name = "protected %s" % tag_id
+    if not sub_dir: sub_dir = effect_lights_dir
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    recursive_rename(get_tag_id(meta.texture), name=name + " glow sprite",
+                     sub_dir=sub_dir + bitmaps_dir, **kwargs)
+
+
+def rename_lens(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not name: name = "protected %s" % tag_id
+    if not sub_dir: sub_dir = effect_lens_flares_dir
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    recursive_rename(get_tag_id(meta.bitmaps.bitmap),
+                     name=name + " flare bitmaps",
+                     sub_dir=sub_dir + bitmaps_dir, **kwargs)
+
+
+def rename_mgs2(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not name: name = "protected %s" % tag_id
+    if not sub_dir: sub_dir = effect_lens_flares_dir
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    recursive_rename(get_tag_id(meta.map), name=name + " light vol map",
+                     sub_dir=sub_dir + bitmaps_dir, **kwargs)
+
+
+def rename_elec(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    if not name: name = "protected %s" % tag_id
+    if not sub_dir: sub_dir = effect_lens_flares_dir
+
+    meta = halo_map.get_meta(tag_id)
+    if meta is None:
+        return
+
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
+    tag_path_handler.set_path(
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
+        )
+    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
+    name = tag_path_handler.get_basename(tag_id)
+
+    recursive_rename(get_tag_id(meta.bitmap), name=name + " electricity map",
+                     sub_dir=sub_dir + bitmaps_dir, **kwargs)
+
+
+def rename_cont(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+
+
 def rename_effe(tag_id, halo_map, tag_path_handler,
+                root_dir="", sub_dir="", name="", **kwargs):
+    kwargs.update(halo_map=halo_map, root_dir=root_dir,
+                  tag_path_handler=tag_path_handler)
+
+
+def rename_jpt_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kwargs):
     kwargs.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
@@ -1571,12 +2057,6 @@ def rename_unhi(tag_id, halo_map, tag_path_handler,
 
 
 def rename_wphi(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
-
-
-def rename_ligh(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kwargs):
     kwargs.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
@@ -1630,126 +2110,54 @@ def rename_unic(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
 
 
-def rename_deca(tag_id, halo_map, tag_path_handler,
+def rename_lsnd(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
-
-
-def rename_ant_(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
+    if not sub_dir: sub_dir = snd_music_dir
+    if not name: name = "protected %s" % tag_id
 
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
-    elif not name:
-        name = 'antenna'
 
-        if 'antenna' not in meta.attachment_marker_name:
-            name += meta.attachment_marker_name
-
-    tag_path_handler.set_path(
-        tag_id, root_dir + sub_dir + name,
-        kwargs.get('priority', DEFAULT_PRIORITY))
-    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
-    name = tag_path_handler.get_basename(tag_id)
-
-    bitm_dir = '\\'.join(sub_dir.split('\\')[: -2])
-    if bitm_dir: bitm_dir += "\\"
-    bitm_dir += bitmaps_dir
-    recursive_rename(get_tag_id(meta.bitmaps), sub_dir=bitm_dir,
-                     name=name + " bitmaps", **kwargs)
-    recursive_rename(get_tag_id(meta.physics), sub_dir=sub_dir,
-                     name=name + " physics", **kwargs)
-
-
-def rename_cont(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
     kwargs.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
-
-
-def rename_jpt_(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
-
-
-def rename_dobc(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    meta = halo_map.get_meta(tag_id)
-    if meta is None:
-        return
-
+    kwargs.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(
-        tag_id, root_dir + sub_dir + name, kwargs.get('priority')
+        tag_id, root_dir + sub_dir + name, kwargs['priority']
         )
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    dobc_type_names = set()
-    for b in meta.detail_object_types.STEPTREE:
-        dobc_name = b.name.lower().replace("_", " ").strip()
-        if name:
-            dobc_type_names.add(dobc_name)
+    recursive_rename(get_tag_id(meta.continuous_damage_effect),
+                     name=name + " continuous damage",
+                     sub_dir=sub_dir, **kwargs)
 
-    dobc_name = join_names(sorted(dobc_type_names), 96)
+    i = 0
+    tracks_dir = sub_dir + sound_dir + name + " tracks\\"
+    for b in meta.tracks.STEPTREE:
+        recursive_rename(get_tag_id(b.start), name="track %s start" % i,
+                         sub_dir=tracks_dir, **kwargs)
+        recursive_rename(get_tag_id(b.loop), name="track %s loop" % i,
+                         sub_dir=tracks_dir, **kwargs)
+        recursive_rename(get_tag_id(b.end), name="track %s end" % i,
+                         sub_dir=tracks_dir, **kwargs)
+        recursive_rename(get_tag_id(b.alternate_loop),
+                         name="track %s alt loop" % i,
+                         sub_dir=tracks_dir, **kwargs)
+        recursive_rename(get_tag_id(b.alternate_end),
+                         name="track %s alt end" % i,
+                         sub_dir=tracks_dir, **kwargs)
+        i += 1
 
-    recursive_rename(
-        get_tag_id(meta.sprite_plate), halo_map, tag_path_handler,
-        root_dir, sub_dir + bitmaps_dir, name + " " + dobc_name, **kwargs)
-
-
-def rename_udlg(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    meta = halo_map.get_meta(tag_id)
-    if meta is None:
-        return
-
-    tag_path_handler.set_path(
-        tag_id, root_dir + sub_dir + name, kwargs.get('priority')
-        )
-    name = tag_path_handler.get_basename(tag_id)
-    sub_dir = snd_dialog_dir + name + "\\"
-
-    for struct in (meta.idle, meta.involuntary, meta.hurting_people,
-                   meta.being_hurt, meta.killing_people, meta.actions,
-                   meta.player_kill_responses, meta.friends_dying,
-                   meta.shouting, meta.group_communication, meta.exclamations,
-                   meta.post_combat_actions, meta.post_combat_chatter):
-        snd_dir = sub_dir + "%s\\" % struct.NAME
-        for dep in struct:
-            recursive_rename(get_tag_id(dep), halo_map, tag_path_handler,
-                             root_dir, snd_dir, dep.NAME, **kwargs)
-
-
-def rename_glw_(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
+    i = 0
+    detail_dir = sub_dir + sound_dir + name + " details\\"
+    for b in meta.detail_sounds.STEPTREE:
+        recursive_rename(get_tag_id(b.sound), name="detail sound %s" % i,
+                         sub_dir=detail_dir, **kwargs)
+        i += 1
 
 
 def rename_hud_(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
-
-
-def rename_lens(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
-
-
-def rename_mgs2(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
-
-
-def rename_elec(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kwargs):
     kwargs.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
@@ -1779,82 +2187,6 @@ def rename_ngpr(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
 
 
-def rename_lsnd(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
-
-
-def rename_DeLa(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    kwargs.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
-    if not sub_dir: sub_dir = ui_shell_dir
-
-
-    # FINISH THIS
-
-
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kwargs.get('priority', DEFAULT_PRIORITY))
-
-
-def rename_snd_(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    meta = halo_map.get_meta(tag_id)
-    if meta is None:
-        return
-    sub_dir2, name2 = get_sound_sub_dir_and_name(meta, sub_dir, name)
-    if not sub_dir: sub_dir = sub_dir2
-    if not name: name = name2
-
-    tag_path_handler.set_path(
-        tag_id, root_dir + sub_dir + name, kwargs.get('priority')
-        )
-    sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
-    name = tag_path_handler.get_basename(tag_id)
-
-    recursive_rename(get_tag_id(meta.promotion_sound), halo_map,
-                     tag_path_handler, root_dir, sub_dir,
-                     name + "promo", **kwargs)
-
-
-
-def rename_vcky(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    if not sub_dir: sub_dir = ui_dir
-    if not name: name = "english"
-
-
-    # FINISH THIS
-
-
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kwargs.get('priority', LOW_PRIORITY))
-
-def rename_trak(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    if not sub_dir: sub_dir = camera_dir
-
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kwargs.get('priority', LOW_PRIORITY))
-
-def rename_snde(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    if not sub_dir: sub_dir = snd_sound_env_dir
-
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kwargs.get('priority', LOW_PRIORITY))
-
-def rename_devc(tag_id, halo_map, tag_path_handler,
-                root_dir="", sub_dir="", name="", **kwargs):
-    if not sub_dir: sub_dir = ui_devc_def_dir
-    if not name: name = tag_path_handler.get_basename(tag_id)
-
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kwargs.get('priority', DEFAULT_PRIORITY))
-
-
 recursive_rename_functions = dict(
     scenario = rename_scnr,
     scenario_structure_bsp = rename_sbsp,
@@ -1870,8 +2202,12 @@ recursive_rename_functions = dict(
     ui_widget_definition = rename_DeLa,
     virtual_keyboard = rename_vcky,
 
+    tag_collection = rename_tagc,
+    ui_widget_collection = rename_soul,
+
     dialogue = rename_udlg,
     sound = rename_snd_, 
+    sound_looping = rename_lsnd,
 
     actor_variant = rename_actv,
 
@@ -1891,9 +2227,13 @@ recursive_rename_functions = dict(
     camera_track = rename_trak,
     sound_environment = rename_snde,
 
+    glow = rename_glw_,
+    light = rename_ligh,
+    light_volume = rename_mgs2,
+    lightning = rename_elec,
+    lens_flare = rename_lens,
     antenna = rename_ant_,
     flag = rename_flag,
-
     sky = rename_sky_,
     fog = rename_fog_,
     weather_particle_system = rename_rain,
@@ -1901,6 +2241,8 @@ recursive_rename_functions = dict(
     model_collision_geometry = rename_coll,
 
     material_effects = rename_foot,
+
+    decal = rename_deca,
 
     gbxmodel = rename_mode,
     model = rename_mode,
@@ -1920,38 +2262,26 @@ recursive_rename_functions = dict(
     )
 '''
     effect = rename_effe, #
-
-    grenade_hud_interface = rename_grhi, #
-    unit_hud_interface = rename_unhi, #
-    weapon_hud_interface = rename_wphi, #
-
-    light = rename_ligh, #
-
-    decal = rename_deca, #
+    particle = rename_part, #
     contrail = rename_cont, #
     damage_effect = rename_jpt_, #
-    glow = rename_glw_, #
-    hud_number = rename_hud_, #
-    lens_flare = rename_lens, #
-    light_volume = rename_mgs2, #
-    lightning = rename_elec, #
-    multiplayer_scenario_description = rename_mply, #
-    particle = rename_part, #
     particle_system = rename_pctl, #
+
+    grenade_hud_interface = rename_grhi, #
+    weapon_hud_interface = rename_wphi, #
+    unit_hud_interface = rename_unhi, #
+
+    hud_number = rename_hud_, #
+    multiplayer_scenario_description = rename_mply, #
     preferences_network_game = rename_ngpr, #
-    sound_looping = rename_lsnd, #
 
 
     actor_variant_transform_collection = rename_avtc, #
     actor_variant_transform_in = rename_atvi, #
     actor_variant_transform_out = rename_atvo, #
-
     effect_postprocess_collection = rename_efpc, #
     effect_postprocess_generic = rename_efpg, #
     shader_postprocess_generic = rename_shpg, #
-
     text_value_pair_definition = rename_sily, #
     multilingual_unicode_string_list = rename_unic, #
-    )
-
 '''
