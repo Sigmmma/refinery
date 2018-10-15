@@ -38,6 +38,7 @@ config_header = Struct("header",
         "fix_tag_index_offset",
         "use_hashcaches",
         "use_heuristics",
+        "valid_tag_paths_are_accurate",
         ),
 
     Pad(128 - 5*4 - 2*4),
