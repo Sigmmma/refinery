@@ -1,5 +1,5 @@
 from refinery.recursive_rename.constants import *
-from refinery.recursive_rename.functions import sanitize_name
+from refinery.recursive_rename.functions import sanitize_path
 from supyr_struct.defs.util import str_to_identifier
 
 
@@ -110,7 +110,7 @@ class TagPathHandler():
             return ""
         return tag_ref.tag.tag_path.split("\\")[-1]
 
-    def set_path(self, index, new_path_no_ext, priority=None, parent=None):
+    def set_path(self, index, new_path_no_ext, priority=None, override=False):
         if index is None:
             return ""
         elif priority is None:
@@ -119,10 +119,12 @@ class TagPathHandler():
 
         tag_ref = self.get_index_ref(index)
         ext = "." + tag_ref.class_1.enum_name
-        new_path_no_ext, ext = sanitize_name(new_path_no_ext), ext.lower()
+        new_path_no_ext, ext = sanitize_path(new_path_no_ext), ext.lower()
         old_path = tag_ref.tag.tag_path.lower() + ext
 
-        if self.get_priority(index) >= priority or tag_ref.indexed:
+        if self.get_priority(index) > priority or tag_ref.indexed:
+            return old_path
+        elif self.get_priority(index) == priority and not override:
             return old_path
 
         if not new_path_no_ext or new_path_no_ext[-1] == "\\":
@@ -143,8 +145,6 @@ class TagPathHandler():
         #    return old_path
 
         self._priorities[index] = priority
-        if parent:
-            self._shared_by[index].append(parent)
 
         self._path_map.pop(old_path, None)
         self._path_map[new_path] = index

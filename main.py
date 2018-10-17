@@ -133,7 +133,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 8, 1)
+    version = (1, 8, 2)
 
     data_extract_window = None
     settings_window     = None
@@ -1449,7 +1449,7 @@ class Refinery(tk.Tk):
 
         for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
                         soul_ids, (hudg_id, matg_id, scnr_id),
-                        tagc_ids, misc_ids):
+                        tagc_ids, ):#misc_ids):
 
             if self.stop_processing:
                 print("    Deprotection stopped by user.")
