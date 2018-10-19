@@ -35,6 +35,7 @@ weather_dir    = "weather\\"
 # general purpose directories used in MANY things
 shaders_dir = "shaders\\"
 bitmaps_dir = "bitmaps\\"
+sounds_dir  = "sounds\\"
 shared_dir  = "shared\\"  # for anything shared between tags
 
 
