@@ -39,6 +39,8 @@ config_header = Struct("header",
         "use_hashcaches",
         "use_heuristics",
         "valid_tag_paths_are_accurate",
+        "scrape_tag_paths_from_scripts",
+        "limit_tag_path_lengths",
         ),
 
     Pad(128 - 5*4 - 2*4),
