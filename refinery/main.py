@@ -52,6 +52,7 @@ from reclaimer.meta.class_repair import class_repair_functions,\
      get_tagc_refs
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
+
 from refinery import crc_functions
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, RefineryChecksumEditorWindow,\
@@ -184,6 +185,8 @@ class Refinery(tk.Tk):
         self.use_hashcaches = tk.IntVar(self)
         self.use_heuristics = tk.IntVar(self)
         self.valid_tag_paths_are_accurate = tk.IntVar(self, 1)
+        self.scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
+        self.limit_tag_path_lengths = tk.IntVar(self, 1)
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
@@ -202,6 +205,8 @@ class Refinery(tk.Tk):
             use_hashcaches=self.use_hashcaches,
             use_heuristics=self.use_heuristics,
             valid_tag_paths_are_accurate=self.valid_tag_paths_are_accurate,
+            scrape_tag_paths_from_scripts=self.scrape_tag_paths_from_scripts,
+            limit_tag_path_lengths=self.limit_tag_path_lengths,
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
@@ -442,7 +447,9 @@ class Refinery(tk.Tk):
         flags = header.deprotection_flags
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
                           "use_hashcaches", "use_heuristics",
-                          "valid_tag_paths_are_accurate"):
+                          "valid_tag_paths_are_accurate",
+                          "scrape_tag_paths_from_scripts",
+                          "limit_tag_path_lengths"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
     def update_config(self, config_file=None):
@@ -487,7 +494,9 @@ class Refinery(tk.Tk):
         flags = header.deprotection_flags
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
                           "use_hashcaches", "use_heuristics",
-                          "valid_tag_paths_are_accurate"):
+                          "valid_tag_paths_are_accurate",
+                          "scrape_tag_paths_from_scripts",
+                          "limit_tag_path_lengths"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
     def save_config(self, e=None):
@@ -1378,6 +1387,14 @@ class Refinery(tk.Tk):
                 print(format_exc())
             print("    Finished")
 
+        if self.limit_tag_path_lengths.get():
+            print("Limiting tag paths to 254 characters...")
+            try:
+                tag_path_handler.shorten_paths(254)
+            except Exception:
+                print(format_exc())
+            print("    Finished")
+
         if self.stop_processing:
             print("    Deprotection stopped by user.")
             return
@@ -1447,6 +1464,7 @@ class Refinery(tk.Tk):
             else:
                 misc_ids.append(i)
 
+        print("\ntag_id\tweight\ttag_path\n")
         for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
                         soul_ids, (hudg_id, matg_id, scnr_id),
                         tagc_ids, ):#misc_ids):
@@ -1454,18 +1472,19 @@ class Refinery(tk.Tk):
             if self.stop_processing:
                 print("    Deprotection stopped by user.")
                 return
+
             for i in id_list:
                 try:
                     recursive_rename(i, active_map, tag_path_handler)
                 except Exception:
                     print(format_exc())
+
         total = 0
         for b in tag_index_array:
             if "\\" not in b.tag.tag_path:
                 total += 1
 
-        print("Percent protected:",
-              round(total * 100 / len(tag_index_array), 2))
+        print('%s%% still "protected":' % round(total * 100 / len(tag_index_array), 2))
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return
@@ -1623,7 +1642,7 @@ class Refinery(tk.Tk):
             tag_index.serialize(buffer=out_file, calc_pointers=False,
                                 magic=map_magic, offset=index_header_offset)
             out_file.flush()
-            if hasattr(map_file, "fileno"):
+            if hasattr(out_file, "fileno"):
                 os.fsync(out_file.fileno())
 
             # write the map header so the calculate_ce_checksum can read it
@@ -1639,7 +1658,7 @@ class Refinery(tk.Tk):
             out_file.seek(0)
             out_file.write(map_header.serialize(calc_pointers=False))
             out_file.flush()
-            if hasattr(map_file, "fileno"):
+            if hasattr(out_file, "fileno"):
                 os.fsync(out_file.fileno())
             print("    Finished")
         except Exception:

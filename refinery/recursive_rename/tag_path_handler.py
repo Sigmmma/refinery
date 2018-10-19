@@ -122,7 +122,7 @@ class TagPathHandler():
         new_path_no_ext, ext = sanitize_path(new_path_no_ext), ext.lower()
         old_path = tag_ref.tag.tag_path.lower() + ext
 
-        if self.get_priority(index) > priority or tag_ref.indexed:
+        if (not self.get_priority(index) < priority) or tag_ref.indexed:
             return old_path
         elif self.get_priority(index) == priority and not override:
             return old_path
@@ -140,9 +140,6 @@ class TagPathHandler():
             new_path_no_ext += " %s" % i
 
         new_path = new_path_no_ext + ext
-        #if len(new_path_no_ext) > MAX_TAG_NAME_LEN:
-        #    print("'%s' is too long to use as a tagpath" % new_path_no_ext)
-        #    return old_path
 
         self._priorities[index] = priority
 
@@ -150,8 +147,25 @@ class TagPathHandler():
         self._path_map[new_path] = index
         tag_ref.tag.tag_path = new_path_no_ext
         ############# DEBUG #############
-        print(index, priority, new_path_no_ext)
+        print(index, priority, new_path_no_ext, sep="\t")
         return new_path
 
     def set_priority(self, index, priority):
         self._priorities[index] = float(priority)
+
+    def shorten_paths(self, max_len):
+        sorted_paths = {}
+
+        for tag_path in self._path_map:
+            curr_dir = sorted_paths
+            tag_path_pieces = tag_path.split("\\")
+            if len(tag_path_pieces)*2 - 1 > max_len:
+                raise ValueError("Tag paths too nested to shorten to %s chars."
+                                 % max_len)
+                return
+
+            for dirname in tag_path_pieces[: -1]:
+                curr_dir = curr_dir.setdefault(dirname, {})
+
+            curr_dir[tag_path_pieces[-1]] = self._path_map[tag_path]
+
