@@ -209,10 +209,16 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     # rename player starting weapon references
     for profile in meta.player_starting_profiles.STEPTREE:
+        start_name = sanitize_name(b.name)
+        if not start_name:
+            start_name = "start weapon"
+
         recursive_rename(get_tag_id(profile.primary_weapon),
-                         sub_dir=weapons_dir, **kwargs)
+                         sub_dir=weapons_dir,
+                         name=start_name + " pri", **kwargs)
         recursive_rename(get_tag_id(profile.secondary_weapon),
-                         sub_dir=weapons_dir, **kwargs)
+                         sub_dir=weapons_dir,
+                         name=start_name + " sec", **kwargs)
 
     item_coll_dir = sub_dir + level_item_coll_dir
 
@@ -220,14 +226,10 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     i = 0
     for b in meta.starting_equipments.STEPTREE:
         j = 0
-        profile_name = sanitize_name(b.name)
-        if not profile_name:
-            profile_name = "start equipment"
-
-        for i in range(1, 7):
+        for k in range(1, 7):
             recursive_rename(
-                get_tag_id(b['item collection %s' % i]),
-                sub_dir=item_coll_dir, name=profile_name,
+                get_tag_id(b['item_collection_%s' % k]),
+                sub_dir=item_coll_dir, name="start equipment %s" % i,
                 priority=MEDIUM_PRIORITY, **kwargs)
             j += 1
         i += 1
