@@ -134,7 +134,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 8, 2)
+    version = (1, 9, 0)
 
     data_extract_window = None
     settings_window     = None
@@ -1379,9 +1379,7 @@ class Refinery(tk.Tk):
                 if not tag_path.startswith("protected"):
                     tag_path_handler.set_priority(tag_id, float("inf"))
 
-        ##################### DEBUG #####################
-        #if self.use_heuristics.get():
-        if self.use_heuristics.get() and False:
+        if self.use_heuristics.get():
             print("Renaming tags using heuristics...")
             try:
                 self._heuristics_deprotect(tag_path_handler)
