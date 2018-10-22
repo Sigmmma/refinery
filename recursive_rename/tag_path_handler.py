@@ -161,8 +161,11 @@ class TagPathHandler():
         new_paths = {}
 
         for tag_path, index in self._path_map.items():
-            curr_dir = paths
+            if len(splitext(tag_path)[0]) < max_len:
+                continue
+
             tag_path_pieces = tag_path.split("\\")
+            curr_dir = paths
             # 1 char for \, 1 for potential ~, 1 for potential number,
             # and 1 for at least one name character
             if (len(tag_path_pieces) - 1)*4 > max_len:
@@ -185,10 +188,6 @@ class TagPathHandler():
         reparent = {}
 
 
-
-        # TODO: FINISH THIS SHIT
-
-
         while True:
             for name in sorted(curr_paths):
                 val = curr_paths[name]
@@ -202,7 +201,7 @@ class TagPathHandler():
                     else:
                         # name was simplified to nothing.
                         # schedule it to be put it in the parent
-                        reparent.setdefault(parent, []).append(val)
+                        reparent.setdefault(parent + ext, []).append(val)
 
                 elif val:
                     # need to go deeper, as this is a non-empty
@@ -216,9 +215,7 @@ class TagPathHandler():
                     if new_name:
                         # if the name doesn't get simplified to nothing,
                         # create a new directory to store these items in
-                        # CANNOT SIMPLIFY THIS TO THIS
-                        #    curr_new_paths = curr_new_paths[name] = {}
-                        parent = name
+                        parent = new_name
                         if new_name not in curr_new_paths:
                             curr_new_paths[new_name] = {}
 
@@ -239,19 +236,20 @@ class TagPathHandler():
 
 
             # re-parent any paths that needed to be reparented
-            for name in reparent:
-                for item in reparent[name]:
-                    curr_new_paths[
-                        self.get_unique_name(curr_new_paths,
-                                             *splitext(name))] = item
-
-
-            reparent.clear()
+            curr_reparent = reparent
             try:
                 # exhausted the current paths, get the next ones to do
                 parent, curr_paths, curr_new_paths, reparent = stack.get_nowait()
             except EmptyQueueException:
                 break
+
+            for name in curr_reparent:
+                for item in curr_reparent[name]:
+                    curr_new_paths[
+                        self.get_unique_name(curr_new_paths,
+                                             *splitext(name))] = item
+
+            curr_reparent.clear()
 
 
         # apply the renames
@@ -260,33 +258,35 @@ class TagPathHandler():
         while True:
             for name in sorted(curr_paths):
                 val = curr_paths.pop(name)
-                if not isinstance(val, dict):
-                    # reached a filename. rename the item and continue.
-                    if not val.indexed:
-                        val.tag.tag_path = "\\".join(
-                            path_pieces + splitext(name)[: 1])
+                if isinstance(val, dict):
+                    # This is a directory. Need to jump in it, so we'll break
+                    if val:
+                        # This is a non-empty directory. Store the
+                        # current state to the stack and jump in.
+                        stack.put([path_pieces, curr_paths])
 
+                        curr_paths = val
+                        path_pieces += (name, )
+                    break
+
+                # reached a filename. rename the item and continue.
+                if val.indexed:
                     continue
-                elif val:
-                    # This is a non-empty directory. Need to go
-                    # deeper, so store the current state to the
-                    # stack and jump into this dir.
-                    stack.put([path_pieces, curr_paths])
 
-                    curr_paths = val
-                    path_pieces += (name, )
+                tag_path = val.tag.tag_path
+                new_tag_path = "\\".join(path_pieces + splitext(name)[: 1])
+                print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
+                      (len(tag_path), len(new_tag_path),
+                       tag_path, new_tag_path))
+                self._path_map.pop(tag_path, None)
+                val.tag.tag_path = new_tag_path
 
-                break
-
-            if curr_paths:
-                # still have paths to modify.
-                continue
-
-            try:
+            if not curr_paths:
                 # exhausted the current paths, get the next ones to do
-                path_pieces, curr_paths = stack.get_nowait()
-            except EmptyQueueException:
-                break
+                try:
+                    path_pieces, curr_paths = stack.get_nowait()
+                except EmptyQueueException:
+                    break
 
 
         # remake the path map
@@ -302,12 +302,14 @@ class TagPathHandler():
         name_pieces = name.replace('_', ' ').split(' ')
         start, end = 0, len(name_pieces)
         for i in range(min(len(parent_pieces), len(name_pieces))):
-            if parent_pieces[i] == name_pieces[i]:
-                start += 1
+            if parent_pieces[i] != name_pieces[i]:
+                break
+            start += 1
 
         for i in range(min(len(parent_pieces), len(name_pieces))):
-            if parent_pieces[-1 - i] == name_pieces[-1 - i]:
-                end -= 1
+            if parent_pieces[-1 - i] != name_pieces[-1 - i]:
+                break
+            end -= 1
 
         return join_char.join(name_pieces[start: end])
 
