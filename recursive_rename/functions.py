@@ -12,6 +12,21 @@ DEFAULT_PRIORITY = 1.0
 LOW_PRIORITY = 0.5
 
 
+
+# TODO:
+#   Implement OSv4 unit attribute renaming
+#   Implement these rename functions:
+#       actor_variant_transform_collection = rename_avtc,
+#       actor_variant_transform_in = rename_atvi,
+#       actor_variant_transform_out = rename_atvo,
+#       effect_postprocess_collection = rename_efpc,
+#       effect_postprocess_generic = rename_efpg,
+#       shader_postprocess_generic = rename_shpg,
+#       text_value_pair_definition = rename_sily,
+#       multilingual_unicode_string_list = rename_unic,
+
+
+
 def sanitize_path(name):
     for c in ':*?"<>|':
         name = name.replace(c, '')
@@ -156,21 +171,21 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     try:
         recursive_rename(
             get_tag_id(meta.project_yellow_definitions),
-            priority=INF, name=name, sub_dir=level_dir + globals_dir, **kwargs)
+            priority=INF, name=name, sub_dir=sub_dir + globals_dir, **kwargs)
     except AttributeError:
         pass
 
     # rename the references at the bottom of the scenario tag
     tag_path_handler.set_path(get_tag_id(meta.custom_object_names),
-                              level_dir + "object_names",
+                              sub_dir + "object_names",
                               INF, kwargs.get("override"))
 
     tag_path_handler.set_path(get_tag_id(meta.ingame_help_text),
-                              level_dir + "help_text",
+                              sub_dir + "help_text",
                               INF, kwargs.get("override"))
 
     tag_path_handler.set_path(get_tag_id(meta.hud_messages),
-                              level_dir + "hud_messages",
+                              sub_dir + "hud_messages",
                               INF, kwargs.get("override"))
 
     # rename sky references
@@ -178,13 +193,13 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         recursive_rename(get_tag_id(b.sky), sub_dir=sky_dir + name + "\\",
                          name=name + " sky", **kwargs)
 
-    devices_dir = level_dir + level_devices_dir
+    devices_dir = sub_dir + level_devices_dir
     palette_renames = (
         ("machines_palette", devices_dir + "machines\\"),
         ("controls_palette", devices_dir + "controls\\"),
         ("light_fixtures_palette", devices_dir + "light fixtures\\"),
-        ("sound_sceneries_palette", level_dir + 'sfx emitters\\'),
-        ("sceneries_palette", level_dir + scenery_dir),
+        ("sound_sceneries_palette", sub_dir + 'sfx emitters\\'),
+        ("sceneries_palette", sub_dir + scenery_dir),
         ("actors_palette", characters_dir),
         ("bipeds_palette", characters_dir),
         ("vehicles_palette", vehicles_dir),
@@ -199,7 +214,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         recursive_rename(get_tag_id(profile.secondary_weapon),
                          sub_dir=weapons_dir, **kwargs)
 
-    item_coll_dir = level_dir + level_item_coll_dir
+    item_coll_dir = sub_dir + level_item_coll_dir
 
     # starting equipment
     i = 0
@@ -220,13 +235,13 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     # rename detail objects palette
     for b in meta.detail_object_collection_palette.STEPTREE:
         recursive_rename(
-            get_tag_id(b.name), sub_dir=level_dir + "detail objects\\",
+            get_tag_id(b.name), sub_dir=sub_dir + "detail objects\\",
             priority=MEDIUM_PRIORITY, **kwargs)
 
     # rename decal palette references
     for swatch in meta.decals_palette.STEPTREE:
         recursive_rename(get_tag_id(swatch.name), priority=MEDIUM_PRIORITY, 
-                         sub_dir=level_dir + "decals\\", **kwargs)
+                         sub_dir=sub_dir + "decals\\", **kwargs)
 
     # rename palette references
     for b_name, pal_sub_dir in palette_renames:
@@ -267,18 +282,50 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
             anim_name = "ai anim"
 
         recursive_rename(get_tag_id(b.animation_graph), name=anim_name,
-                         sub_dir=level_dir + cinematics_dir + "animations\\",
+                         sub_dir=sub_dir + cinematics_dir + "animations\\",
                          priority=LOW_PRIORITY, **kwargs)
 
     # rename bsp references
     for b in meta.structure_bsps.STEPTREE:
         recursive_rename(get_tag_id(b.structure_bsp),
                          priority=SCNR_BSPS_PRIORITY,
-                         sub_dir=level_dir, name=name, **kwargs)
+                         sub_dir=sub_dir, name=name, **kwargs)
+
+    # rename bsp modifiers
+    bsp_modifiers = getattr(getattr(meta, "bsp_modifiers", ()), "STEPTREE", ())
+    for modifier in bsp_modifiers:
+        try:
+            bsp_name = tag_path_handler.get_basename(
+                get_tag_id(
+                    meta.structure_bsps.STEPTREE[b.bsp_index].structure_bsp))
+        except Exception:
+            bsp_name = ""
+
+        lightmap_sub_dir = sub_dir + (bsp_name + " lightmaps\\").strip()
+        for b in modifier.lightmap_sets.STEPTREE:
+            recursive_rename(
+                get_tag_id(b.std_lightmap), priority=VERY_HIGH_PRIORITY,
+                sub_dir=lightmap_sub_dir, name=b.name + " std", **kwargs)
+            recursive_rename(
+                get_tag_id(b.dir_lightmap_1), priority=VERY_HIGH_PRIORITY,
+                sub_dir=lightmap_sub_dir, name=b.name + " dlm1", **kwargs)
+            recursive_rename(
+                get_tag_id(b.dir_lightmap_2), priority=VERY_HIGH_PRIORITY,
+                sub_dir=lightmap_sub_dir, name=b.name + " dlm2", **kwargs)
+            recursive_rename(
+                get_tag_id(b.dir_lightmap_3), priority=VERY_HIGH_PRIORITY,
+                sub_dir=lightmap_sub_dir, name=b.name + " dlm3", **kwargs)
+
+        sky_set_dir = sub_dir + (bsp_name + " sky sets\\").strip()
+        for sky_set in modifier.sky_sets.STEPTREE:
+            for b in sky_set.skies.STEPTREE:
+                recursive_rename(
+                    get_tag_id(b.sky), sub_dir=sky_set_dir,
+                    name=sky_set.name, **kwargs)
 
     # rename ai conversation sounds
     i = 0
-    conv_dir = level_dir + "ai convos\\"
+    conv_dir = sub_dir + "ai convos\\"
     for b in meta.ai_conversations.STEPTREE:
         j = 0
         conv_name = sanitize_name(b.name)
@@ -325,7 +372,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
             ref_sub_dir = (cinematics_dir + (
                 tag_cls.lstrip("device_").replace("_", " ") + "s\\"))
         elif tag_cls == "sound_looping":
-            ref_sub_dir = level_dir + "music\\"
+            ref_sub_dir = sub_dir + "music\\"
         elif tag_cls == "sound":
             snd_meta = halo_map.get_meta(sub_id)
             if snd_meta is None:
@@ -337,7 +384,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
             ref_sub_dir, tag_name = new_ref_sub_dir, new_tag_name
 
         else:
-            ref_sub_dir = level_dir + "referenced tags\\"
+            ref_sub_dir = sub_dir + "referenced tags\\"
 
         recursive_rename(sub_id, sub_dir=ref_sub_dir, **kwargs)
 
@@ -595,7 +642,7 @@ def rename_yelo(tag_id, halo_map, tag_path_handler,
     # rename scripted ui widget references
     kwargs['priority'], i = 0.6, 0
     widgets_dir = ui_dir + "yelo widgets\\"
-    for b in meta.references.STEPTREE:
+    for b in meta.scripted_ui_widgets.STEPTREE:
         widget_name = sanitize_name(b.name)
         if not widget_name:
             widget_name = "y scripted ui widget %s" % i
@@ -629,18 +676,20 @@ def rename_gelo(tag_id, halo_map, tag_path_handler,
                      name="global references", **kwargs)
 
     # rename the chokin victim globals
-    sub_id = get_tag_id(meta.chokin_victim_globals)
+    try:
+        sub_id = get_tag_id(meta.chokin_victim_globals)
+    except AttributeError:
+        sub_id = None
     if sub_id is not None:
         recursive_rename(sub_id, sub_dir=sub_dir,
                          name="yelo globals cv", **kwargs)
 
     # rename scripted ui widget references
-    kwargs['priority'], i = 0.6, 0
-    widgets_dir = ui_dir + "yelo widgets\\"
-    for b in meta.references.STEPTREE:
+    widgets_dir = ui_dir + "gelo widgets\\"
+    for b in meta.scripted_ui_widgets.STEPTREE:
         widget_name = sanitize_name(b.name)
         if not widget_name:
-            widget_name = "g scripted ui widget %s" % i
+            widget_name = "y scripted ui widget %s" % i
         recursive_rename(get_tag_id(b.definition), sub_dir=widgets_dir,
                          name=widget_name, **kwargs)
         i += 1
@@ -773,7 +822,8 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
                          get_tag_id(b.wind), **kwargs)
 
     for b in meta.background_sounds_palette.STEPTREE:
-        recursive_rename(get_tag_id(b.background_sound), sub_dir=sub_dir,
+        recursive_rename(get_tag_id(b.background_sound),
+                         sub_dir=sub_dir + sounds_dir,
                          name=b.name if b.name else
                          "protected background sound %s" %
                          get_tag_id(b.background_sound), **kwargs)
@@ -1013,6 +1063,13 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
         recursive_rename(get_tag_id(senv_attrs.reflection.cube_map),
                          name="senv %s reflection" % name, **kwargs)
 
+        senv_ext = getattr(getattr(senv_attrs, "os_shader_environment_ext", ()),
+                           "STEPTREE", ())
+        for b in senv_ext:
+            recursive_rename(get_tag_id(b.specular_color_map),
+                             name="senv %s spec color" % name, **kwargs)
+            
+
     elif shdr_type == "soso":
         soso_attrs = meta.soso_attrs
         recursive_rename(get_tag_id(soso_attrs.maps.diffuse_map),
@@ -1023,6 +1080,17 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
                          name="soso %s detail" % name, **kwargs)
         recursive_rename(get_tag_id(soso_attrs.reflection.cube_map),
                          name="soso %s reflection" % name, **kwargs)
+        soso_ext = getattr(getattr(soso_attrs, "os_shader_model_ext", ()),
+                           "STEPTREE", ())
+        for b in soso_ext:
+            recursive_rename(get_tag_id(b.specular_color_map),
+                             name="soso %s spec color" % name, **kwargs)
+            recursive_rename(get_tag_id(b.base_normal_map),
+                             name="soso %s normal" % name, **kwargs)
+            recursive_rename(get_tag_id(b.detail_normal_1_map),
+                             name="soso %s normal detail 1" % name, **kwargs)
+            recursive_rename(get_tag_id(b.detail_normal_2_map),
+                             name="soso %s normal detail 2" % name, **kwargs)
 
     elif shdr_type in ("sotr", "schi", "scex"):
         if shdr_type == "scex":
@@ -1491,7 +1559,7 @@ def rename_mode(tag_id, halo_map, tag_path_handler,
         region = meta.regions.STEPTREE[i]
         geoms = []
 
-        region_name = region.name.replace("__unnamed", "").replace(' ', '').strip("_")
+        region_name = region.name.lower().strip("_ ").replace("unnamed", "")
         if region_name: region_name += " "
 
         for j in range(len(region.permutations.STEPTREE)):
@@ -1684,6 +1752,11 @@ def rename_antr(tag_id, halo_map, tag_path_handler,
         recursive_rename(
             get_tag_id(meta.sound_references.STEPTREE[i].sound),
             name=sfx_names.get(i, name), sub_dir=anim_sfx_dir, **kwargs)
+
+    if hasattr(meta, "stock_animation"):
+        recursive_rename(
+            get_tag_id(meta.stock_animation),
+            name=name + " base", sub_dir=sub_dir, **kwargs)
 
 
 def rename_deca(tag_id, halo_map, tag_path_handler,
@@ -2654,13 +2727,3 @@ recursive_rename_functions = dict(
     shader_transparent_plasma = rename_shdr,
     shader_transparent_water = rename_shdr,
     )
-'''
-    actor_variant_transform_collection = rename_avtc, #
-    actor_variant_transform_in = rename_atvi, #
-    actor_variant_transform_out = rename_atvo, #
-    effect_postprocess_collection = rename_efpc, #
-    effect_postprocess_generic = rename_efpg, #
-    shader_postprocess_generic = rename_shpg, #
-    text_value_pair_definition = rename_sily, #
-    multilingual_unicode_string_list = rename_unic, #
-'''
