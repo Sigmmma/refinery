@@ -1352,19 +1352,20 @@ class Refinery(tk.Tk):
                                 i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
                 print()
 
+            # write the deprotected tag classes fourcc's to each
+            # tag's header in the tag index in the map buffer
+            index_array_offset = tag_index.tag_index_offset - map_magic
+            for tag_id, tag_cls in repaired.items():
+                tag_index_ref = tag_index_array[tag_id]
+                classes_int = int.from_bytes(class_bytes_by_fcc[tag_cls], 'little')
+                tag_index_ref.class_1.data = classes_int & 0xFFffFFff
+                tag_index_ref.class_2.data = (classes_int >> 32) & 0xFFffFFff
+                tag_index_ref.class_3.data = (classes_int >> 64) & 0xFFffFFff
+
+
         if self.stop_processing:
             print("    Deprotection stopped by user.")
             return
-
-        # write the deprotected tag classes fourcc's to each
-        # tag's header in the tag index in the map buffer
-        index_array_offset = tag_index.tag_index_offset - map_magic
-        for tag_id, tag_cls in repaired.items():
-            tag_index_ref = tag_index_array[tag_id]
-            classes_int = int.from_bytes(class_bytes_by_fcc[tag_cls], 'little')
-            tag_index_ref.class_1.data = classes_int & 0xFFffFFff
-            tag_index_ref.class_2.data = (classes_int >> 32) & 0xFFffFFff
-            tag_index_ref.class_3.data = (classes_int >> 64) & 0xFFffFFff
 
 
         if self.use_hashcaches.get():
