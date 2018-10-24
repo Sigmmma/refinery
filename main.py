@@ -134,7 +134,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 9, 0)
+    version = (1, 9, 1)
 
     data_extract_window = None
     settings_window     = None
@@ -1466,9 +1466,9 @@ class Refinery(tk.Tk):
                 misc_ids.append(i)
 
         print("\ntag_id\tweight\ttag_path\n")
+        # NOTE: These are ordered in this way to allow the most logical sorting
         for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
-                        soul_ids, (hudg_id, matg_id, scnr_id),
-                        tagc_ids, ):#misc_ids):
+                        soul_ids, (hudg_id, matg_id, scnr_id), tagc_ids):
 
             if self.stop_processing:
                 print("    Deprotection stopped by user.")
