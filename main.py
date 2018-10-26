@@ -1505,7 +1505,7 @@ class Refinery(tk.Tk):
                 return
 
             for tag_id in id_list:
-                if not tag_id:
+                if tag_id is None:
                     continue
 
                 try:
