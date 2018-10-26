@@ -150,7 +150,7 @@ class TagPathHandler():
         self._path_map[new_path] = index
         tag_ref.tag.tag_path = new_path_no_ext
         ############# DEBUG #############
-        print(index, priority, new_path_no_ext, sep="\t")
+        print(index, priority, new_path, sep="\t")
         return new_path
 
     def set_priority(self, index, priority):
@@ -293,8 +293,11 @@ class TagPathHandler():
         self._path_map.clear()
         for i in range(len(self._index_map)):
             ref = self._index_map[i]
-            self._path_map[('%s.%s' % (
-                ref.tag.tag_path, ref.class_1.enum_name)).lower()] = i
+            tag_path = ref.tag.tag_path
+            if len(tag_path) > max_len:
+                print('WARNING: "%s" is over the length limit.' % tag_path)
+
+            self._path_map[(tag_path + "." + ref.class_1.enum_name).lower()] = i
 
     def shorten_name_to_parent(self, parent, name):
         join_char = '_' if '_' in name else ' '
