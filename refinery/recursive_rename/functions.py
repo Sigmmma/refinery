@@ -13,10 +13,6 @@ LOW_PRIORITY = 0.5
 
 
 
-# TODO:
-#   Implement OSv4 unit attribute renaming
-
-
 
 def sanitize_path(name):
     for c in ':*?"<>|':
@@ -200,7 +196,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     # rename player starting weapon references
     for profile in meta.player_starting_profiles.STEPTREE:
-        start_name = sanitize_name(b.name)
+        start_name = sanitize_name(profile.name)
         if not start_name:
             start_name = "start weapon"
 
@@ -386,9 +382,9 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     if not sub_dir: sub_dir = globals_dir
 
+    kw.setdefault("priority", MEDIUM_PRIORITY)
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  priority=MEDIUM_PRIORITY,
-                  tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler)
     kwargs_no_priority = dict(kw)
     kwargs_no_priority.pop('priority')
 
@@ -624,17 +620,20 @@ def rename_yelo(tag_id, halo_map, tag_path_handler,
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
+    override_kw = dict(kw)
+    override_kw['priority'] = INF
+
     # rename the yelo globals
     recursive_rename(get_tag_id(meta.yelo_globals),
-                     sub_dir=sub_dir, name="yelo globals", **kw)
+                     sub_dir=sub_dir, name="yelo globals", **override_kw)
 
     # rename the globals override
     recursive_rename(get_tag_id(meta.globals_override),
-                     sub_dir=sub_dir, name="globals", **kw)
+                     sub_dir=sub_dir, name="globals", **override_kw)
 
     # rename the explicit references
     recursive_rename(get_tag_id(meta.scenario_explicit_references),
-                     sub_dir=sub_dir, name="scenario references", **kw)
+                     sub_dir=sub_dir, name="scenario refs", **override_kw)
 
     # rename scripted ui widget references
     kw['priority'], i = 0.6, 0
@@ -642,7 +641,7 @@ def rename_yelo(tag_id, halo_map, tag_path_handler,
     for b in meta.scripted_ui_widgets.STEPTREE:
         widget_name = sanitize_name(b.name)
         if not widget_name:
-            widget_name = "y scripted ui widget %s" % i
+            widget_name = "scripted ui widget %s" % i
         recursive_rename(get_tag_id(b.definition), sub_dir=widgets_dir,
                          name=widget_name, **kw)
         i += 1
@@ -670,7 +669,7 @@ def rename_gelo(tag_id, halo_map, tag_path_handler,
 
     # rename the explicit references
     recursive_rename(get_tag_id(meta.global_explicit_references),
-                     name="global references", **kw)
+                     name="global refs", **kw)
 
     # rename the chokin victim globals
     try:
@@ -678,15 +677,14 @@ def rename_gelo(tag_id, halo_map, tag_path_handler,
     except AttributeError:
         sub_id = None
     if sub_id is not None:
-        recursive_rename(sub_id, sub_dir=sub_dir,
-                         name="yelo globals cv", **kw)
+        recursive_rename(sub_id, sub_dir=sub_dir, name="yelo globals cv", **kw)
 
     # rename scripted ui widget references
     widgets_dir = ui_dir + "gelo widgets\\"
     for b in meta.scripted_ui_widgets.STEPTREE:
         widget_name = sanitize_name(b.name)
         if not widget_name:
-            widget_name = "y scripted ui widget %s" % i
+            widget_name = "scripted ui widget %s" % i
         recursive_rename(get_tag_id(b.definition), sub_dir=widgets_dir,
                          name=widget_name, **kw)
         i += 1
@@ -1322,7 +1320,7 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
         return
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler)
 
     unit_attrs = meta.unit_attrs
     bipd_attrs = getattr(meta, "bipd_attrs", None)
@@ -1347,6 +1345,7 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
     recursive_rename(get_tag_id(unit_attrs.melee_damage),
                      sub_dir=sub_dir, name="melee impact", **kw)
 
+    unit_ext_array = getattr(getattr(unit_attrs, "unit_extensions", ()), "STEPTREE", ())
     trak_array = unit_attrs.camera_tracks.STEPTREE
     unhi_array = unit_attrs.new_hud_interfaces.STEPTREE
     udlg_array = unit_attrs.dialogue_variants.STEPTREE
@@ -1365,6 +1364,20 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
             get_tag_id(udlg_array[i].dialogue),
             sub_dir=sub_dir, name=name + " dialogue", **kw)
 
+    # there should only ever be 1 unit_ext and 1 mounted_state, so iterating
+    # over them should really just collapse to a single iteration.
+    for unit_ext in unit_ext_array:
+      for mounted_state in unit_ext.mounted_states.STEPTREE:
+        i = 0
+        for b in mounted_state.camera_tracks.STEPTREE:
+            recursive_rename(get_tag_id(b.track), sub_dir=sub_dir,
+                             name={0:"mounted loose",
+                                   1:"mounted tight"}.get(i, "unknown"), **kw)
+            i += 1
+
+        for b in mounted_state.keyframe_actions.STEPTREE:
+            rename_keyframe_action(
+                b, name, sub_dir=sub_dir + "mounted effects\\", **kw)
 
     trak_kwargs = dict(kw)
     trak_kwargs["priority"] = (DEFAULT_PRIORITY if
@@ -1373,9 +1386,12 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
     for seat in unit_attrs.seats.STEPTREE:
         seat_name = tag_path_handler.get_icon_string(
             seat.hud_text_message_index)
+        if not seat_name:
+            seat_name = sanitize_name(seat.label)
         if seat_name:
             seat_name += " "
 
+        seat_ext_array = getattr(getattr(seat, "seat_extensions", ()), "STEPTREE", ())
         trak_array = seat.camera_tracks.STEPTREE
         unhi_array = seat.new_hud_interfaces.STEPTREE
         for i in range(len(trak_array)):
@@ -1388,6 +1404,21 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
             recursive_rename(
                 get_tag_id(unhi_array[i].unit_hud_interface), sub_dir=sub_dir,
                 name=seat_name + {0:"sp", 1:"mp"}.get(i, "unknown"), **kw)
+
+        boarding_dir = sub_dir + "boarding\\"
+        for seat_ext in seat_ext_array:
+            for seat_boarding in seat_ext.seat_boarding.STEPTREE:
+                for b in seat_boarding.seat_keyframe_actions.STEPTREE:
+                    rename_keyframe_action(
+                        b, seat_name, sub_dir=boarding_dir + effects_dir, **kw)
+
+            for b in seat_ext.seat_damage.STEPTREE:
+                recursive_rename(get_tag_id(b.melee_damage.damage_effect),
+                                 sub_dir=boarding_dir,
+                                 name=seat_name + " melee damage", **kw)
+                recursive_rename(get_tag_id(b.region_damage.damage_effect),
+                                 sub_dir=boarding_dir,
+                                 name=seat_name + " region damage", **kw)
 
         recursive_rename(get_tag_id(seat.built_in_gunner),
                          sub_dir=sub_dir, name="built in gunner", **kw)
@@ -2063,13 +2094,16 @@ def rename_tagc(tag_id, halo_map, tag_path_handler,
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
-    kw.setdefault('priority', LOW_PRIORITY)
+    kw['priority'] = LOW_PRIORITY  # tag collections contain so many various
+    #                                things that it's not smart to expect
+    #                                their contents should share the tag
+    #                                collection's priority or directory
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw['priority'], kw.get("override"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    kw.update(sub_dir=sub_dir + name + " references\\")
+    kw.update(sub_dir=sub_dir + name)
     for b in meta.tag_references.STEPTREE:
         recursive_rename(get_tag_id(b.tag), **kw)
 
@@ -2595,20 +2629,19 @@ def rename_hud_(tag_id, halo_map, tag_path_handler,
 
 def rename_efpc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
-    if not name: name = "protected %s" % tag_id
-    if not sub_dir: sub_dir = "postprocess_effects\\"
+    name = "postprocess effects"
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
+    tag_path_handler.set_path(tag_id, root_dir + name,
                               kw['priority'], kw.get("override"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, tag_path_handler=tag_path_handler,
-                  root_dir=root_dir, sub_dir=sub_dir + name + " effects\\")
+              root_dir=root_dir, sub_dir=sub_dir + "postprocess effects\\")
 
     for b in meta.effects.STEPTREE:
         recursive_rename(get_tag_id(b.effect), name=sanitize_name(b.name), **kw)
@@ -2632,7 +2665,7 @@ def rename_efpg(tag_id, halo_map, tag_path_handler,
                   root_dir=root_dir, sub_dir=sub_dir + name + " shaders\\")
 
     for b in meta.efpg_attrs.shaders.STEPTREE:
-        recursive_rename(get_tag_id(b.shader), name=sanitize_name(b.name), **kw)
+        recursive_rename(get_tag_id(b.shader), **kw)
 
 
 def rename_shpg(tag_id, halo_map, tag_path_handler,
@@ -2657,10 +2690,12 @@ def rename_shpg(tag_id, halo_map, tag_path_handler,
 
     kw.update(sub_dir=sub_dir + name + "\\")
     for b in meta.shpg_attrs.merged_values.STEPTREE:
-        recursive_rename(get_tag_id(b.shader), name=sanitize_name(b.name), **kw)
+        recursive_rename(get_tag_id(b.bitmap),
+                         name=sanitize_name(b.value_name), **kw)
 
     for b in meta.shpg_attrs.bitmaps.STEPTREE:
-        recursive_rename(get_tag_id(b.shader), name=sanitize_name(b.name), **kw)
+        recursive_rename(get_tag_id(b.bitmap),
+                         name=sanitize_name(b.value_name), **kw)
 
 
 def rename_sily(tag_id, halo_map, tag_path_handler,
@@ -2720,26 +2755,25 @@ def rename_unic(tag_id, halo_map, tag_path_handler,
 
 def rename_avtc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
-    if not name: name = "protected %s" % tag_id
+    name = "actor variant transform collection"
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
-    kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+    kw.setdefault('priority', VERY_HIGH_PRIORITY)
+    tag_path_handler.set_path(tag_id, root_dir + name, kw['priority'], True)
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, tag_path_handler=tag_path_handler,
-                  root_dir=root_dir)
+              root_dir=root_dir)
 
-    sub_dir += name + " transforms\\"
+    sub_dir += "actor variant transforms\\"
     for b in meta.actor_variant_transforms.STEPTREE:
-        recursive_rename(get_tag_id(b.actor_variant), sub_dir=sub_dir,
-                         name=name + " target actor variant", **kw)
-        actv_sub_dir = tag_path_handler.get_sub_dir(b.actor_variant, root_dir)
-        actv_name = tag_path_handler.get_basename(b.actor_variant)
+        recursive_rename(get_tag_id(b.actor_variant), sub_dir=sub_dir, **kw)
+        actv_name = tag_path_handler.get_basename(get_tag_id(b.actor_variant))
+        actv_sub_dir = tag_path_handler.get_sub_dir(
+            get_tag_id(b.actor_variant), root_dir) + "transforms\\"
 
         for transform in b.transforms.STEPTREE:
             stages = transform.transform_stages
@@ -2748,16 +2782,14 @@ def rename_avtc(tag_id, halo_map, tag_path_handler,
                 trans_name = "unnamed"
 
             recursive_rename(
-                get_tag_id(stages.transform_out),
-                sub_dir=actv_sub_dir + trans_name + " transforms\\",
-                name=trans_name + " out", **kw)
+                get_tag_id(stages.transform_out), sub_dir=actv_sub_dir,
+                name=trans_name + " transform out", **kw)
             recursive_rename(
-                get_tag_id(stages.transform_in),
-                sub_dir=actv_sub_dir + trans_name + " transforms\\",
-                name=trans_name + " in", **kw)
+                get_tag_id(stages.transform_in), sub_dir=actv_sub_dir,
+                name=trans_name + " transform in", **kw)
 
 
-def rename_avtio_keyframe_action(b, name, **kw):
+def rename_keyframe_action(b, name, **kw):
     recursive_rename(get_tag_id(b.damage_effect), name=name + " damage", **kw)
     recursive_rename(get_tag_id(b.effect), name=name + " effect", **kw)
 
@@ -2792,9 +2824,8 @@ def rename_atvi(tag_id, halo_map, tag_path_handler,
             transform_name = "transform in"
 
         for b in target.animation.keyframe_actions.STEPTREE:
-            rename_avtio_keyframe_action(b, transform_name,
-                                         sub_dir=sub_dir + effects_dir, **kw)
-
+            rename_keyframe_action(b, transform_name,
+                                   sub_dir=sub_dir + effects_dir, **kw)
 
 
 def rename_atvo(tag_id, halo_map, tag_path_handler,
@@ -2817,15 +2848,17 @@ def rename_atvo(tag_id, halo_map, tag_path_handler,
         recursive_rename(get_tag_id(b.unit), name="instigator", **kw)
 
     for b in meta.attachments.attachments.STEPTREE:
-        recursive_rename(get_tag_id(b.object), name="attachment", **kw)
+        recursive_rename(get_tag_id(b.object),
+                         name=sanitize_name(b.object_marker +
+                                            " attachment").strip(), **kw)
 
     transform_name = sanitize_name(meta.animation.transform_out_anim)
     if not transform_name:
         transform_name = "transform out"
 
-    kw["sub_dir"] += effects_dir
+    kw["sub_dir"] += "keyframe actions\\"
     for b in meta.animation.keyframe_actions.STEPTREE:
-        rename_avtio_keyframe_action(b, transform_name, **kw)
+        rename_keyframe_action(b, transform_name, **kw)
 
 
 recursive_rename_functions = dict(
