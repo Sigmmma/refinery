@@ -6,8 +6,9 @@ import mmap
 import gc
 import tkinter as tk
 import os
-import zlib
 import refinery
+import sys
+import zlib
 
 from os.path import dirname, basename, exists, join, isfile, splitext
 from struct import unpack
@@ -65,6 +66,7 @@ if print_startup:
     print("    Initializing Refinery")
 
 
+platform = sys.platform.lower()
 curr_dir = get_cwd(__file__)
 default_config_path = join(curr_dir, 'refinery.cfg')
 
@@ -348,7 +350,7 @@ class Refinery(tk.Tk):
 
         # pack everything
         self.rebuild_map_select_menu()
-        self.cancel_button.pack(side='right', padx=4, pady=4)
+        #self.cancel_button.pack(side='right', padx=4, pady=4)
         self.begin_button.pack(side='right', padx=4, pady=4)
         self.deprotect_button.pack(side='right', padx=4, pady=4)
 
@@ -700,6 +702,10 @@ class Refinery(tk.Tk):
 
     def set_active_map(self, e=None):
         map_name = self.tk_active_map_name.get()
+        if not self.maps:
+            self.tk_active_map_name.set("")
+            return
+
         if map_name in self.maps:
             curr_map = self.active_map
             next_map = self.maps[map_name]
@@ -1361,6 +1367,7 @@ class Refinery(tk.Tk):
 
 
         # find out if there are any explicit scenario refs in the yelo tag
+        has_yelo_explicit_refs = False
         for tag_id, tag_cls in tag_classes_by_id.items():
             if tag_cls == "yelo":
                 yelo_meta = active_map.get_meta(tag_id)
@@ -1909,20 +1916,33 @@ class Refinery(tk.Tk):
                             continue
 
                         if extract_mode == "tags":
-                            if not exists(dirname(abs_file_path)):
-                                os.makedirs(dirname(abs_file_path))
+                            try:
+                                if not exists(dirname(abs_file_path)):
+                                    os.makedirs(dirname(abs_file_path))
 
-                            if is_halo1_tag: FieldType.force_big()
-                            mode = 'r+b' if isfile(abs_file_path) else 'w+b'
-                            with open(abs_file_path, mode) as f:
-                                try:
-                                    f.truncate(0)
-                                    f.write(curr_map.tag_headers[tag_cls])
-                                    f.write(meta.serialize(calc_pointers=False))
-                                except Exception:
+                                if is_halo1_tag: FieldType.force_big()
+                                mode = 'r+b' if isfile(abs_file_path) else 'w+b'
+                                with open(abs_file_path, mode) as f:
+                                    try:
+                                        f.truncate(0)
+                                        f.write(curr_map.tag_headers[tag_cls])
+                                        f.write(meta.serialize(calc_pointers=False))
+                                    except Exception:
+                                        print(format_exc())
+                                        print("    Failed to serialize tag")
+                                        continue
+                            except FileNotFoundError:
+                                if platform == "win32" and len(abs_file_path) >= 256:
+                                    fp, ext = splitext(abs_file_path)
+                                    print(("    Failed to extract. Absolute filepath is over 260 "
+                                           "characters. Must be shortened by %s characters. "
+                                           "Try extracting to a more shallow tags directory.") % (
+                                              len(abs_file_path) - 260))
+                                else:
                                     print(format_exc())
-                                    print("    Failed to serialize tag")
-                                    continue
+
+                                del meta
+                                continue
                         elif extract_mode == "data":
                             try:
                                 error_str = curr_map.extract_tag_data(
