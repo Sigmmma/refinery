@@ -126,7 +126,8 @@ class TagPathHandler():
             return False
         return True
 
-    def set_path(self, index, new_path_no_ext, priority=None, override=False):
+    def set_path(self, index, new_path_no_ext, priority=None,
+                 override=False, print_new_name=True):
         if index is None:
             return ""
         elif priority is None:
@@ -147,8 +148,8 @@ class TagPathHandler():
         if self._path_map.get(new_path_no_ext + ext, None) not in (None, index):
             i = 1
             while (self._path_map.get(
-                    "%s %s%s" % (new_path_no_ext, i, ext), None)
-                    not in (None, index)):
+                   "%s %s%s" % (new_path_no_ext, i, ext), None)
+                   not in (None, index)):
                 i += 1
 
             new_path_no_ext += " %s" % i
@@ -160,8 +161,9 @@ class TagPathHandler():
         self._path_map.pop(old_path, None)
         self._path_map[new_path] = index
         tag_ref.tag.tag_path = new_path_no_ext
-        ############# DEBUG #############
-        print(index, priority, new_path, sep="\t")
+        if print_new_name:
+            print(index, priority, new_path, sep="\t")
+
         return new_path
 
     def set_priority(self, index, priority):

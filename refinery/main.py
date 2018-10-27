@@ -1167,6 +1167,12 @@ class Refinery(tk.Tk):
 
         tag_path_handler = TagPathHandler(tag_index_array)
 
+        if self.valid_tag_paths_are_accurate.get():
+            for tag_id in range(len(tag_index_array)):
+                if not (tag_index_array[tag_id].tag.tag_path.lower().
+                        startswith("protected")):
+                    tag_path_handler.set_priority(tag_id, float("inf"))
+
         if self.fix_tag_classes.get() and not("stubbs" in active_map.engine or
                                               "shadowrun" in active_map.engine):
             print("Repairing tag classes...")
@@ -1338,19 +1344,17 @@ class Refinery(tk.Tk):
                 b.meta_offset, map_data, map_magic, tag_classes_by_id)
             reffed_tag_types = set(reffed_tag_types)
             if reffed_tag_types == set(["DeLa"]):
-                b.tag.tag_path = dict(
+                tag_path = dict(
                     sp="ui\\shell\\solo",
                     mp="ui\\shell\\multiplayer",
                     ui="ui\\shell\\main_menu"
                     ).get(map_type, b.tag.tag_path)
-                tag_path_handler.set_priority(tag_id, float("inf"))
+                tag_path_handler.set_path(tag_id, tag_path, float("inf"),
+                                          True, False)
             elif reffed_tag_types == set(["devc"]):
-                if len(reffed_tag_ids) == 4:
-                    b.tag.tag_path = "ui\\ui_default_profiles"
-                    tag_path_handler.set_priority(tag_id, float("inf"))
-                else:
-                    b.tag.tag_path = "ui\\ui_input_device_defaults"
-                    tag_path_handler.set_priority(tag_id, float("inf"))
+                tag_path_handler.set_path(
+                    tag_id, "ui\\ui_input_device_defaults", float("inf"),
+                                          True, False)
 
             if tag_id not in tagc_ids_reffed_in_other_tagc:
                 tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
@@ -1377,16 +1381,19 @@ class Refinery(tk.Tk):
 
             if ((tagc_i == 0 and not has_yelo_explicit_refs) or
                 (tagc_i == 1 and has_yelo_explicit_refs)):
-                b.tag.tag_path = "ui\\ui_tags_loaded_all_scenario_types"
-                tag_path_handler.set_priority(tag_id, float("inf"))
+                tag_path_handler.set_path(
+                    tag_id, "ui\\ui_tags_loaded_all_scenario_types",
+                    float("inf"), True, False)
             elif ((tagc_i == 1 and not has_yelo_explicit_refs) or
                   (tagc_i == 2 and has_yelo_explicit_refs)):
-                b.tag.tag_path = dict(
+                tag_path = dict(
                     sp="ui\\ui_tags_loaded_solo_scenario_type",
                     mp="ui\\ui_tags_loaded_multiplayer_scenario_type",
                     ui="ui\\ui_tags_loaded_mainmenu_scenario_type"
                     ).get(map_type, b.tag.tag_path)
-                tag_path_handler.set_priority(tag_id, float("inf"))
+                tag_path_handler.set_path(tag_id, tag_path, float("inf"),
+                                          True, False)
+
             tagc_i += 1
 
 
@@ -1399,13 +1406,6 @@ class Refinery(tk.Tk):
             print("Hashcaches are not implemented.")
             # print("Renaming tags using hashcaches...")
             # print("    Finished")
-
-        if self.valid_tag_paths_are_accurate.get():
-            for tag_id in range(len(tag_index_array)):
-                tag_index_ref = tag_index_array[tag_id]
-                tag_path = tag_index_ref.tag.tag_path
-                if not tag_path.startswith("protected"):
-                    tag_path_handler.set_priority(tag_id, float("inf"))
 
         if self.use_heuristics.get():
             print("Renaming tags using heuristics...")
