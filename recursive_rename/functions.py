@@ -1849,6 +1849,9 @@ def rename_DeLa(tag_id, halo_map, tag_path_handler,
         recursive_rename(get_tag_id(b.widget_tag),
                          dela_name=sanitize_name(b.name), **kw)
 
+    if kw.get("shallow_ui_widget_nesting"):
+        kw.update(sub_dir=sub_dir)
+
     for b in meta.child_widgets.STEPTREE:
         if (tag_path_handler.get_priority(get_tag_id(b.widget_tag)) >=
             kw["priority"] and tag_id in seen):
