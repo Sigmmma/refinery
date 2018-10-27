@@ -113,6 +113,19 @@ class TagPathHandler():
             return ""
         return tag_ref.tag.tag_path.split("\\")[-1]
 
+    def get_will_overwrite(self, index, priority, override=False):
+        if index is None:
+            return False
+        elif priority is None:
+            priority = self._def_priority
+
+        tag_ref = self.get_index_ref(index)
+        if (not self.get_priority(index) < priority) or tag_ref.indexed:
+            return False
+        elif self.get_priority(index) == priority and not override:
+            return False
+        return True
+
     def set_path(self, index, new_path_no_ext, priority=None, override=False):
         if index is None:
             return ""
@@ -121,14 +134,12 @@ class TagPathHandler():
         assert isinstance(new_path_no_ext, str)
 
         tag_ref = self.get_index_ref(index)
+        if not self.get_will_overwrite(index, priority, override):
+            return
+
         ext = "." + tag_ref.class_1.enum_name
         new_path_no_ext, ext = sanitize_path(new_path_no_ext), ext.lower()
         old_path = tag_ref.tag.tag_path.lower() + ext
-
-        if (not self.get_priority(index) < priority) or tag_ref.indexed:
-            return old_path
-        elif self.get_priority(index) == priority and not override:
-            return old_path
 
         if not new_path_no_ext or new_path_no_ext[-1] == "\\":
             new_path_no_ext += "protected"
