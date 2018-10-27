@@ -1513,13 +1513,6 @@ class Refinery(tk.Tk):
                 except Exception:
                     print(format_exc())
 
-        total = 0
-        for b in tag_index_array:
-            if "\\" not in b.tag.tag_path:
-                total += 1
-
-        print('%s%% still "protected":' % round(total * 100 / len(tag_index_array), 2))
-
     def save_map_as(self, e=None):
         if not self.map_loaded: return
 
