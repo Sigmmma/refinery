@@ -826,7 +826,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "fix_tag_classes", "use_hashcaches", "use_heuristics",
                      "autoload_resources", "extract_cheape", "show_all_fields",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
-                     "scrape_tag_paths_from_scripts",
+                     "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
                      "show_output", "fix_tag_index_offset"):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
@@ -879,6 +879,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.limit_tag_path_lengths_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Limit tag paths to 254 characters (tool.exe limitation)",
             variable=self.limit_tag_path_lengths)
+        self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Use shallow ui_widget_definition nesting",
+            variable=self.shallow_ui_widget_nesting)
 
         self.fix_tag_index_offset_cbtn = tk.Checkbutton(
             self.deprotect_frame, text=("Fix tag index offset when saving\n" +
@@ -944,6 +947,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                   self.valid_tag_paths_are_accurate_cbtn,
                   #self.scrape_tag_paths_from_scripts_cbtn,
                   self.limit_tag_path_lengths_cbtn,
+                  self.shallow_ui_widget_nesting_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
 

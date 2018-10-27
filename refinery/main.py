@@ -189,6 +189,7 @@ class Refinery(tk.Tk):
         self.valid_tag_paths_are_accurate = tk.IntVar(self, 1)
         self.scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
         self.limit_tag_path_lengths = tk.IntVar(self, 1)
+        self.shallow_ui_widget_nesting = tk.IntVar(self, 1)
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
@@ -209,6 +210,7 @@ class Refinery(tk.Tk):
             valid_tag_paths_are_accurate=self.valid_tag_paths_are_accurate,
             scrape_tag_paths_from_scripts=self.scrape_tag_paths_from_scripts,
             limit_tag_path_lengths=self.limit_tag_path_lengths,
+            shallow_ui_widget_nesting=self.shallow_ui_widget_nesting,
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
@@ -451,7 +453,7 @@ class Refinery(tk.Tk):
                           "use_hashcaches", "use_heuristics",
                           "valid_tag_paths_are_accurate",
                           "scrape_tag_paths_from_scripts",
-                          "limit_tag_path_lengths"):
+                          "limit_tag_path_lengths", "shallow_ui_widget_nesting"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
     def update_config(self, config_file=None):
@@ -498,7 +500,7 @@ class Refinery(tk.Tk):
                           "use_hashcaches", "use_heuristics",
                           "valid_tag_paths_are_accurate",
                           "scrape_tag_paths_from_scripts",
-                          "limit_tag_path_lengths"):
+                          "limit_tag_path_lengths", "shallow_ui_widget_nesting"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
     def save_config(self, e=None):
@@ -1502,6 +1504,7 @@ class Refinery(tk.Tk):
                 misc_ids.append(i)
 
         print("\ntag_id\tweight\ttag_path\n")
+        shallow_nesting = self.shallow_ui_widget_nesting.get()
         # NOTE: These are ordered in this way to allow the most logical sorting
         for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
                         soul_ids, (hudg_id, yelo_id, matg_id, scnr_id),
@@ -1516,7 +1519,8 @@ class Refinery(tk.Tk):
                     continue
 
                 try:
-                    recursive_rename(tag_id, active_map, tag_path_handler)
+                    recursive_rename(tag_id, active_map, tag_path_handler,
+                                     shallow_ui_widget_nesting=shallow_nesting)
                 except Exception:
                     print(format_exc())
 

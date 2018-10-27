@@ -41,6 +41,7 @@ config_header = Struct("header",
         "valid_tag_paths_are_accurate",
         "scrape_tag_paths_from_scripts",
         "limit_tag_path_lengths",
+        "shallow_ui_widget_nesting",
         ),
 
     Pad(128 - 5*4 - 2*4),
