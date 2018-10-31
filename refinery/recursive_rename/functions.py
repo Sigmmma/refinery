@@ -26,9 +26,9 @@ def sanitize_name(name):
 
 
 def get_tag_id(tag_ref):
-    if tag_ref.id[0] == 0xFFFF and tag_ref.id[1] == 0xFFFF:
+    if tag_ref.id == 0xFFffFFff:
         return None
-    return tag_ref.id[0]
+    return tag_ref.id & 0xFFff
 
 
 def join_names(names, max_len=100):

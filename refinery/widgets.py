@@ -141,7 +141,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         if self.sort_by == "index_id":
             for index_ref in sortable_index_refs:
-                key = index_ref[1].id.tag_table_index
+                key = index_ref[1].id & 0xFFff
                 same_list = new_sorting.get(key, [])
                 same_list.append(index_ref)
                 new_sorting[key] = same_list
@@ -330,10 +330,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         for index_ref in index_refs:
             tag_cls_val = index_ref.class_1.data
-            tag_id      = index_ref.id.tag_table_index
+            tag_id      = index_ref.id & 0xFFff
             if not map_magic:
                 # resource cache tag
-                tag_id += (index_ref.id.table_index << 16)
+                tag_id = index_ref.id
             if new_cls:
                 try:
                     tag_cls_val = index_ref.class_1.get_value(new_cls)
@@ -478,7 +478,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 dir_path += PATHDIV
 
             tag_name = basename(tag_path)
-            tag_id = b.id.tag_table_index
+            tag_id = b.id & 0xFFff
             map_magic = self.active_map.map_magic
 
             if b.indexed and map_magic:
@@ -490,7 +490,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
             if not map_magic:
                 # resource cache tag
-                tag_id += (b.id.table_index << 16)
+                tag_id = b.id
 
             try:
                 cls1 = cls2 = cls3 = ""
@@ -596,7 +596,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             if is_reserved_tag(b): continue
 
             tag_path = tag_path.split(PATHDIV, 1)[1]
-            tag_id = b.id.tag_table_index
+            tag_id = b.id & 0xFFff
             map_magic = self.active_map.map_magic
             tag_cls = "INVALID"
             if b.class_1.enum_name not in BAD_CLASSES:
@@ -611,7 +611,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
 
             if not map_magic:
                 # resource cache tag
-                tag_id += (b.id.table_index << 16)
+                tag_id = b.id
 
             try:
                 if not self.tags_tree.exists(tag_cls + PATHDIV):
@@ -1277,7 +1277,7 @@ class RefineryActionsWindow(tk.Toplevel):
                 print("Could not get map.")
                 return
 
-            meta = halo_map.get_meta(index_ref.id.tag_table_index, True)
+            meta = halo_map.get_meta(index_ref.id & 0xFFff, True)
             if meta is None:
                 print("Could not get meta.")
                 return
