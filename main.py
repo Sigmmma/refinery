@@ -43,6 +43,7 @@ if print_startup:
 
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors
 from reclaimer.meta.objs.halo1_map import Halo1Map
+from reclaimer.meta.objs.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.objs.halo1_rsrc_map import Halo1RsrcMap
 from reclaimer.meta.objs.halo2_map import Halo2Map
 from reclaimer.meta.objs.stubbs_map import StubbsMap
@@ -118,7 +119,7 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
             func = rawdata_ref_move_functions.get(fourcc(ref.class_1.data))
             if func is None or ref.indexed:
                 continue
-            func(ref.id.tag_table_index, tag_index_array, map_file,
+            func(ref.id & 0xFFff, tag_index_array, map_file,
                  halo_map.map_magic, halo_map.engine, diffs_by_offsets)
 
     map_file.flush()
@@ -843,6 +844,8 @@ class Refinery(tk.Tk):
                     new_map = StubbsMap(self.maps)
                 elif "shadowrun" in engine:
                     new_map = ShadowrunMap(self.maps)
+                if "halo1anni" in engine:
+                    new_map = Halo1AnniMap(self.maps)
                 elif "halo1" in engine:
                     new_map = Halo1Map(self.maps)
                 elif "halo2" in engine:
@@ -963,7 +966,7 @@ class Refinery(tk.Tk):
                         "    scenario tag id     == %s\n" +
                         "    index array pointer == %s\n") %
                     (orig_index.tag_count,
-                     orig_index.scenario_tag_id[0], tag_index_offset))
+                     orig_index.scenario_tag_id & 0xFFff, tag_index_offset))
                 elif "halo2" in active_map.engine:
                     used_tag_count = 0
                     local_tag_count = 0
@@ -985,8 +988,8 @@ class Refinery(tk.Tk):
                         "    index array pointer == %s\n") %
                     (orig_index.tag_count, used_tag_count, local_tag_count,
                      orig_index.tag_types_count,
-                     orig_index.scenario_tag_id[0],
-                     orig_index.globals_tag_id[0], tag_index_offset))
+                     orig_index.scenario_tag_id,
+                     orig_index.globals_tag_id, tag_index_offset))
                 elif active_map.engine == "halo3":
                     string += ((
                         "\nTag index:\n" +
@@ -998,6 +1001,7 @@ class Refinery(tk.Tk):
                      orig_index.root_tags_count,
                      tag_index_offset - active_map.map_magic))
                 else:
+
                     string += ((
                         "\nTag index:\n" +
                         "    tag count           == %s\n" +
@@ -1007,7 +1011,7 @@ class Refinery(tk.Tk):
                         "    meta data length    == %s\n" +
                         "    vertex parts count  == %s\n" +
                         "    index  parts count  == %s\n") %
-                    (index.tag_count, index.scenario_tag_id[0],
+                    (index.tag_count, index.scenario_tag_id & 0xFFff,
                      tag_index_offset, tag_index_offset - active_map.map_magic,
                      index.model_data_offset, header.tag_index_meta_len,
                      index.vertex_parts_count, index.index_parts_count))
@@ -1192,7 +1196,7 @@ class Refinery(tk.Tk):
                     print("    Deprotection stopped by user.")
                     return
 
-                tag_id = b.id.tag_table_index
+                tag_id = b.id & 0xFFff
                 if tag_id == tag_index.scenario_tag_id.tag_table_index:
                     tag_cls = "scnr"
                 elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
@@ -1261,7 +1265,7 @@ class Refinery(tk.Tk):
                             print("    Deprotection stopped by user.")
                             return
 
-                        tag_id = b.id.tag_table_index
+                        tag_id = b.id & 0xFFff
                         tag_cls = None
                         if tag_id in repaired:
                             continue
@@ -1284,7 +1288,7 @@ class Refinery(tk.Tk):
                             repair[tag_id] = tag_cls
 
             for b in tag_index_array:
-                tag_id = b.id.tag_table_index
+                tag_id = b.id & 0xFFff
                 if b.class_1.enum_name in ("tag_collection",
                                            "ui_widget_collection"):
                     reffed_tag_ids, reffed_tag_types = get_tagc_refs(
@@ -1339,7 +1343,7 @@ class Refinery(tk.Tk):
         map_type = map_header.map_type.enum_name
         tagc_ids_reffed_in_other_tagc = set()
         for b in tag_index_array:
-            tag_id = b.id.tag_table_index
+            tag_id = b.id & 0xFFff
             if b.class_1.enum_name not in ("tag_collection",
                                            "ui_widget_collection"):
                 continue
@@ -1375,11 +1379,11 @@ class Refinery(tk.Tk):
                 yelo_meta = active_map.get_meta(tag_id)
                 if yelo_meta:
                     has_yelo_explicit_refs = (
-                        yelo_meta.scenario_explicit_references.id[0] != 0xFFff)
+                        yelo_meta.scenario_explicit_references.id & 0xFFff != 0xFFff)
 
 
         for b in tag_index_array:
-            tag_id = b.id.tag_table_index
+            tag_id = b.id & 0xFFff
             if (tag_classes_by_id.get(tag_id) != "tagc" or
                 tag_id in tagc_ids_reffed_in_other_tagc):
                 continue
@@ -1454,13 +1458,13 @@ class Refinery(tk.Tk):
         tag_index_array = active_map.tag_index.tag_index
         matg_meta = active_map.matg_meta
         hudg_id = 0xFFFF if not matg_meta else\
-                  matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id[0]
+                  matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id & 0xFFff
         hudg_meta = active_map.get_meta(hudg_id, True)
 
         if hudg_meta:
             block = hudg_meta.messaging_parameters
-            items_meta = active_map.get_meta(block.item_message_text.id[0], True)
-            icons_meta = active_map.get_meta(block.alternate_icon_text.id[0], True)
+            items_meta = active_map.get_meta(block.item_message_text.id & 0xFFff, True)
+            icons_meta = active_map.get_meta(block.alternate_icon_text.id & 0xFFff, True)
 
             if items_meta: tag_path_handler.set_item_strings(items_meta)
             if icons_meta: tag_path_handler.set_icon_strings(icons_meta)
@@ -1850,10 +1854,10 @@ class Refinery(tk.Tk):
                         if self.stop_processing:
                             break
 
-                        tag_id = tag_index_ref.id.tag_table_index
+                        tag_id = tag_index_ref.id & 0xFFff
                         if not map_magic:
                             # resource cache tag
-                            tag_id += (tag_index_ref.id.table_index << 16)
+                            tag_id = tag_index_ref.id
 
                         # dont want to re-extract tags
                         if (tag_id, extract_mode) in extracted:
@@ -1903,7 +1907,7 @@ class Refinery(tk.Tk):
 
                             extracting = set(extracted)
                             for ref in refs:
-                                index = ref.id.tag_table_index
+                                index = ref.id & 0xFFff
                                 key = (index, extract_mode)
                                 if key not in extracting and index < index_len:
                                     extracting.add(key)
