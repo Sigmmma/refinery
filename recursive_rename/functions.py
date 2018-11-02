@@ -212,18 +212,6 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     item_coll_dir = sub_dir + level_item_coll_dir
 
-    # starting equipment
-    i = 0
-    for b in meta.starting_equipments.STEPTREE:
-        j = 0
-        for k in range(1, 7):
-            recursive_rename(
-                get_tag_id(b['item_collection_%s' % k]),
-                sub_dir=item_coll_dir, name="start equipment %s" % i,
-                priority=MEDIUM_PRIORITY, **kw)
-            j += 1
-        i += 1
-
     # rename detail objects palette
     for b in meta.detail_object_collection_palette.STEPTREE:
         recursive_rename(
@@ -266,6 +254,19 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         recursive_rename(
             get_tag_id(b.item_collection), sub_dir=item_coll_dir,
             name=ng_name, priority=MEDIUM_PRIORITY, **kw)
+
+    # starting equipment
+    # do this AFTER netgame equipment
+    i = 0
+    for b in meta.starting_equipments.STEPTREE:
+        j = 0
+        for k in range(1, 7):
+            recursive_rename(
+                get_tag_id(b['item_collection_%s' % k]),
+                sub_dir=item_coll_dir + "start equipment\\",
+                priority=MEDIUM_PRIORITY, **kw)
+            j += 1
+        i += 1
 
     # rename animation references
     for b in meta.ai_animation_references.STEPTREE:
