@@ -111,6 +111,7 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
                                       triangle_data_expansion)
     halo_map.map_magic                 -= meta_ptr_diff
     map_header.tag_index_header_offset += meta_ptr_diff
+    map_header.decomp_len = map_end
     map_header.tag_index_meta_len = map_end - map_header.tag_index_header_offset
 
     # adjust rawdata pointers in various tags if the index header moved
@@ -137,7 +138,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 9, 1)
+    version = (2, 0, 0)
 
     data_extract_window = None
     settings_window     = None
@@ -254,7 +255,7 @@ class Refinery(tk.Tk):
             label="Unload active map",
             command=lambda s=self: s.unload_maps_clicked(None))
         self.file_menu.add_command(
-            label="Unload all maps",
+            label="Unload all non-resource maps",
             command=lambda s=self: s.unload_maps_clicked(False, None))
         self.file_menu.add_command(
             label="Unload resource maps",
@@ -1197,7 +1198,7 @@ class Refinery(tk.Tk):
                     return
 
                 tag_id = b.id & 0xFFff
-                if tag_id == tag_index.scenario_tag_id.tag_table_index:
+                if tag_id == tag_index.scenario_tag_id & 0xFFff:
                     tag_cls = "scnr"
                 elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
                     tag_cls = fourcc(b.class_1.data)
@@ -1208,8 +1209,6 @@ class Refinery(tk.Tk):
                     repair[tag_id] = tag_cls
                 elif tag_cls == "matg" and b.tag.tag_path == "globals\\globals":
                     repair[tag_id] = tag_cls
-                else:
-                    continue
 
             # scan the tags that need repairing and repair them
             repaired = {}
@@ -1239,6 +1238,10 @@ class Refinery(tk.Tk):
                         continue
 
                     if tag_cls == "sbsp":
+                        if tag_id not in bsp_headers:
+                            print("    Bsp header missing for tag %s" % tag_id)
+                            continue
+
                         class_repair_functions[tag_cls](
                             bsp_headers[tag_id].meta_pointer,
                             tag_index_array, map_data,
