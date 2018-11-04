@@ -329,7 +329,10 @@ class TagPathHandler():
 
         return join_char.join(name_pieces[start: end])
 
-    def get_unique_name(self, collection, name, ext=""):
+    def get_unique_name(self, collection=None, name="", ext=""):
+        if collection is None:
+            collection = self._path_map
+
         if name + ext not in collection:
             return name + ext
 

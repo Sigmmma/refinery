@@ -12,6 +12,10 @@ DEFAULT_PRIORITY = 1.0
 LOW_PRIORITY = 0.5
 
 
+INVALID_MODEL_NAMES = frozenset(
+    ("", "base", "unnamed", "blur", "unnamed base",
+     "def", "default", "damaged"))
+
 
 
 def sanitize_path(name):
@@ -43,27 +47,37 @@ def join_names(names, max_len=100):
     return name
 
 
+def sanitize_tag_name(name, def_name):
+    name = sanitize_name(name).replace("_", " ").replace("-", " ").strip()
+    name = " ".join(s for s in name.split(" ") if s)
+    while name and name[-1] in "0123456789":
+        name = name[: -1].strip()
+
+    if name not in INVALID_MODEL_NAMES:
+        return name
+
+    return def_name
+
+
 def get_model_name(halo_map, tag_id, model_name=""):
     meta = halo_map.get_meta(tag_id)
-    if not meta:
+    if not meta or not meta.regions.STEPTREE:
         return model_name
 
-    names = set()
+    names = []
     for region in meta.regions.STEPTREE:
         for perm in region.permutations.STEPTREE:
-            name = sanitize_name(perm.name).replace("_", " ")\
-                   .replace("-", " ").strip()
-            name = " ".join(s for s in name.split(" ") if s)
-            while name and name[-1] in "0123456789":
-                name = name[: -1].strip()
-            names.add(name)
+            names.append(sanitize_tag_name(perm.name, ""))
 
-    if not names or len(names) > 1:
-        return model_name
+    name = "" if not names else names.pop()
+    if not names and name not in INVALID_MODEL_NAMES:
+        # just one single valid name was found amidst the permutations
+        return name
 
-    for name in names:
-        if name not in ("base", "unnamed", "unnamed base",
-                        "blur", "def", "default", "damaged"):
+    if names and len(meta.regions.STEPTREE) == 1:
+        # more than 1 perm name found. try to get a valid name from the regions
+        name = sanitize_tag_name(meta.regions.STEPTREE[0].name, "")
+        if name not in INVALID_MODEL_NAMES:
             return name
 
     return model_name
@@ -99,12 +113,7 @@ def get_sound_sub_dir_and_name(snd_meta, sub_dir="", snd_name=""):
 
     for pr in snd_meta.pitch_ranges.STEPTREE:
         for perm in pr.permutations.STEPTREE:
-            perm_name = sanitize_name(perm.name).replace(".", " ").\
-                        replace("_", " ").replace("-", " ").strip()
-            perm_name = " ".join(s for s in perm_name.split(" ") if s)
-            while perm_name and perm_name[-1] in "0123456789":
-                perm_name = perm_name[: -1].strip()
-
+            perm_name = sanitize_tag_name(perm.name, "")
             if perm_name:
                 snd_name = perm_name
                 break
@@ -1477,8 +1486,8 @@ def rename_mode(tag_id, halo_map, tag_path_handler,
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  sub_dir=sub_dir + shaders_dir,
-                  tag_path_handler=tag_path_handler)
+              sub_dir=sub_dir + shaders_dir,
+              tag_path_handler=tag_path_handler)
 
 
     shader_names = {}
