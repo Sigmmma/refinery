@@ -74,7 +74,7 @@ def get_model_name(halo_map, tag_id, model_name=""):
         # just one single valid name was found amidst the permutations
         return name
 
-    if names and len(meta.regions.STEPTREE) == 1:
+    if len(meta.regions.STEPTREE) == 1:
         # more than 1 perm name found. try to get a valid name from the regions
         name = sanitize_tag_name(meta.regions.STEPTREE[0].name, "")
         if name not in INVALID_MODEL_NAMES:
