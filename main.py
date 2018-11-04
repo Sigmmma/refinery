@@ -845,7 +845,7 @@ class Refinery(tk.Tk):
                     new_map = StubbsMap(self.maps)
                 elif "shadowrun" in engine:
                     new_map = ShadowrunMap(self.maps)
-                if "halo1anni" in engine:
+                elif "halo1anni" in engine:
                     new_map = Halo1AnniMap(self.maps)
                 elif "halo1" in engine:
                     new_map = Halo1Map(self.maps)
