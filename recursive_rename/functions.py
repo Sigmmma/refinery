@@ -121,6 +121,45 @@ def get_sound_sub_dir_and_name(snd_meta, sub_dir="", snd_name=""):
     return sub_dir, snd_name
 
 
+def get_sound_looping_name(meta, halo_map, def_name=""):
+    if meta is None:
+        return def_name
+    elif not hasattr(meta, "tracks") and not hasattr(meta, "detail_sounds"):
+        return def_name
+
+    # try and determine a name for this sound_looping from its sound tags
+    for b in meta.tracks.STEPTREE:
+        for snd_id in (get_tag_id(b.start), get_tag_id(b.loop), get_tag_id(b.end)):
+            _, snd_name = get_sound_sub_dir_and_name(halo_map.get_meta(snd_id))
+            snd_name = snd_name.lower()
+            if snd_name not in ("", "in", "start", "begin", "loops", "loop",
+                                "lp", "lps", "out", "stop", "end"):
+                return snd_name
+
+    for b in meta.detail_sounds.STEPTREE:
+        _, snd_name = get_sound_sub_dir_and_name(
+            halo_map.get_meta(get_tag_id(b.sound)))
+        snd_name = snd_name.lower()
+        if snd_name not in ("", "detail", "details", "lp", "loops", "loop"):
+            return snd_name
+
+    return def_name
+
+
+def get_sound_scenery_name(meta, halo_map, def_name=""):
+    if not meta or not meta.obje_attrs.attachments.STEPTREE:
+        return def_name
+
+    for b in meta.obje_attrs.attachments.STEPTREE:
+        lsnd_meta = halo_map.get_meta(get_tag_id(b.type))
+        if lsnd_meta:
+            lsnd_name = get_sound_looping_name(lsnd_meta, halo_map, "")
+            if lsnd_name:
+                return lsnd_name
+
+    return def_name
+
+
 def recursive_rename(tag_id, halo_map, tag_path_handler,
                      root_dir="", sub_dir="", name="", **kw):
     # create a copy of this set for each recursion level to prevent
@@ -803,8 +842,12 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
             kw.setdefault('priority', HIGH_PRIORITY)
         else:
             kw.setdefault('priority', MEDIUM_HIGH_PRIORITY)
-            name = get_model_name(halo_map, get_tag_id(obje_attrs.model),
-                                  "protected %s" % tag_id)
+            name = "protected %s" % tag_id
+            if obje_type == "ssce":
+                name = get_sound_scenery_name(meta, halo_map, name)
+            else:
+                name = get_model_name(
+                    halo_map, get_tag_id(obje_attrs.model), name)
 
     if not sub_dir:
         if obje_type == "bipd":
@@ -1879,27 +1922,8 @@ def rename_lsnd(tag_id, halo_map, tag_path_handler,
     if meta is None:
         return
 
-    # try and determine a name for this sound_looping from its sound tags
-    for b in meta.tracks.STEPTREE:
-        if name: break
-        for snd_id in (get_tag_id(b.start), get_tag_id(b.loop), get_tag_id(b.end)):
-            if name: break
-            _, snd_name = get_sound_sub_dir_and_name(halo_map.get_meta(snd_id))
-            snd_name = snd_name.lower()
-            if snd_name not in ("", "in", "start", "begin", "loops", "loop",
-                                "lp", "lps", "out", "stop", "end"):
-                name = snd_name
-
-    for b in meta.detail_sounds.STEPTREE:
-        if name: break
-        _, snd_name = get_sound_sub_dir_and_name(
-            halo_map.get_meta(get_tag_id(b.sound)))
-        snd_name = snd_name.lower()
-        if snd_name not in ("", "detail", "details", "lp", "loops", "loop"):
-            name = snd_name
-
     if not name:
-        name = "protected %s" % tag_id
+        name = get_sound_looping_name(meta, halo_map, "protected %s" % tag_id)
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
