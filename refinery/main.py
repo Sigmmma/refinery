@@ -42,12 +42,12 @@ if print_startup:
     print("    Loading map definitions")
 
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors
-from reclaimer.meta.objs.halo1_map import Halo1Map
-from reclaimer.meta.objs.halo1_anni_map import Halo1AnniMap
-from reclaimer.meta.objs.halo1_rsrc_map import Halo1RsrcMap
-from reclaimer.meta.objs.halo2_map import Halo2Map
-from reclaimer.meta.objs.stubbs_map import StubbsMap
-from reclaimer.meta.objs.shadowrun_map import ShadowrunMap
+from reclaimer.meta.wrappers.halo1_map import Halo1Map
+from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
+from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
+from reclaimer.meta.wrappers.halo2_map import Halo2Map
+from reclaimer.meta.wrappers.stubbs_map import StubbsMap
+from reclaimer.meta.wrappers.shadowrun_map import ShadowrunMap
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
      get_tag_index
 from reclaimer.meta.class_repair import class_repair_functions,\
@@ -138,7 +138,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (2, 0, 0)
+    version = (2, 0, 1)
 
     data_extract_window = None
     settings_window     = None
