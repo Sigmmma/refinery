@@ -46,6 +46,7 @@ from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
 from reclaimer.meta.wrappers.halo2_map import Halo2Map
+from reclaimer.meta.wrappers.halo3_map import Halo3Map
 from reclaimer.meta.wrappers.stubbs_map import StubbsMap
 from reclaimer.meta.wrappers.shadowrun_map import ShadowrunMap
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
@@ -851,6 +852,8 @@ class Refinery(tk.Tk):
                     new_map = Halo1Map(self.maps)
                 elif "halo2" in engine:
                     new_map = Halo2Map(self.maps)
+                elif "halo3" in engine:
+                    new_map = Halo3Map(self.maps)
                 else:
                     print("    Cant let you do that.")
                     map_header.pprint(printout=True)
@@ -1001,8 +1004,21 @@ class Refinery(tk.Tk):
                     (orig_index.tag_count, orig_index.tag_types_count,
                      orig_index.root_tags_count,
                      tag_index_offset - active_map.map_magic))
-                else:
 
+                    for arr_name, arr in (("Partitions", header.partitions),
+                                          ("Sections", header.sections),):
+                        string += "\n%s:\n" % arr_name
+                        for name in arr.NAME_MAP:
+                            section = arr[name]
+                            string += ((
+                                "    %s:\n" +
+                                "        address == %s\n" +
+                                "        size    == %s\n" +
+                                "        offset  == %s\n") %
+                            (name, section[0], section[1], section.file_offset)
+                            )
+                        
+                else:
                     string += ((
                         "\nTag index:\n" +
                         "    tag count           == %s\n" +
