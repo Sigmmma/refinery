@@ -1008,7 +1008,9 @@ class Refinery(tk.Tk):
                     for arr_name, arr in (("Partitions", header.partitions),
                                           ("Sections", header.sections),):
                         string += "\n%s:\n" % arr_name
-                        for name in arr.NAME_MAP:
+                        names = ("debug", "resource", "tag", "locale")\
+                                if arr.NAME_MAP else range(len(arr))
+                        for name in names:
                             section = arr[name]
                             string += ((
                                 "    %s:\n" +
@@ -1017,7 +1019,6 @@ class Refinery(tk.Tk):
                                 "        offset  == %s\n") %
                             (name, section[0], section[1], section.file_offset)
                             )
-                        
                 else:
                     string += ((
                         "\nTag index:\n" +
