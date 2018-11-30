@@ -1124,7 +1124,7 @@ class Refinery(tk.Tk):
                         #"        compressed   lightmaps count   == %s\n" +
                         #"        compressed   lightmaps pointer == %s   non-magic == %s\n"
                         ) %
-                    (index.tag_index[tag_id].tag.tag_path,
+                    (index.tag_index[tag_id].path,
                      active_map.bsp_header_offsets[tag_id],
                      magic, active_map.bsp_sizes[tag_id],
                      header.meta_pointer, header.meta_pointer - magic,
@@ -1199,7 +1199,7 @@ class Refinery(tk.Tk):
 
         if self.valid_tag_paths_are_accurate.get():
             for tag_id in range(len(tag_index_array)):
-                if not (tag_index_array[tag_id].tag.tag_path.lower().
+                if not (tag_index_array[tag_id].path.lower().
                         startswith("protected")):
                     tag_path_handler.set_priority(tag_id, float("inf"))
 
@@ -1224,7 +1224,7 @@ class Refinery(tk.Tk):
 
                 if tag_cls in ("scnr", "DeLa"):
                     repair[tag_id] = tag_cls
-                elif tag_cls == "matg" and b.tag.tag_path == "globals\\globals":
+                elif tag_cls == "matg" and b.path == "globals\\globals":
                     repair[tag_id] = tag_cls
 
             # scan the tags that need repairing and repair them
@@ -1345,7 +1345,7 @@ class Refinery(tk.Tk):
                     try:
                         print("  [ %s, %s, %s, %s ]" % (
                             i, b.meta_offset - map_magic,
-                            b.class_1.enum_name, b.tag.tag_path))
+                            b.class_1.enum_name, b.path))
                     except Exception:
                         print("  [ %s, %s, %s ]" % (
                             i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
@@ -1380,7 +1380,7 @@ class Refinery(tk.Tk):
                     sp="ui\\shell\\solo",
                     mp="ui\\shell\\multiplayer",
                     ui="ui\\shell\\main_menu"
-                    ).get(map_type, b.tag.tag_path)
+                    ).get(map_type, b.path)
                 tag_path_handler.set_path(tag_id, tag_path, float("inf"),
                                           True, False)
             elif reffed_tag_types == set(["devc"]):
@@ -1423,7 +1423,7 @@ class Refinery(tk.Tk):
                     sp="ui\\ui_tags_loaded_solo_scenario_type",
                     mp="ui\\ui_tags_loaded_multiplayer_scenario_type",
                     ui="ui\\ui_tags_loaded_mainmenu_scenario_type"
-                    ).get(map_type, b.tag.tag_path)
+                    ).get(map_type, b.path)
                 tag_path_handler.set_path(tag_id, tag_path, float("inf"),
                                           True, False)
 
@@ -1468,7 +1468,7 @@ class Refinery(tk.Tk):
 
         # record the original tag_paths so we know if any were changed
         active_map.orig_tag_paths = tuple(
-            b.tag.tag_path for b in active_map.tag_index.tag_index)
+            b.path for b in active_map.tag_index.tag_index)
 
         print("Completed. Took %s seconds." % round(time()-start, 1))
 
@@ -1868,7 +1868,7 @@ class Refinery(tk.Tk):
                     file_path = "<Could not get filepath>"
                     try:
                         file_path = sanitize_path("%s.%s" %
-                            (tag_index_ref.tag.tag_path,
+                            (tag_index_ref.path,
                              tag_index_ref.class_1.enum_name))
                         self.update()
                         if self.stop_processing:
