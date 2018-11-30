@@ -28,7 +28,7 @@ class TagPathHandler():
 
         i = 0
         for ref in self._index_map:
-            path = (ref.tag.tag_path + '.%s' % ref.class_1.enum_name).lower()
+            path = (ref.path + '.%s' % ref.class_1.enum_name).lower()
             self._path_map[path] = i
             if ref.indexed:
                 self._priorities[i] = INF
@@ -83,7 +83,7 @@ class TagPathHandler():
     def get_path(self, index):
         tag_ref = self.get_index_ref(index)
         if tag_ref:
-            return tag_ref.tag.tag_path
+            return tag_ref.path
         return ""
 
     def get_shared_by(self, index):
@@ -97,7 +97,7 @@ class TagPathHandler():
         if not tag_ref:
             return ""
         root_dirs = root.split("\\")
-        dirs = tag_ref.tag.tag_path.split("\\")[: -1]
+        dirs = tag_ref.path.split("\\")[: -1]
         while (dirs and root_dirs) and dirs[0] == root_dirs[0]:
             dirs.pop(0)
             root_dirs.pop(0)
@@ -111,7 +111,7 @@ class TagPathHandler():
         tag_ref = self.get_index_ref(index)
         if not tag_ref:
             return ""
-        return tag_ref.tag.tag_path.split("\\")[-1]
+        return tag_ref.path.split("\\")[-1]
 
     def get_will_overwrite(self, index, priority, override=False):
         if index is None:
@@ -140,7 +140,7 @@ class TagPathHandler():
 
         ext = "." + tag_ref.class_1.enum_name
         new_path_no_ext, ext = sanitize_path(new_path_no_ext), ext.lower()
-        old_path = tag_ref.tag.tag_path.lower() + ext
+        old_path = tag_ref.path.lower() + ext
 
         if not new_path_no_ext or new_path_no_ext[-1] == "\\":
             new_path_no_ext += "protected"
@@ -160,7 +160,7 @@ class TagPathHandler():
 
         self._path_map.pop(old_path, None)
         self._path_map[new_path] = index
-        tag_ref.tag.tag_path = new_path_no_ext
+        tag_ref.path = new_path_no_ext
         if print_new_name:
             print(index, priority, new_path, sep="\t")
 
@@ -286,13 +286,13 @@ class TagPathHandler():
                 if val.indexed:
                     continue
 
-                tag_path = val.tag.tag_path
+                tag_path = val.path
                 new_tag_path = "\\".join(path_pieces + splitext(name)[: 1])
                 print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
                       (len(tag_path), len(new_tag_path),
                        tag_path, new_tag_path))
                 self._path_map.pop(tag_path, None)
-                val.tag.tag_path = new_tag_path
+                val.path = new_tag_path
 
             if not curr_paths:
                 # exhausted the current paths, get the next ones to do
@@ -306,7 +306,7 @@ class TagPathHandler():
         self._path_map.clear()
         for i in range(len(self._index_map)):
             ref = self._index_map[i]
-            tag_path = ref.tag.tag_path
+            tag_path = ref.path
             if len(tag_path) > max_len:
                 print('WARNING: "%s" is over the length limit.' % tag_path)
 
