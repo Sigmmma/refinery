@@ -341,7 +341,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                     new_cls = None
 
             # when renaming only one tag, the basenames COULD BE the full names
-            old_name = sanitize_path(index_ref.tag.tag_path.lower())
+            old_name = sanitize_path(index_ref.path.lower())
             new_name = old_name.replace(old_basename, new_basename, 1)
             if not old_name.startswith(old_basename):
                 # tag_path doesnt have the base_name in it
@@ -375,7 +375,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 elif tag_cls_val != sibling_index_ref.class_1.data:
                     # classes are different. no worry
                     continue
-                elif sibling_index_ref.tag.tag_path != new_name:
+                elif sibling_index_ref.path != new_name:
                     # names are different. no worry
                     continue
                 already_exists = True
@@ -386,7 +386,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 continue
 
             if rename_other_trees:
-                index_ref.tag.tag_path = new_name
+                index_ref.path = new_name
                 try:
                     old_cls = index_ref.class_1.enum_name
                 except Exception:
@@ -447,7 +447,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 else:
                     ext = ".INVALID"
 
-                tag_path = b.tag.tag_path.lower()
+                tag_path = b.path.lower()
                 if PATHDIV == "/":
                     tag_path = sanitize_path(tag_path)
                 sorted_index_refs.append((tag_path + ext, b))
@@ -568,7 +568,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     tag_cls = "INVALID"
                     ext = ".INVALID"
 
-                tag_path = b.tag.tag_path.lower()
+                tag_path = b.path.lower()
                 if PATHDIV == "/":
                     tag_path = sanitize_path(tag_path)
                 sorted_index_refs.append(
@@ -710,7 +710,7 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
             if b.class_1.enum_name not in BAD_CLASSES:
                 tag_cls = fourcc(b.class_1.data)
 
-            tag_path = b.tag.tag_path.lower()
+            tag_path = b.path.lower()
             if PATHDIV == "/":
                 tag_path = sanitize_path(tag_path)
             sorted_index_refs.append(
@@ -1284,7 +1284,7 @@ class RefineryActionsWindow(tk.Toplevel):
 
             meta_tag = meta_tag_def.build()
             meta_tag.data.tagdata = meta
-            tag_path = index_ref.tag.tag_path
+            tag_path = index_ref.path
             meta_tag.filepath = tag_path
             if index_ref.class_1.enum_name not in BAD_CLASSES:
                 ext = ".%s" % index_ref.class_1.enum_name
