@@ -1793,6 +1793,7 @@ class Refinery(tk.Tk):
                 is_halo1_tag = ("halo1"  in curr_map.engine or
                                 "stubbs" in curr_map.engine or
                                 "shadowrun" in curr_map.engine)
+                is_extractable = bool(curr_map.tag_headers)
                 recursive &= is_halo1_tag
 
                 extract_kw = dict(out_dir=out_dir, overwrite=overwrite,
@@ -1802,8 +1803,7 @@ class Refinery(tk.Tk):
                 print(format_exc())
                 continue
 
-            if extract_mode == "tags" and not is_halo1_tag:
-                # cant extract anything other than halo 1 tags yet
+            if extract_mode == "tags" and not is_extractable:
                 try: queue_tree.delete(iid)
                 except Exception: pass
                 continue
@@ -1901,6 +1901,8 @@ class Refinery(tk.Tk):
                             continue
 
                         tag_cls = fourcc(tag_index_ref.class_1.data)
+                        if tag_cls not in curr_map.tag_headers:
+                            continue
 
                         if show_output and not dont_extract:
                             print("%s: %s" % (extract_mode, file_path))
