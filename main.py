@@ -113,7 +113,7 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
     halo_map.map_magic                 -= meta_ptr_diff
     map_header.tag_index_header_offset += meta_ptr_diff
     map_header.decomp_len = map_end
-    map_header.tag_index_meta_len = map_end - map_header.tag_index_header_offset
+    map_header.tag_data_size = map_end - map_header.tag_index_header_offset
 
     # adjust rawdata pointers in various tags if the index header moved
     if meta_ptr_diff:
@@ -259,7 +259,7 @@ class Refinery(tk.Tk):
             label="Unload all non-resource maps",
             command=lambda s=self: s.unload_maps_clicked(False, None))
         self.file_menu.add_command(
-            label="Unload resource maps",
+            label="Unload all resource maps",
             command=lambda s=self: s.unload_maps_clicked(True, None))
         self.file_menu.add_separator()
         self.file_menu.add_command(
@@ -1031,7 +1031,7 @@ class Refinery(tk.Tk):
                         "    index  parts count  == %s\n") %
                     (index.tag_count, index.scenario_tag_id & 0xFFff,
                      tag_index_offset, tag_index_offset - active_map.map_magic,
-                     index.model_data_offset, header.tag_index_meta_len,
+                     index.model_data_offset, header.tag_data_size,
                      index.vertex_parts_count, index.index_parts_count))
 
                     if index.SIZE == 36:
@@ -1653,7 +1653,7 @@ class Refinery(tk.Tk):
             # recalculate pointers for the strings if they were changed
             strings_size, string_offs = 0, {}
             for i in range(len(index_array)):
-                tag_path = index_array[i].tag.tag_path
+                tag_path = index_array[i].path
                 if orig_tag_paths[i].lower() == tag_path.lower():
                     # path wasnt changed
                     continue
@@ -1793,7 +1793,7 @@ class Refinery(tk.Tk):
                 is_halo1_tag = ("halo1"  in curr_map.engine or
                                 "stubbs" in curr_map.engine or
                                 "shadowrun" in curr_map.engine)
-                is_extractable = bool(curr_map.tag_headers)
+                tags_are_extractable = bool(curr_map.tag_headers)
                 recursive &= is_halo1_tag
 
                 extract_kw = dict(out_dir=out_dir, overwrite=overwrite,
@@ -1803,7 +1803,7 @@ class Refinery(tk.Tk):
                 print(format_exc())
                 continue
 
-            if extract_mode == "tags" and not is_extractable:
+            if extract_mode == "tags" and not tags_are_extractable:
                 try: queue_tree.delete(iid)
                 except Exception: pass
                 continue
@@ -1901,7 +1901,7 @@ class Refinery(tk.Tk):
                             continue
 
                         tag_cls = fourcc(tag_index_ref.class_1.data)
-                        if tag_cls not in curr_map.tag_headers:
+                        if extract_mode == "tags" and tag_cls not in curr_map.tag_headers:
                             continue
 
                         if show_output and not dont_extract:
