@@ -874,7 +874,7 @@ class Refinery(tk.Tk):
                          "Close that map and load this one instead?") % map_name,
                         icon='warning', parent=self)
 
-                if not do_load:
+                if not do_load or engine is None:
                     print("    Skipped")
                     continue
 
