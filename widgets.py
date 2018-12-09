@@ -479,16 +479,19 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
             tag_name = basename(tag_path)
             tag_id = b.id & 0xFFff
-            map_magic = self.active_map.map_magic
+            pointer_converter = self.active_map.map_pointer_converter
+            if hasattr(self.active_map, "bsp_pointer_converters"):
+                pointer_converter = self.active_map.bsp_pointer_converters.get(
+                    tag_id, pointer_converter)
 
-            if b.indexed and map_magic:
+            if b.indexed and pointer_converter:
                 pointer = "not in map"
-            elif map_magic is not None:
-                pointer = b.meta_offset - map_magic
+            elif pointer_converter is not None:
+                pointer = pointer_converter.v_ptr_to_f_ptr(b.meta_offset)
             else:
                 pointer = 0
 
-            if not map_magic:
+            if not self.active_map.map_magic:
                 # resource cache tag
                 tag_id = b.id
 
@@ -602,14 +605,19 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             if b.class_1.enum_name not in BAD_CLASSES:
                 tag_cls = fourcc(b.class_1.data)
 
-            if b.indexed and map_magic:
+            pointer_converter = self.active_map.map_pointer_converter
+            if hasattr(self.active_map, "bsp_pointer_converters"):
+                pointer_converter = self.active_map.bsp_pointer_converters.get(
+                    tag_id, pointer_converter)
+
+            if b.indexed and pointer_converter:
                 pointer = "not in map"
-            elif map_magic is not None:
-                pointer = b.meta_offset - map_magic
+            elif pointer_converter is not None:
+                pointer = pointer_converter.v_ptr_to_f_ptr(b.meta_offset)
             else:
                 pointer = 0
 
-            if not map_magic:
+            if not self.active_map.map_magic:
                 # resource cache tag
                 tag_id = b.id
 
