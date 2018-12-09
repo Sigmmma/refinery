@@ -41,14 +41,23 @@ from refinery.defs.config_def import config_def
 if print_startup:
     print("    Loading map definitions")
 
+from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
 from reclaimer.meta.wrappers.halo2_map import Halo2Map
 from reclaimer.meta.wrappers.halo3_map import Halo3Map
+from reclaimer.meta.wrappers.halo3_beta_map import Halo3BetaMap
+from reclaimer.meta.wrappers.halo_reach_map import HaloReachMap
+from reclaimer.meta.wrappers.halo_reach_beta_map import HaloReachBetaMap
+from reclaimer.meta.wrappers.halo3_odst_map import Halo3OdstMap
+from reclaimer.meta.wrappers.halo4_map import Halo4Map
+from reclaimer.meta.wrappers.halo4_beta_map import Halo4BetaMap
+from reclaimer.meta.wrappers.halo5_map import Halo5Map
 from reclaimer.meta.wrappers.stubbs_map import StubbsMap
 from reclaimer.meta.wrappers.shadowrun_map import ShadowrunMap
+
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
      get_tag_index
 from reclaimer.meta.class_repair import class_repair_functions,\
@@ -901,12 +910,26 @@ class Refinery(tk.Tk):
                     new_map = ShadowrunMap(maps)
                 elif "halo1anni" in engine:
                     new_map = Halo1AnniMap(maps)
-                elif "halo1" in engine:
+                elif engine in GEN_1_HALO_ENGINES:
                     new_map = Halo1Map(maps)
-                elif "halo2" in engine:
+                elif engine in GEN_2_ENGINES:
                     new_map = Halo2Map(maps)
-                elif "halo3" in engine:
+                elif engine == "halo3":
                     new_map = Halo3Map(maps)
+                elif engine == "halo3beta":
+                    new_map = Halo3BetaMap(maps)
+                elif engine == "haloreach":
+                    new_map = HaloReachMap(maps)
+                elif engine == "haloreachbeta":
+                    new_map = HaloReachBetaMap(maps)
+                elif engine == "halo3odst":
+                    new_map = Halo3OdstMap(maps)
+                elif engine == "halo4":
+                    new_map = Halo4Map(maps)
+                elif engine == "halo4beta":
+                    new_map = Halo4BetaMap(maps)
+                elif engine == "halo5":
+                    new_map = Halo5Map(maps)
                 else:
                     print("    Cant let you do that.")
                     map_header.pprint(printout=True)
