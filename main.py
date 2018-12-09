@@ -959,7 +959,7 @@ class Refinery(tk.Tk):
         self.engine_select_menu = tk.OptionMenu(
             self.map_action_frame, self.tk_active_engine, *options,
             command=self.set_active_engine)
-        self.engine_select_menu.config(anchor="w", width=12)
+        self.engine_select_menu.config(anchor="w", width=15)
         self.engine_select_menu.pack(side='left', padx=4, pady=4,
                                      fill='x', expand=False)
         self.rebuild_map_select_menu()
@@ -1182,36 +1182,36 @@ class Refinery(tk.Tk):
                      rsrc.tag_string_to_id_storage_header_offset,
                     ))
 
-                if active_map.bsp_magics:
+                if hasattr(active_map, "bsp_magics"):
                     string += "\nSbsp magic and headers:\n"
 
-                for tag_id in active_map.bsp_magics:
-                    header = active_map.bsp_headers.get(tag_id)
-                    if header is None: continue
+                    for tag_id in active_map.bsp_magics:
+                        header = active_map.bsp_headers.get(tag_id)
+                        if header is None: continue
 
-                    magic  = active_map.bsp_magics[tag_id]
-                    string += ((
-                        "    %s.structure_scenario_bsp\n" +
-                        "        bsp base pointer               == %s\n" +
-                        "        bsp magic                      == %s\n" +
-                        "        bsp size                       == %s\n" +
-                        "        bsp metadata pointer           == %s   non-magic == %s\n"
-                        #"        uncompressed lightmaps count   == %s\n" +
-                        #"        uncompressed lightmaps pointer == %s   non-magic == %s\n" +
-                        #"        compressed   lightmaps count   == %s\n" +
-                        #"        compressed   lightmaps pointer == %s   non-magic == %s\n"
-                        ) %
-                    (index.tag_index[tag_id].path,
-                     active_map.bsp_header_offsets[tag_id],
-                     magic, active_map.bsp_sizes[tag_id],
-                     header.meta_pointer, header.meta_pointer - magic,
-                     #header.uncompressed_lightmap_materials_count,
-                     #header.uncompressed_lightmap_materials_pointer,
-                     #header.uncompressed_lightmap_materials_pointer - magic,
-                     #header.compressed_lightmap_materials_count,
-                     #header.compressed_lightmap_materials_pointer,
-                     #header.compressed_lightmap_materials_pointer - magic,
-                     ))
+                        magic  = active_map.bsp_magics[tag_id]
+                        string += ((
+                            "    %s.structure_scenario_bsp\n" +
+                            "        bsp base pointer               == %s\n" +
+                            "        bsp magic                      == %s\n" +
+                            "        bsp size                       == %s\n" +
+                            "        bsp metadata pointer           == %s   non-magic == %s\n"
+                            #"        uncompressed lightmaps count   == %s\n" +
+                            #"        uncompressed lightmaps pointer == %s   non-magic == %s\n" +
+                            #"        compressed   lightmaps count   == %s\n" +
+                            #"        compressed   lightmaps pointer == %s   non-magic == %s\n"
+                            ) %
+                        (index.tag_index[tag_id].path,
+                         active_map.bsp_header_offsets[tag_id],
+                         magic, active_map.bsp_sizes[tag_id],
+                         header.meta_pointer, header.meta_pointer - magic,
+                         #header.uncompressed_lightmap_materials_count,
+                         #header.uncompressed_lightmap_materials_pointer,
+                         #header.uncompressed_lightmap_materials_pointer - magic,
+                         #header.compressed_lightmap_materials_count,
+                         #header.compressed_lightmap_materials_pointer,
+                         #header.compressed_lightmap_materials_pointer - magic,
+                         ))
             except Exception:
                 string = ""
                 print(format_exc())
@@ -1238,6 +1238,9 @@ class Refinery(tk.Tk):
         self._running = False
 
     def _deprotect(self):
+        if self.active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+            return
+
         save_path = asksaveasfilename(
             initialdir=dirname(self.tk_map_path.get()), parent=self,
             title="Choose where to save the deprotected map",
