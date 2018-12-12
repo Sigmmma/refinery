@@ -268,10 +268,10 @@ class Refinery(tk.Tk):
             command=lambda s=self: s.unload_maps_clicked(None))
         self.file_menu.add_command(
             label="Unload all non-resource maps",
-            command=lambda s=self: s.unload_maps_clicked(False, ("active",), None))
+            command=lambda s=self: s.unload_maps_clicked(False, ("<active>",), None))
         self.file_menu.add_command(
             label="Unload all resource maps",
-            command=lambda s=self: s.unload_maps_clicked(True, ("active",), None))
+            command=lambda s=self: s.unload_maps_clicked(True, ("<active>",), None))
         self.file_menu.add_command(
             label="Unload all maps",
             command=lambda s=self: s.unload_maps_clicked(None, None, None))
@@ -412,11 +412,11 @@ class Refinery(tk.Tk):
 
     @property
     def active_maps(self):
-        return self.maps_by_engine.get("active", {})
+        return self.maps_by_engine.get("<active>", {})
 
     @property
     def active_map(self):
-        return self.active_maps.get("active")
+        return self.active_maps.get("<active>")
 
     def load_config(self, filepath=None):
         if filepath is None:
@@ -745,9 +745,9 @@ class Refinery(tk.Tk):
                 self.tk_active_map_name.set(next_map_name)
                 break
 
-        self.maps_by_engine["active"] = next_maps
-        next_maps.pop("active", None)
-        curr_maps.pop("active", None)
+        self.maps_by_engine["<active>"] = next_maps
+        next_maps.pop("<active>", None)
+        curr_maps.pop("<active>", None)
         self.rebuild_map_select_menu()
         self.set_active_map()
 
@@ -765,14 +765,14 @@ class Refinery(tk.Tk):
                 return
 
             self.tk_map_path.set(next_map.filepath)
-            maps["active"] = next_map
+            maps["<active>"] = next_map
             self.display_map_info()
             self.reload_explorers()
         else:
             print('"%s" is not loaded.' % map_name)
 
-    def unload_maps_clicked(self, map_type=False, engines_to_unload=("active", ),
-                            maps_to_unload=("active", )):
+    def unload_maps_clicked(self, map_type=False, engines_to_unload=("<active>", ),
+                            maps_to_unload=("<active>", )):
         if self._running:
             return
         self._running = True
@@ -783,8 +783,8 @@ class Refinery(tk.Tk):
             print(format_exc())
         self._running = False
 
-    def unload_maps(self, map_type=False, engines_to_unload=("active", ),
-                    maps_to_unload=("active", )):
+    def unload_maps(self, map_type=False, engines_to_unload=("<active>", ),
+                    maps_to_unload=("<active>", )):
         if engines_to_unload is None:
             engines_to_unload = tuple(self.maps_by_engine.keys())
 
@@ -961,9 +961,9 @@ class Refinery(tk.Tk):
         self.rebuild_engine_select_menu()
         if will_be_active and new_active_map:
             # self.set_active_map must set this
-            maps.pop("active", None)
+            maps.pop("<active>", None)
             # self.tk_active_engine must set this
-            self.maps_by_engine.pop("active", None)
+            self.maps_by_engine.pop("<active>", None)
             self.tk_active_engine.set(engine)
             self.tk_active_map_name.set(new_active_map)
             self.set_active_engine()
@@ -973,7 +973,7 @@ class Refinery(tk.Tk):
             self.engine_select_menu.destroy()
 
         options = dict(self.maps_by_engine)
-        options.pop("active", None)
+        options.pop("<active>", None)
         if options:
             options = sorted(options.keys())
         else:
@@ -992,7 +992,7 @@ class Refinery(tk.Tk):
             self.map_select_menu.destroy()
 
         options = dict(self.active_maps)
-        options.pop("active", None)
+        options.pop("<active>", None)
         if options:
             options = sorted(options.keys())
         else:
@@ -1681,7 +1681,7 @@ class Refinery(tk.Tk):
             print(format_exc())
         self._running = False
 
-    def save_map(self, save_path=None, engine="active", map_name="active", *,
+    def save_map(self, save_path=None, engine="<active>", map_name="<active>", *,
                  reload_window=True, meta_data_expansion=0,
                  raw_data_expansion=0, vertex_data_expansion=0,
                  triangle_data_expansion=0, prompt_strings_expand=True):
