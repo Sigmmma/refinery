@@ -42,7 +42,8 @@ if print_startup:
     print("    Loading map definitions")
 
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
-from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors
+from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
+     h3_data_extractors
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
@@ -68,7 +69,8 @@ from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 from refinery import crc_functions
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, RefineryChecksumEditorWindow,\
-     ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
+     ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree,\
+     bitmap_file_formats
 from refinery.recursive_rename.tag_path_handler import TagPathHandler
 from refinery.recursive_rename.functions import recursive_rename
 
@@ -149,7 +151,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (2, 0, 1)
+    version = (2, 0, 2)
 
     data_extract_window = None
     settings_window     = None
@@ -206,6 +208,7 @@ class Refinery(tk.Tk):
         self.shallow_ui_widget_nesting = tk.IntVar(self, 1)
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
+        self.edit_all_fields = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
         self.rename_duplicates_in_scnr = tk.IntVar(self)
         self.overwrite = tk.IntVar(self)
@@ -213,6 +216,8 @@ class Refinery(tk.Tk):
         self.autoload_resources = tk.IntVar(self, 1)
         self.show_output  = tk.IntVar(self, 1)
         self.decode_adpcm = tk.IntVar(self, 1)
+        self.bitmap_extract_format = tk.IntVar(self, 0)
+        self.bitmap_extract_keep_alpha = tk.IntVar(self, 1)
         self.generate_comp_verts = tk.IntVar(self, 0)
         self.generate_uncomp_verts = tk.IntVar(self, 1)
 
@@ -230,6 +235,7 @@ class Refinery(tk.Tk):
             overwrite=self.overwrite,
             extract_cheape=self.extract_cheape,
             show_all_fields=self.show_all_fields,
+            edit_all_fields=self.edit_all_fields,
             recursive=self.recursive,
             autoload_resources=self.autoload_resources,
             show_output=self.show_output,
@@ -238,6 +244,8 @@ class Refinery(tk.Tk):
             tags_list_path=self.tags_list_path,
             extract_mode=self.extract_mode,
             decode_adpcm=self.decode_adpcm,
+            bitmap_extract_format=self.bitmap_extract_format,
+            bitmap_extract_keep_alpha=self.bitmap_extract_keep_alpha,
             generate_comp_verts=self.generate_comp_verts,
             generate_uncomp_verts=self.generate_uncomp_verts,
             )
@@ -466,9 +474,11 @@ class Refinery(tk.Tk):
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields",):
+                          "show_all_fields", "edit_all_fields",):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
+        self.bitmap_extract_format.set(header.bitmap_extract_format.data)
+        self.bitmap_extract_keep_alpha.set(bool(header.bitmap_extract_flags.keep_alpha))
         flags = header.deprotection_flags
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
                           "use_hashcaches", "use_heuristics",
@@ -513,9 +523,11 @@ class Refinery(tk.Tk):
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields",):
+                          "show_all_fields", "edit_all_fields",):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
+        header.bitmap_extract_format.data = self.bitmap_extract_format.get()
+        header.bitmap_extract_flags.keep_alpha = self.bitmap_extract_keep_alpha.get()
         flags = header.deprotection_flags
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
                           "use_hashcaches", "use_heuristics",
@@ -612,6 +624,8 @@ class Refinery(tk.Tk):
                 valid_classes = h1_data_extractors.keys()
             elif "halo2" in engine:
                 valid_classes = h2_data_extractors.keys()
+            elif "halo3" in engine:
+                valid_classes = h3_data_extractors.keys()
             else:
                 return
 
@@ -1900,8 +1914,16 @@ class Refinery(tk.Tk):
                 tags_are_extractable = bool(curr_map.tag_headers)
                 recursive &= is_halo1_tag
 
-                extract_kw = dict(out_dir=out_dir, overwrite=overwrite,
-                                  decode_adpcm=info['decode_adpcm'].get())
+                extract_bitmap_to = info['bitmap_extract_format'].get()
+                if extract_bitmap_to not in range(len(bitmap_file_formats)):
+                    extract_bitmap_to = 0
+
+                extract_kw = dict(
+                    out_dir=out_dir, overwrite=overwrite,
+                    decode_adpcm=info['decode_adpcm'].get(),
+                    bitmap_ext=bitmap_file_formats[extract_bitmap_to],
+                    bitmap_keep_alpha=info["bitmap_extract_keep_alpha"].get(),
+                    )
 
             except Exception:
                 print(format_exc())

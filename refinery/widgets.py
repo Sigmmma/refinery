@@ -19,6 +19,8 @@ from refinery.util import get_cwd, sanitize_path, is_protected_tag, fourcc,\
 from supyr_struct.defs.tag_def import TagDef
 from mozzarilla.tools.shared_widgets import HierarchyFrame
 
+bitmap_file_formats = ("dds", "tga", "png")
+
 
 curr_dir = get_cwd(__file__)
 no_op = lambda *a, **kw: None
@@ -74,6 +76,8 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
         show_output=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
         autoload_resources=tk.IntVar(parent), decode_adpcm=tk.IntVar(parent),
+        bitmap_extract_format=tk.IntVar(parent),
+        bitmap_extract_keep_alpha=tk.IntVar(parent),
         generate_comp_verts=tk.IntVar(parent), generate_uncomp_verts=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
@@ -803,21 +807,23 @@ class RefinerySettingsWindow(tk.Toplevel):
         except Exception:
             print("Could not load window icon.")
 
-        self.geometry("340x200")
-        self.minsize(width=340, height=200)
+        self.geometry("400x200")
+        self.minsize(width=400, height=200)
         self.resizable(1, 0)
         self.title("Settings")
 
         self.tabs = ttk.Notebook(self)
-        self.dirs_frame      = tk.Frame(self.tabs)
-        self.extract_frame   = tk.Frame(self.tabs)
-        self.data_fixing_frame = tk.Frame(self.tabs)
-        self.deprotect_frame = tk.Frame(self.tabs)
-        self.other_frame     = tk.Frame(self.tabs)
+        self.dirs_frame         = tk.Frame(self.tabs)
+        self.extract_frame      = tk.Frame(self.tabs)
+        self.data_extract_frame = tk.Frame(self.tabs)
+        self.tag_fixup_frame    = tk.Frame(self.tabs)
+        self.deprotect_frame    = tk.Frame(self.tabs)
+        self.other_frame        = tk.Frame(self.tabs)
 
         self.tabs.add(self.dirs_frame, text="Directories")
         self.tabs.add(self.extract_frame, text="Extraction")
-        self.tabs.add(self.data_fixing_frame, text="Data fixing")
+        self.tabs.add(self.data_extract_frame, text="Data extraction")
+        self.tabs.add(self.tag_fixup_frame, text="Tag fixup")
         self.tabs.add(self.deprotect_frame, text="Deprotection")
         self.tabs.add(self.other_frame, text="Other")
 
@@ -830,9 +836,11 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         for attr in ("extract_from_ce_resources", "overwrite", "recursive",
                      "rename_duplicates_in_scnr", "decode_adpcm",
+                     "bitmap_extract_format", "bitmap_extract_keep_alpha",
                      "generate_comp_verts", "generate_uncomp_verts",
                      "fix_tag_classes", "use_hashcaches", "use_heuristics",
-                     "autoload_resources", "extract_cheape", "show_all_fields",
+                     "autoload_resources", "extract_cheape",
+                     "show_all_fields", "edit_all_fields",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
                      "show_output", "fix_tag_index_offset"):
@@ -841,71 +849,6 @@ class RefinerySettingsWindow(tk.Toplevel):
         for attr in ("tags_dir", "data_dir", "tags_list_path"):
             object.__setattr__(self, attr, settings.get(attr, tk.StringVar(self)))
 
-        self.extract_from_ce_resources_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Extract from Halo CE resource maps",
-            variable=self.extract_from_ce_resources)
-        self.overwrite_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Overwrite files(not recommended)",
-            variable=self.overwrite)
-        self.recursive_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Recursive extraction",
-            variable=settings.get("recursive", tk.IntVar(self)))
-        self.show_output_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Print extracted file names",
-            variable=self.show_output)
-
-        self.rename_duplicates_in_scnr_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, text=(
-                "Rename duplicate camera points, cutscene\n"+
-                "flags, and recorded animations in scenario"),
-            variable=self.rename_duplicates_in_scnr)
-        self.generate_comp_verts_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, text="Generate compressed lightmap vertices",
-            variable=self.generate_comp_verts)
-        self.generate_uncomp_verts_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, text="Generate uncompressed lightmap vertices",
-            variable=self.generate_uncomp_verts)
-        self.decode_adpcm_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, variable=self.decode_adpcm,
-            text="Decode Xbox audio when extracting data (slow)")
-
-        self.fix_tag_classes_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Fix tag classes",
-            variable=self.fix_tag_classes)
-        self.use_hashcaches_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use hashcaches",
-            variable=self.use_hashcaches)
-        self.use_heuristics_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use heuristics",
-            variable=self.use_heuristics)
-        self.valid_tag_paths_are_accurate_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Do not rename non-protected tag paths",
-            variable=self.valid_tag_paths_are_accurate)
-        self.scrape_tag_paths_from_scripts_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Scrape tag paths from scenario scripts",
-            variable=self.scrape_tag_paths_from_scripts)
-        self.limit_tag_path_lengths_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Limit tag paths to 254 characters (tool.exe limitation)",
-            variable=self.limit_tag_path_lengths)
-        self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use shallow ui_widget_definition nesting",
-            variable=self.shallow_ui_widget_nesting)
-
-        self.fix_tag_index_offset_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text=("Fix tag index offset when saving\n" +
-                                        "WARNING: Can corrupt certain maps"),
-            variable=self.fix_tag_index_offset, justify='left')
-
-        self.autoload_resources_cbtn = tk.Checkbutton(
-            self.other_frame, text=("Load resource maps automatically\n" +
-                                    "when loading a non-resource map"),
-            variable=self.autoload_resources)
-        self.extract_cheape_cbtn = tk.Checkbutton(
-            self.other_frame, variable=self.extract_cheape,
-            text="Extract cheape.map when extracting from yelo maps")
-        self.show_all_fields_cbtn = tk.Checkbutton(
-            self.other_frame, variable=self.show_all_fields,
-            text="Show hidden fields when viewing metadata")
 
         # tags directory
         self.tags_dir_entry = tk.Entry(
@@ -930,12 +873,92 @@ class RefinerySettingsWindow(tk.Toplevel):
             self.tags_list_frame, text="Browse",
             command=self.tags_list_browse, width=6)
 
+
+        self.rename_duplicates_in_scnr_cbtn = tk.Checkbutton(
+            self.tag_fixup_frame, text=(
+                "Rename duplicate camera points, cutscene\n"+
+                "flags, and recorded animations in scenario"),
+            variable=self.rename_duplicates_in_scnr)
+        self.generate_comp_verts_cbtn = tk.Checkbutton(
+            self.tag_fixup_frame, text="Generate compressed lightmap vertices",
+            variable=self.generate_comp_verts)
+        self.generate_uncomp_verts_cbtn = tk.Checkbutton(
+            self.tag_fixup_frame, text="Generate uncompressed lightmap vertices",
+            variable=self.generate_uncomp_verts)
+
+
+        self.extract_from_ce_resources_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Extract from Halo CE resource maps",
+            variable=self.extract_from_ce_resources)
+        self.overwrite_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Overwrite files(not recommended)",
+            variable=self.overwrite)
+        self.recursive_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Recursive extraction",
+            variable=self.recursive)
+        self.show_output_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Print extracted file names",
+            variable=self.show_output)
+
+
+        self.decode_adpcm_cbtn = tk.Checkbutton(
+            self.data_extract_frame, variable=self.decode_adpcm,
+            text="Decode Xbox audio (slow)")
+        self.bitmap_extract_frame = tk.LabelFrame(
+            self.data_extract_frame, relief="flat",
+            text="Bitmap extraction format")
+        self.bitmap_extract_keep_alpha_cbtn = tk.Checkbutton(
+            self.bitmap_extract_frame, variable=self.bitmap_extract_keep_alpha,
+            text="Preserve alpha when extracting to PNG")
+        self.bitmap_extract_format_menu = ScrollMenu(
+            self.bitmap_extract_frame, menu_width=10,
+            options=bitmap_file_formats, variable=self.bitmap_extract_format)
+
+
+        self.fix_tag_classes_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Fix tag classes",
+            variable=self.fix_tag_classes)
+        self.use_hashcaches_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Use hashcaches",
+            variable=self.use_hashcaches)
+        self.use_heuristics_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Use heuristics",
+            variable=self.use_heuristics)
+        self.valid_tag_paths_are_accurate_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Do not rename non-protected tag paths",
+            variable=self.valid_tag_paths_are_accurate)
+        self.scrape_tag_paths_from_scripts_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Scrape tag paths from scenario scripts",
+            variable=self.scrape_tag_paths_from_scripts)
+        self.limit_tag_path_lengths_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Limit tag paths to 254 characters (tool.exe limitation)",
+            variable=self.limit_tag_path_lengths)
+        self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Use shallow ui_widget_definition nesting",
+            variable=self.shallow_ui_widget_nesting)
+        self.fix_tag_index_offset_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text=("Fix tag index offset when saving\n" +
+                                        "WARNING: Can corrupt certain maps"),
+            variable=self.fix_tag_index_offset, justify='left')
+
+
+        self.autoload_resources_cbtn = tk.Checkbutton(
+            self.other_frame, text=("Load resource maps automatically\n" +
+                                    "when loading a non-resource map"),
+            variable=self.autoload_resources)
+        self.extract_cheape_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.extract_cheape,
+            text="Extract cheape.map when extracting from yelo maps")
+        self.show_all_fields_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.show_all_fields,
+            text="Show hidden fields when viewing metadata")
+        self.edit_all_fields_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.edit_all_fields,
+            text="Allow editing all fields when viewing metadata")
+
+
         # pack everything
         self.tabs.pack(fill="both", expand=True)
-        for w in (self.dirs_frame, self.extract_frame, self.data_fixing_frame,
-                  self.deprotect_frame, self.other_frame):
-            pass#w.pack(fill="both", expand=True)
-
         for w in (self.tags_dir_frame, self.data_dir_frame,
                   self.tags_list_frame):
             w.pack(padx=4, pady=2, expand=True, fill="x")
@@ -944,10 +967,16 @@ class RefinerySettingsWindow(tk.Toplevel):
                   self.recursive_cbtn, self.show_output_cbtn):
             w.pack(padx=4, anchor='w')
 
+        for w in (self.bitmap_extract_keep_alpha_cbtn,
+                  self.bitmap_extract_format_menu,):
+            w.pack(padx=16, anchor='w')
+
+        for w in (self.decode_adpcm_cbtn, self.bitmap_extract_frame):
+            w.pack(padx=4, anchor='w')
+
         for w in (self.rename_duplicates_in_scnr_cbtn,
                   self.generate_uncomp_verts_cbtn,
-                  self.generate_comp_verts_cbtn,
-                  self.decode_adpcm_cbtn):
+                  self.generate_comp_verts_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.fix_tag_index_offset_cbtn,
@@ -960,7 +989,7 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, anchor='w')
 
         for w in (self.autoload_resources_cbtn, self.extract_cheape_cbtn,
-                  self.show_all_fields_cbtn,):
+                  self.show_all_fields_cbtn, self.edit_all_fields_cbtn,):
             w.pack(padx=4, anchor='w')
 
         for w1, w2 in ((self.tags_dir_entry, self.tags_dir_browse_button),
