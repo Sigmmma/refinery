@@ -47,7 +47,10 @@ class MetaWindow(TagWindow):
 
     @property
     def all_editable(self):
-        return self.all_visible
+        try:
+            return bool(self.app_root.edit_all_fields.get())
+        except Exception:
+            return False
 
     def populate(self):
         '''
