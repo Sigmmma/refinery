@@ -171,6 +171,7 @@ class Refinery(tk.Tk):
 
     # dictionary of all loaded map collections by their engine id strings
     maps_by_engine = None
+    last_map_by_engine = None
 
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self, *args, **kwargs)
@@ -186,6 +187,7 @@ class Refinery(tk.Tk):
         self.minsize(width=500, height=300)
 
         self.maps_by_engine = {}
+        self.last_map_by_engine = {}
 
         # make the tkinter variables
         self.tk_map_path = tk.StringVar(self)
@@ -754,10 +756,12 @@ class Refinery(tk.Tk):
         elif curr_maps and next_maps:
             # selected a different engine and both were valid.
             # select a new map to set as active
-            self.tk_active_map_name.set("")
-            for next_map_name in next_maps:
-                self.tk_active_map_name.set(next_map_name)
-                break
+            next_map_name = self.last_map_by_engine.get(engine_name, "")
+            if next_map_name not in next_maps:
+                next_map_name = ""
+                for next_map_name in next_maps: break
+
+            self.tk_active_map_name.set(next_map_name)
 
         self.maps_by_engine["<active>"] = next_maps
         next_maps.pop("<active>", None)
@@ -775,6 +779,7 @@ class Refinery(tk.Tk):
         if map_name in maps:
             curr_map = self.active_map
             next_map = maps[map_name]
+            self.last_map_by_engine[self.tk_active_engine.get()] = map_name
             if curr_map is next_map:
                 return
 
