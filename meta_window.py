@@ -7,9 +7,11 @@ from supyr_struct.defs.constants import *
 class MetaWindow(TagWindow):
     widget_picker = def_halo_widget_picker
     tag_path = None
+    engine = ""
 
     def __init__(self, master, tag, *args, **kwargs):
         self.tag_path = kwargs.pop("tag_path", self.tag_path)
+        self.engine = kwargs.pop("engine", "")
         self.tag = tag
 
         # delete the tags_dir so the FieldWidgets dont create

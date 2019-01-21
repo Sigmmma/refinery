@@ -1328,7 +1328,8 @@ class RefineryActionsWindow(tk.Toplevel):
             else:
                 ext = ".INVALID"
 
-            w = MetaWindow(self.app_root, meta_tag, tag_path=tag_path + ext)
+            w = MetaWindow(self.app_root, meta_tag, engine=halo_map.engine,
+                           tag_path=tag_path + ext)
             self.destroy()
             w.focus_set()
         except Exception:
