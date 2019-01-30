@@ -714,9 +714,9 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler)
     kw.setdefault("priority", MEDIUM_PRIORITY if
-                      sub_dir else DEFAULT_PRIORITY)
+                  sub_dir else DEFAULT_PRIORITY)
 
     recursive_rename(get_tag_id(meta.lightmap_bitmaps),
                      sub_dir=sub_dir, name=name, **kw)
