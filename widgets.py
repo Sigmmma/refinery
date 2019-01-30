@@ -807,8 +807,8 @@ class RefinerySettingsWindow(tk.Toplevel):
         except Exception:
             print("Could not load window icon.")
 
-        self.geometry("400x200")
-        self.minsize(width=400, height=200)
+        self.geometry("400x250")
+        self.minsize(width=400, height=250)
         self.resizable(1, 0)
         self.title("Settings")
 
@@ -838,8 +838,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "rename_duplicates_in_scnr", "decode_adpcm",
                      "bitmap_extract_format", "bitmap_extract_keep_alpha",
                      "generate_comp_verts", "generate_uncomp_verts",
-                     "fix_tag_classes", "use_hashcaches", "use_heuristics",
-                     "autoload_resources", "extract_cheape",
+                     "fix_tag_classes", "autoload_resources", "extract_cheape",
+                     "use_hashcaches", "use_heuristics", "rename_cached_tags",
                      "show_all_fields", "edit_all_fields",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
@@ -930,6 +930,10 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.scrape_tag_paths_from_scripts_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Scrape tag paths from scenario scripts",
             variable=self.scrape_tag_paths_from_scripts)
+        self.rename_cached_tags_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text=("Rename cached tags using tag paths in\n"
+                                        "bitmaps/loc/sounds resource maps"),
+            variable=self.rename_cached_tags)
         self.limit_tag_path_lengths_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Limit tag paths to 254 characters (tool.exe limitation)",
             variable=self.limit_tag_path_lengths)
@@ -937,7 +941,7 @@ class RefinerySettingsWindow(tk.Toplevel):
             self.deprotect_frame, text="Use shallow ui_widget_definition nesting",
             variable=self.shallow_ui_widget_nesting)
         self.fix_tag_index_offset_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text=("Fix tag index offset when saving\n" +
+            self.deprotect_frame, text=("Fix tag index offset when saving\n"
                                         "WARNING: Can corrupt certain maps"),
             variable=self.fix_tag_index_offset, justify='left')
 
@@ -961,7 +965,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.tabs.pack(fill="both", expand=True)
         for w in (self.tags_dir_frame, self.data_dir_frame,
                   self.tags_list_frame):
-            w.pack(padx=4, pady=2, expand=True, fill="x")
+            w.pack(padx=4, pady=2, fill="x")
 
         for w in (self.extract_from_ce_resources_cbtn, self.overwrite_cbtn,
                   self.recursive_cbtn, self.show_output_cbtn):
@@ -982,6 +986,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         for w in (self.fix_tag_classes_cbtn, self.fix_tag_index_offset_cbtn,
                   self.use_heuristics_cbtn, #self.use_hashcaches_cbtn,
                   self.valid_tag_paths_are_accurate_cbtn,
+                  self.rename_cached_tags_cbtn,
                   #self.scrape_tag_paths_from_scripts_cbtn,
                   self.limit_tag_path_lengths_cbtn,
                   self.shallow_ui_widget_nesting_cbtn,
