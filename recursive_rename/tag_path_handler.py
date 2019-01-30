@@ -120,9 +120,10 @@ class TagPathHandler():
             priority = self._def_priority
 
         tag_ref = self.get_index_ref(index)
-        if (not self.get_priority(index) < priority) or tag_ref.indexed:
+        if self.get_priority(index) > priority:
             return False
-        elif self.get_priority(index) == priority and not override:
+        elif (self.get_priority(index) == priority or
+              tag_ref.indexed) and not override:
             return False
         return True
 
