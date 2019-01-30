@@ -85,6 +85,7 @@ default_config_path = join(curr_dir, 'refinery.cfg')
 
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
 VALID_EXTRACT_MODES = frozenset(("tags", "data"))
+INF = float("inf")
 
 
 def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
@@ -151,7 +152,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (2, 0, 3)
+    version = (2, 0, 4)
 
     data_extract_window = None
     settings_window     = None
@@ -1323,7 +1324,7 @@ class Refinery(tk.Tk):
             for tag_id in range(len(tag_index_array)):
                 if not (tag_index_array[tag_id].path.lower().
                         startswith("protected")):
-                    tag_path_handler.set_priority(tag_id, float("inf"))
+                    tag_path_handler.set_priority(tag_id, INF)
 
         if self.fix_tag_classes.get() and not("stubbs" in active_map.engine or
                                               "shadowrun" in active_map.engine):
@@ -1332,9 +1333,7 @@ class Refinery(tk.Tk):
             # locate the tags to start deprotecting with
             repair = {}
             for b in tag_index_array:
-                if self.stop_processing:
-                    print("    Deprotection stopped by user.")
-                    return
+                if self.stop_processing: break
 
                 tag_id = b.id & 0xFFff
                 if tag_id == tag_index.scenario_tag_id & 0xFFff:
@@ -1353,11 +1352,13 @@ class Refinery(tk.Tk):
             repaired = {}
             tagc_i = 0
             while repair:
+                if self.stop_processing: break
                 # DEBUG
                 # print("Repairing %s tags." % len(repair))
 
                 next_repair = {}
                 for tag_id in repair:
+                    if self.stop_processing: break
                     if tag_id in repaired:
                         continue
                     tag_cls = repair[tag_id]
@@ -1365,10 +1366,6 @@ class Refinery(tk.Tk):
                         # unknown tag class
                         continue
                     repaired[tag_id] = tag_cls
-
-                    if self.stop_processing:
-                        print("    Deprotection stopped by user.")
-                        return
 
                     # DEBUG
                     # print('    %s %s' % (tag_id, tag_cls))
@@ -1403,9 +1400,7 @@ class Refinery(tk.Tk):
                 # exhausted tags to repair. try to repair tag colletions now
                 if not repair:
                     for b in tag_index_array:
-                        if self.stop_processing:
-                            print("    Deprotection stopped by user.")
-                            return
+                        if self.stop_processing: break
 
                         tag_id = b.id & 0xFFff
                         tag_cls = None
@@ -1429,7 +1424,9 @@ class Refinery(tk.Tk):
                         elif tag_cls in ("Soul", "tagc", "yelo", "gelo", "gelc"):
                             repair[tag_id] = tag_cls
 
+
             for b in tag_index_array:
+                if self.stop_processing: break
                 tag_id = b.id & 0xFFff
                 if b.class_1.enum_name in ("tag_collection",
                                            "ui_widget_collection"):
@@ -1438,10 +1435,12 @@ class Refinery(tk.Tk):
                     if set(reffed_tag_types) == set(["DeLa"]):
                         repaired[tag_id] = "Soul"
 
+
             # write the deprotected tag classes fourcc's to each
             # tag's header in the tag index in the map buffer
             index_array_offset = tag_index.tag_index_offset - map_magic
             for tag_id, tag_cls in repaired.items():
+                if self.stop_processing: break
                 tag_index_ref = tag_index_array[tag_id]
                 classes_int = int.from_bytes(class_bytes_by_fcc[tag_cls], 'little')
                 tag_index_ref.class_1.data = classes_int & 0xFFffFFff
@@ -1449,35 +1448,35 @@ class Refinery(tk.Tk):
                 tag_index_ref.class_3.data = (classes_int >> 64) & 0xFFffFFff
 
 
-            print("    Finished")
-            print("    Deprotected classes of %s of the %s total tags(%s%%)." %
-                  (len(repaired), len(tag_index_array),
-                   1000*len(repaired)//len(tag_index_array)/10))
+            if not self.stop_processing:
+                print("    Finished")
+                print("    Deprotected classes of %s of the %s total tags(%s%%)." %
+                      (len(repaired), len(tag_index_array),
+                       1000*len(repaired)//len(tag_index_array)/10))
 
 
-            print()
-            if len(repaired) != len(tag_index_array):
-                print("The deprotector could not find these tags:\n"
-                      "  (This does not mean they are protected however)\n"
-                      "  [ id,  offset,  type,  path ]\n")
-                for i in range(len(tag_index_array)):
-                    if i in repaired:
-                        continue
-                    b = tag_index_array[i]
-                    try:
-                        print("  [ %s, %s, %s, %s ]" % (
-                            i, b.meta_offset - map_magic,
-                            b.class_1.enum_name, b.path))
-                    except Exception:
-                        print("  [ %s, %s, %s ]" % (
-                            i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
                 print()
+                if len(repaired) != len(tag_index_array):
+                    print("The deprotector could not reach these tags:\n"
+                          "  (This does not mean they are protected however)\n"
+                          "  [ id,  offset,  type,  path ]\n")
+                    for i in range(len(tag_index_array)):
+                        if i in repaired:
+                            continue
+                        b = tag_index_array[i]
+                        try:
+                            print("  [ %s, %s, %s, %s ]" % (
+                                i, b.meta_offset - map_magic,
+                                b.class_1.enum_name, b.path))
+                        except Exception:
+                            print("  [ %s, %s, %s ]" % (
+                                i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
+                    print()
 
 
-        tag_classes_by_id = {}
-        for i in range(len(tag_index_array)):
-            tag_classes_by_id[i] = tag_index_array[i].class_1.\
-                                   data.to_bytes(4, "big").decode('latin-1')
+        tag_classes_by_id = {i: tag_index_array[i].class_1.data.
+                             to_bytes(4, "big").decode('latin-1')
+                             for i in range(len(tag_index_array))}
 
 
         # try to locate the Soul tag out of all the tags thought to be tagc
@@ -1485,14 +1484,11 @@ class Refinery(tk.Tk):
         map_type = map_header.map_type.enum_name
         tagc_ids_reffed_in_other_tagc = set()
         for b in tag_index_array:
+            if self.stop_processing: break
             tag_id = b.id & 0xFFff
             if b.class_1.enum_name not in ("tag_collection",
                                            "ui_widget_collection"):
                 continue
-
-            if self.stop_processing:
-                print("    Deprotection stopped by user.")
-                return
 
             reffed_tag_ids, reffed_tag_types = get_tagc_refs(
                 b.meta_offset, map_data, map_magic, tag_classes_by_id)
@@ -1503,51 +1499,76 @@ class Refinery(tk.Tk):
                     mp="ui\\shell\\multiplayer",
                     ui="ui\\shell\\main_menu"
                     ).get(map_type, b.path)
-                tag_path_handler.set_path(tag_id, tag_path, float("inf"),
-                                          True, False)
+                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
             elif reffed_tag_types == set(["devc"]):
                 tag_path_handler.set_path(
-                    tag_id, "ui\\ui_input_device_defaults", float("inf"),
-                                          True, False)
+                    tag_id, "ui\\ui_input_device_defaults", INF, True, False)
 
             if tag_id not in tagc_ids_reffed_in_other_tagc:
                 tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
 
 
-        # find out if there are any explicit scenario refs in the yelo tag
-        has_yelo_explicit_refs = False
-        for tag_id, tag_cls in tag_classes_by_id.items():
-            if tag_cls == "yelo":
-                yelo_meta = active_map.get_meta(tag_id)
-                if yelo_meta:
-                    has_yelo_explicit_refs = (
-                        yelo_meta.scenario_explicit_references.id & 0xFFff != 0xFFff)
-
-
+        # try to rename resource map tags
         for b in tag_index_array:
+            if self.stop_processing: break
+
+            tag_id = b.id & 0xFFff
+            rsrc_tag_id = b.meta_offset
+            rsrc_map = None
+            if not b.indexed:
+                continue
+            elif b.class_1.enum_name == "bitmap":
+                rsrc_map = self.active_maps.get("bitmaps")
+            elif b.class_1.enum_name == "sound":
+                rsrc_map = self.active_maps.get("sounds")
+            elif b.class_1.enum_name in ("font", "hud_message_text",
+                                         "unicode_string_list"):
+                rsrc_map = self.active_maps.get("loc")
+
+            rsrc_tag_index = getattr(rsrc_map, "orig_tag_index", ())
+            if rsrc_tag_id not in range(len(rsrc_tag_index)):
+                continue
+
+            tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
+            tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
+
+
+        # find out if there are any explicit scenario refs in the yelo tag
+        ui_all_scnr_idx = 0
+        for tag_id, tag_cls in tag_classes_by_id.items():
+            if self.stop_processing: break
+            if tag_cls != "yelo": continue
+
+            yelo_meta = active_map.get_meta(tag_id)
+            if not yelo_meta: continue
+
+            explicit_yelo_refs_id = yelo_meta.scenario_explicit_references.id & 0xFFff
+            if explicit_yelo_refs_id != 0xFFff:
+                ui_all_scnr_idx += 1
+
+
+        # rename tag collections based on what order they're found
+        # first one will will always be the yelo explicit refs(if it exists)
+        # next will be ui_tags_loaded_all_scenario_types
+        # last will be ui_tags_loaded_XXXX_scenario_type
+        for b in tag_index_array:
+            if self.stop_processing: break
             tag_id = b.id & 0xFFff
             if (tag_classes_by_id.get(tag_id) != "tagc" or
                 tag_id in tagc_ids_reffed_in_other_tagc):
                 continue
 
-            if self.stop_processing:
-                print("    Deprotection stopped by user.")
-                return
-
-            if ((tagc_i == 0 and not has_yelo_explicit_refs) or
-                (tagc_i == 1 and has_yelo_explicit_refs)):
+            if tagc_i == ui_all_scnr_idx:
                 tag_path_handler.set_path(
                     tag_id, "ui\\ui_tags_loaded_all_scenario_types",
-                    float("inf"), True, False)
-            elif ((tagc_i == 1 and not has_yelo_explicit_refs) or
-                  (tagc_i == 2 and has_yelo_explicit_refs)):
+                    INF, True, False)
+            elif tagc_i == ui_all_scnr_idx + 1:
                 tag_path = dict(
                     sp="ui\\ui_tags_loaded_solo_scenario_type",
                     mp="ui\\ui_tags_loaded_multiplayer_scenario_type",
                     ui="ui\\ui_tags_loaded_mainmenu_scenario_type"
                     ).get(map_type, b.path)
-                tag_path_handler.set_path(tag_id, tag_path, float("inf"),
-                                          True, False)
+                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
 
             tagc_i += 1
 
@@ -1593,7 +1614,6 @@ class Refinery(tk.Tk):
             b.path for b in active_map.tag_index.tag_index)
 
         print("Completed. Took %s seconds." % round(time()-start, 1))
-
     
     def _heuristics_deprotect(self, tag_path_handler):
         active_map = self.active_map
