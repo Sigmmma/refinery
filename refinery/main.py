@@ -168,7 +168,6 @@ class Refinery(tk.Tk):
     _running = False
     _initialized = False
     _display_mode = "hierarchy"
-    stop_processing = False
 
     # dictionary of all loaded map collections by their engine id strings
     maps_by_engine = None
@@ -209,6 +208,7 @@ class Refinery(tk.Tk):
         self.scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
         self.limit_tag_path_lengths = tk.IntVar(self, 1)
         self.shallow_ui_widget_nesting = tk.IntVar(self, 1)
+        self.rename_cached_tags = tk.IntVar(self, 1)
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
         self.edit_all_fields = tk.IntVar(self)
@@ -233,6 +233,7 @@ class Refinery(tk.Tk):
             scrape_tag_paths_from_scripts=self.scrape_tag_paths_from_scripts,
             limit_tag_path_lengths=self.limit_tag_path_lengths,
             shallow_ui_widget_nesting=self.shallow_ui_widget_nesting,
+            rename_cached_tags=self.rename_cached_tags,
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
@@ -360,9 +361,6 @@ class Refinery(tk.Tk):
         self.begin_button = tk.Button(
             self.map_action_frame, text="Run extraction",
             command=self.start_extraction)
-        self.cancel_button = tk.Button(
-            self.map_action_frame, text="Cancel",
-            command=self.cancel_action)
 
 
         self.add_button = tk.Button(
@@ -380,7 +378,6 @@ class Refinery(tk.Tk):
 
         # pack everything
         self.rebuild_engine_select_menu()
-        #self.cancel_button.pack(side='right', padx=4, pady=4)
         self.begin_button.pack(side='right', padx=4, pady=4)
         self.deprotect_button.pack(side='right', padx=4, pady=4)
 
@@ -486,7 +483,7 @@ class Refinery(tk.Tk):
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
                           "use_hashcaches", "use_heuristics",
                           "valid_tag_paths_are_accurate",
-                          "scrape_tag_paths_from_scripts",
+                          "scrape_tag_paths_from_scripts", "rename_cached_tags",
                           "limit_tag_path_lengths", "shallow_ui_widget_nesting"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
@@ -535,7 +532,7 @@ class Refinery(tk.Tk):
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
                           "use_hashcaches", "use_heuristics",
                           "valid_tag_paths_are_accurate",
-                          "scrape_tag_paths_from_scripts",
+                          "scrape_tag_paths_from_scripts", "rename_cached_tags",
                           "limit_tag_path_lengths", "shallow_ui_widget_nesting"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
@@ -827,8 +824,6 @@ class Refinery(tk.Tk):
 
         self.rebuild_engine_select_menu()
         if self.map_loaded: return
-
-        self.stop_processing = True
 
         self.display_map_info()
         for tree in self.tree_frames.values():
@@ -1303,7 +1298,6 @@ class Refinery(tk.Tk):
             return
 
         start = time()
-        self.stop_processing = False
 
         # get the active map AFTER saving because it WILL have changed
         active_map      = self.active_map
@@ -1333,8 +1327,6 @@ class Refinery(tk.Tk):
             # locate the tags to start deprotecting with
             repair = {}
             for b in tag_index_array:
-                if self.stop_processing: break
-
                 tag_id = b.id & 0xFFff
                 if tag_id == tag_index.scenario_tag_id & 0xFFff:
                     tag_cls = "scnr"
@@ -1352,13 +1344,11 @@ class Refinery(tk.Tk):
             repaired = {}
             tagc_i = 0
             while repair:
-                if self.stop_processing: break
                 # DEBUG
                 # print("Repairing %s tags." % len(repair))
 
                 next_repair = {}
                 for tag_id in repair:
-                    if self.stop_processing: break
                     if tag_id in repaired:
                         continue
                     tag_cls = repair[tag_id]
@@ -1400,8 +1390,6 @@ class Refinery(tk.Tk):
                 # exhausted tags to repair. try to repair tag colletions now
                 if not repair:
                     for b in tag_index_array:
-                        if self.stop_processing: break
-
                         tag_id = b.id & 0xFFff
                         tag_cls = None
                         if tag_id in repaired:
@@ -1426,7 +1414,6 @@ class Refinery(tk.Tk):
 
 
             for b in tag_index_array:
-                if self.stop_processing: break
                 tag_id = b.id & 0xFFff
                 if b.class_1.enum_name in ("tag_collection",
                                            "ui_widget_collection"):
@@ -1440,7 +1427,6 @@ class Refinery(tk.Tk):
             # tag's header in the tag index in the map buffer
             index_array_offset = tag_index.tag_index_offset - map_magic
             for tag_id, tag_cls in repaired.items():
-                if self.stop_processing: break
                 tag_index_ref = tag_index_array[tag_id]
                 classes_int = int.from_bytes(class_bytes_by_fcc[tag_cls], 'little')
                 tag_index_ref.class_1.data = classes_int & 0xFFffFFff
@@ -1448,30 +1434,29 @@ class Refinery(tk.Tk):
                 tag_index_ref.class_3.data = (classes_int >> 64) & 0xFFffFFff
 
 
-            if not self.stop_processing:
-                print("    Finished")
-                print("    Deprotected classes of %s of the %s total tags(%s%%)." %
-                      (len(repaired), len(tag_index_array),
-                       1000*len(repaired)//len(tag_index_array)/10))
+            print("    Finished")
+            print("    Deprotected classes of %s of the %s total tags(%s%%)." %
+                  (len(repaired), len(tag_index_array),
+                   1000*len(repaired)//len(tag_index_array)/10))
 
 
+            print()
+            if len(repaired) != len(tag_index_array):
+                print("The deprotector could not reach these tags:\n"
+                      "  (This does not mean they are protected however)\n"
+                      "  [ id,  offset,  type,  path ]\n")
+                for i in range(len(tag_index_array)):
+                    if i in repaired:
+                        continue
+                    b = tag_index_array[i]
+                    try:
+                        print("  [ %s, %s, %s, %s ]" % (
+                            i, b.meta_offset - map_magic,
+                            b.class_1.enum_name, b.path))
+                    except Exception:
+                        print("  [ %s, %s, %s ]" % (
+                            i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
                 print()
-                if len(repaired) != len(tag_index_array):
-                    print("The deprotector could not reach these tags:\n"
-                          "  (This does not mean they are protected however)\n"
-                          "  [ id,  offset,  type,  path ]\n")
-                    for i in range(len(tag_index_array)):
-                        if i in repaired:
-                            continue
-                        b = tag_index_array[i]
-                        try:
-                            print("  [ %s, %s, %s, %s ]" % (
-                                i, b.meta_offset - map_magic,
-                                b.class_1.enum_name, b.path))
-                        except Exception:
-                            print("  [ %s, %s, %s ]" % (
-                                i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
-                    print()
 
 
         tag_classes_by_id = {i: tag_index_array[i].class_1.data.
@@ -1484,7 +1469,6 @@ class Refinery(tk.Tk):
         map_type = map_header.map_type.enum_name
         tagc_ids_reffed_in_other_tagc = set()
         for b in tag_index_array:
-            if self.stop_processing: break
             tag_id = b.id & 0xFFff
             if b.class_1.enum_name not in ("tag_collection",
                                            "ui_widget_collection"):
@@ -1508,35 +1492,33 @@ class Refinery(tk.Tk):
                 tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
 
 
-        # try to rename resource map tags
-        for b in tag_index_array:
-            if self.stop_processing: break
+        # rename cached tags using tag paths found in resource maps
+        if self.rename_cached_tags.get():
+            for b in tag_index_array:
+                tag_id = b.id & 0xFFff
+                rsrc_tag_id = b.meta_offset
+                rsrc_map = None
+                if not b.indexed:
+                    continue
+                elif b.class_1.enum_name == "bitmap":
+                    rsrc_map = self.active_maps.get("bitmaps")
+                elif b.class_1.enum_name == "sound":
+                    rsrc_map = self.active_maps.get("sounds")
+                elif b.class_1.enum_name in ("font", "hud_message_text",
+                                             "unicode_string_list"):
+                    rsrc_map = self.active_maps.get("loc")
 
-            tag_id = b.id & 0xFFff
-            rsrc_tag_id = b.meta_offset
-            rsrc_map = None
-            if not b.indexed:
-                continue
-            elif b.class_1.enum_name == "bitmap":
-                rsrc_map = self.active_maps.get("bitmaps")
-            elif b.class_1.enum_name == "sound":
-                rsrc_map = self.active_maps.get("sounds")
-            elif b.class_1.enum_name in ("font", "hud_message_text",
-                                         "unicode_string_list"):
-                rsrc_map = self.active_maps.get("loc")
+                rsrc_tag_index = getattr(rsrc_map, "orig_tag_index", ())
+                if rsrc_tag_id not in range(len(rsrc_tag_index)):
+                    continue
 
-            rsrc_tag_index = getattr(rsrc_map, "orig_tag_index", ())
-            if rsrc_tag_id not in range(len(rsrc_tag_index)):
-                continue
-
-            tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
-            tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
+                tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
+                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
 
 
         # find out if there are any explicit scenario refs in the yelo tag
         ui_all_scnr_idx = 0
         for tag_id, tag_cls in tag_classes_by_id.items():
-            if self.stop_processing: break
             if tag_cls != "yelo": continue
 
             yelo_meta = active_map.get_meta(tag_id)
@@ -1552,7 +1534,6 @@ class Refinery(tk.Tk):
         # next will be ui_tags_loaded_all_scenario_types
         # last will be ui_tags_loaded_XXXX_scenario_type
         for b in tag_index_array:
-            if self.stop_processing: break
             tag_id = b.id & 0xFFff
             if (tag_classes_by_id.get(tag_id) != "tagc" or
                 tag_id in tagc_ids_reffed_in_other_tagc):
@@ -1571,12 +1552,6 @@ class Refinery(tk.Tk):
                 tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
 
             tagc_i += 1
-
-
-        if self.stop_processing:
-            print("    Deprotection stopped by user.")
-            return
-
 
         if self.use_hashcaches.get():
             print("Hashcaches are not implemented.")
@@ -1598,10 +1573,6 @@ class Refinery(tk.Tk):
             except Exception:
                 print(format_exc())
             print("    Finished")
-
-        if self.stop_processing:
-            print("    Deprotection stopped by user.")
-            return
 
         # calculate the maps new checksum
         map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
@@ -1641,10 +1612,6 @@ class Refinery(tk.Tk):
         sbsp_ids = []
         scnr_id = matg_id = yelo_id = None
         for i in range(len(tag_index_array)):
-            if self.stop_processing:
-                print("    Deprotection stopped by user.")
-                return
-
             tag_type = tag_index_array[i].class_1.enum_name
             if tag_type == "scenario":
                 scnr_id = i
@@ -1675,10 +1642,6 @@ class Refinery(tk.Tk):
         for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
                         soul_ids, (hudg_id, yelo_id, matg_id, scnr_id),
                         tagc_ids):
-
-            if self.stop_processing:
-                print("    Deprotection stopped by user.")
-                return
 
             for tag_id in id_list:
                 if tag_id is None:
@@ -1903,7 +1866,6 @@ class Refinery(tk.Tk):
         queue_tree = self.queue_tree.tags_tree
 
         print("Starting extraction...")
-        self.stop_processing = False
         start = time()
 
         queue_info = self.queue_tree.queue_info
@@ -1914,10 +1876,6 @@ class Refinery(tk.Tk):
 
         for iid in tuple(queue_items):
             self.update_idletasks()
-            if self.stop_processing:
-                print("Extraction stopped by user\n")
-                break
-
             try:
                 info = queue_info.get(iid)
                 if not info:
@@ -2022,9 +1980,6 @@ class Refinery(tk.Tk):
                             (tag_index_ref.path,
                              tag_index_ref.class_1.enum_name))
                         self.update()
-                        if self.stop_processing:
-                            break
-
                         tag_id = tag_index_ref.id & 0xFFff
                         if not map_magic:
                             # resource cache tag
@@ -2198,10 +2153,6 @@ class Refinery(tk.Tk):
 
         print("Extracted %s tags. Took %s seconds\n" %
               (total, round(time()-start, 1)))
-
-    def cancel_action(self, e=None):
-        if not self.map_loaded: return
-        self.stop_processing = True
 
     def reload_explorers(self):
         if not self.map_loaded: return

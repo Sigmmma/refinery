@@ -43,6 +43,7 @@ config_header = Struct("header",
         "scrape_tag_paths_from_scripts",
         "limit_tag_path_lengths",
         "shallow_ui_widget_nesting",
+        "rename_cached_tags",
         ),
     Pad(48 - 4*5),
 
