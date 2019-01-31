@@ -152,7 +152,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (2, 0, 4)
+    version = (2, 0, 5)
 
     data_extract_window = None
     settings_window     = None

@@ -416,6 +416,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
             ref_sub_dir = sub_dir + "music\\"
         elif tag_cls == "sound":
             snd_meta = halo_map.get_meta(sub_id)
+            ref_sub_dir = sub_dir + "sounds\\"
             if snd_meta is None:
                 continue
             new_ref_sub_dir, new_tag_name = get_sound_sub_dir_and_name(
@@ -2409,22 +2410,24 @@ def rename_grhi(tag_id, halo_map, tag_path_handler,
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw['priority'], kw.get("override"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
-    name = tag_path_handler.get_basename(tag_id)
+    name = "hud " + tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, tag_path_handler=tag_path_handler,
                   root_dir=root_dir, sub_dir=sub_dir + bitmaps_dir)
 
-    rename_hud_background(meta.grenade_hud_background, "hud " + name, **kw)
-    rename_hud_background(meta.total_grenades.background, "hud " + name, **kw)
+    rename_hud_background(meta.grenade_hud_background, name, **kw)
+    rename_hud_background(meta.total_grenades.background, name, **kw)
     recursive_rename(get_tag_id(meta.total_grenades.overlay_bitmap),
-                     name="hud " + name + " grenades overlay", **kw)
+                     name=name + " grenades overlay", **kw)
 
     kw.update(sub_dir=sub_dir + sounds_dir + name + "\\")
     for b in meta.warning_sounds.STEPTREE:
-        snd_name = " "
+        snd_name = ""
         for flag_name in sorted(b.latched_to.NAME_MAP):
             if b.latched_to[flag_name]:
                 snd_name += flag_name + " & "
+        if not snd_name:
+            snd_name = "unused"
         recursive_rename(get_tag_id(b.sound), name=snd_name.strip(" &"), **kw)
 
 
@@ -2440,38 +2443,38 @@ def rename_unhi(tag_id, halo_map, tag_path_handler,
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw['priority'], kw.get("override"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
-    name = tag_path_handler.get_basename(tag_id)
+    name = "hud " + tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, tag_path_handler=tag_path_handler,
-                  root_dir=root_dir, sub_dir=sub_dir + bitmaps_dir)
+              root_dir=root_dir, sub_dir=sub_dir + bitmaps_dir)
 
-    rename_hud_background(meta.unit_hud_background, "hud " + name, **kw)
-    rename_hud_background(meta.shield_panel_background, "hud " + name, **kw)
-    rename_hud_background(meta.health_panel_background, "hud " + name, **kw)
-    rename_hud_background(meta.motion_sensor_background, "hud " + name, **kw)
-    rename_hud_background(meta.motion_sensor_foreground, "hud " + name, **kw)
+    rename_hud_background(meta.unit_hud_background, name, **kw)
+    rename_hud_background(meta.shield_panel_background, name, **kw)
+    rename_hud_background(meta.health_panel_background, name, **kw)
+    rename_hud_background(meta.motion_sensor_background, name, **kw)
+    rename_hud_background(meta.motion_sensor_foreground, name, **kw)
 
     recursive_rename(get_tag_id(meta.health_panel_meter.meter_bitmap),
-                     name="hud health meter", **kw)
+                     name=name + "health meter", **kw)
     recursive_rename(get_tag_id(meta.shield_panel_meter.meter_bitmap),
-                     name="hud shield meter", **kw)
+                     name=name + "shield meter", **kw)
 
     for b in meta.auxilary_overlays.STEPTREE:
-        rename_hud_background(b.background, name,
-                              "hud flashlight meter", **kw)
+        rename_hud_background(b.background, name, "flashlight overlay", **kw)
+
+    for b in meta.auxilary_meters.STEPTREE:
+        rename_hud_background(b.background, name, "flashlight meter bg", **kw)
         recursive_rename(get_tag_id(b.meter_bitmap),
-                         name="hud flashlight meter", **kw)
-
-    for b in meta.auxilary_overlays.STEPTREE:
-        rename_hud_background(b.background, name,
-                              "hud flashlight overlay", **kw)
+                         name=name + "flashlight meter", **kw)
 
     kw.update(sub_dir=sub_dir + sounds_dir + name + "\\")
     for b in meta.warning_sounds.STEPTREE:
-        snd_name = "hud "
+        snd_name = ""
         for flag_name in sorted(b.latched_to.NAME_MAP):
             if b.latched_to[flag_name]:
                 snd_name += flag_name + " & "
+        if not snd_name:
+            snd_name = "unused"
         recursive_rename(get_tag_id(b.sound), name=snd_name.strip(" &"), **kw)
 
 
@@ -2495,28 +2498,29 @@ def rename_wphi(tag_id, halo_map, tag_path_handler,
     recursive_rename(get_tag_id(meta.child_hud),
                      name=name + ("" if name.endswith("child") else " child"),
                      **kw)
+    name = "hud " + name
 
     kw.update(sub_dir=sub_dir + bitmaps_dir)
     for b in meta.static_elements.STEPTREE:
-        rename_hud_background(b, name, "hud static elements", **kw)
+        rename_hud_background(b, name, "static elements", **kw)
 
     for b in meta.meter_elements.STEPTREE:
         recursive_rename(get_tag_id(b.meter_bitmap),
-                         name="hud " + name + " meter element", **kw)
+                         name=name + " meter element", **kw)
 
     for b in meta.crosshairs.STEPTREE:
         recursive_rename(get_tag_id(b.crosshair_bitmap),
-                         name="hud " + name + " crosshair", **kw)
+                         name=name + " crosshair", **kw)
 
     for b in meta.overlay_elements.STEPTREE:
         recursive_rename(get_tag_id(b.overlay_bitmap),
-                         name="hud " + name + " overlay", **kw)
+                         name=name + " overlay", **kw)
 
     for b in meta.screen_effect.STEPTREE:
         recursive_rename(get_tag_id(b.mask.fullscreen_mask),
-                         name="hud " + name + " fullscreen mask", **kw)
+                         name=name + " fullscreen mask", **kw)
         recursive_rename(get_tag_id(b.mask.splitscreen_mask),
-                         name="hud " + name + " splitscreen mask", **kw)
+                         name=name + " splitscreen mask", **kw)
 
 
 def rename_mply(tag_id, halo_map, tag_path_handler,
