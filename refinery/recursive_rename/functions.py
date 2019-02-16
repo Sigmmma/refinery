@@ -1859,12 +1859,12 @@ def rename_DeLa(tag_id, halo_map, tag_path_handler,
     if not name:
         name = "protected %s" % tag_id
 
-    kw["priority"] = (DEFAULT_PRIORITY if
-                      kw.get("priority", 0) < DEFAULT_PRIORITY
+    kw["priority"] = (MEDIUM_HIGH_PRIORITY if
+                      kw.get("priority", 0) < MEDIUM_HIGH_PRIORITY
                       else kw.get("priority", 0))
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw['priority'], kw.get("override"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
@@ -1882,11 +1882,11 @@ def rename_DeLa(tag_id, halo_map, tag_path_handler,
 
     kw.update(sub_dir=sub_dir + bitmaps_dir)
     recursive_rename(get_tag_id(meta.background_bitmap),
-                     name="background bitmap", **kw)
+                     name=name + " bg", **kw)
     recursive_rename(get_tag_id(meta.spinner_list.list_header_bitmap),
-                     name="list header bitmap", **kw)
+                     name=name + " header", **kw)
     recursive_rename(get_tag_id(meta.spinner_list.list_footer_bitmap),
-                     name="list footer bitmap", **kw)
+                     name=name + " footer", **kw)
 
     kw.update(sub_dir=sub_dir + name + "\\")
     recursive_rename(get_tag_id(meta.text_box.text_label_unicode_strings_list),
