@@ -686,6 +686,10 @@ def rename_hudg(tag_id, halo_map, tag_path_handler,
                      sub_dir=ui_hud_dir + bitmaps_dir,
                      name="hud msg icons", **kw)
 
+    tag_path_handler.set_path(get_tag_id(meta.hud_messages),
+                              sub_dir + "hud_messages",
+                              INF, kw.get("override"))
+
     recursive_rename(get_tag_id(meta.waypoint_parameters.arrow_bitmaps),
                      sub_dir=ui_hud_dir + bitmaps_dir + "combined\\",
                      name="hud waypoints", **kw)
