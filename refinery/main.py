@@ -18,7 +18,7 @@ from tkinter import messagebox
 from tkinter.filedialog import askopenfilename, askopenfilenames,\
      asksaveasfilename
 from traceback import format_exc
-     
+
 
 if print_startup:
     print("    Importing supyr_struct modules")
@@ -44,6 +44,7 @@ if print_startup:
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
      h3_data_extractors
+from reclaimer.hsc import get_hsc_data_block
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
@@ -212,6 +213,7 @@ class Refinery(tk.Tk):
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
         self.edit_all_fields = tk.IntVar(self)
+        self.allow_corrupt = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
         self.rename_duplicates_in_scnr = tk.IntVar(self)
         self.overwrite = tk.IntVar(self)
@@ -240,6 +242,7 @@ class Refinery(tk.Tk):
             extract_cheape=self.extract_cheape,
             show_all_fields=self.show_all_fields,
             edit_all_fields=self.edit_all_fields,
+            allow_corrupt=self.allow_corrupt,
             recursive=self.recursive,
             autoload_resources=self.autoload_resources,
             show_output=self.show_output,
@@ -474,7 +477,8 @@ class Refinery(tk.Tk):
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields", "edit_all_fields",):
+                          "show_all_fields", "edit_all_fields",
+                          "allow_corrupt",):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         self.bitmap_extract_format.set(header.bitmap_extract_format.data)
@@ -512,7 +516,7 @@ class Refinery(tk.Tk):
         paths.tags_dir.path  = self.tk_tags_dir.get()
         paths.data_dir.path  = self.tk_data_dir.get()
         paths.last_dir.path  = self.last_dir
-        
+
         flags = header.flags
         flags.display_mode.set_to(self._display_mode)
         for attr_name in ("show_output", "autoload_resources"):
@@ -523,7 +527,8 @@ class Refinery(tk.Tk):
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields", "edit_all_fields",):
+                          "show_all_fields", "edit_all_fields",
+                          "allow_corrupt"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         header.bitmap_extract_format.data = self.bitmap_extract_format.get()
@@ -1553,10 +1558,18 @@ class Refinery(tk.Tk):
 
             tagc_i += 1
 
+        if self.scrape_tag_paths_from_scripts.get():
+            print("Renaming tags using script strings...")
+            try:
+                self._script_scrape_deprotect(tag_path_handler)
+            except Exception:
+                print(format_exc())
+            print("    Finished")
+
         if self.use_hashcaches.get():
             print("Hashcaches are not implemented.")
             # print("Renaming tags using hashcaches...")
-            # print("    Finished")
+            # print("    Finished\n")
 
         if self.use_heuristics.get():
             print("Renaming tags using heuristics...")
@@ -1564,7 +1577,7 @@ class Refinery(tk.Tk):
                 self._heuristics_deprotect(tag_path_handler)
             except Exception:
                 print(format_exc())
-            print("    Finished")
+            print("    Finished\n")
 
         if self.limit_tag_path_lengths.get():
             print("Limiting tag paths to 254 characters...")
@@ -1572,7 +1585,7 @@ class Refinery(tk.Tk):
                 tag_path_handler.shorten_paths(254)
             except Exception:
                 print(format_exc())
-            print("    Finished")
+            print("    Finished\n")
 
         # calculate the maps new checksum
         map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
@@ -1585,8 +1598,33 @@ class Refinery(tk.Tk):
             b.path for b in active_map.tag_index.tag_index)
 
         print("Completed. Took %s seconds." % round(time()-start, 1))
-    
-    def _heuristics_deprotect(self, tag_path_handler):
+
+    def _script_scrape_deprotect(self, path_handler):
+        scnr_meta = self.active_map.scnr_meta
+
+        string_data = scnr_meta.script_string_data.data.decode("latin-1")
+        syntax_data = get_hsc_data_block(raw_syntax_data=scnr_meta.script_syntax_data.data)
+
+        seen = set()
+        for i in range(min(syntax_data.last_node, len(syntax_data.nodes))):
+            node = syntax_data.nodes[i]
+            # make sure the node references some kind of tag
+            if node.type not in range(24, 32):
+                continue
+
+            # make sure the tag id points to a valid tag
+            tag_id = node.data & 0xFFff
+            if tag_id in seen or path_handler.get_index_ref(tag_id) is None:
+                continue
+
+            seen.add(tag_id)
+
+            string_end = string_data.find("\x00", node.string_offset)
+            new_tag_path = string_data[node.string_offset: string_end]
+            if new_tag_path:
+                path_handler.set_path(tag_id, new_tag_path, INF, True)
+
+    def _heuristics_deprotect(self, path_handler):
         active_map = self.active_map
         tag_index_array = active_map.tag_index.tag_index
         matg_meta = active_map.matg_meta
@@ -1599,20 +1637,34 @@ class Refinery(tk.Tk):
             items_meta = active_map.get_meta(block.item_message_text.id & 0xFFff, True)
             icons_meta = active_map.get_meta(block.alternate_icon_text.id & 0xFFff, True)
 
-            if items_meta: tag_path_handler.set_item_strings(items_meta)
-            if icons_meta: tag_path_handler.set_icon_strings(icons_meta)
+            if items_meta: path_handler.set_item_strings(items_meta)
+            if icons_meta: path_handler.set_icon_strings(icons_meta)
+
+        # reset the name of each tag with a default priority and that
+        # currently resides in the tags directory root to "protected_XXXX"
+        for i in range(len(tag_index_array)):
+            if ((path_handler.get_priority(i) == path_handler.def_priority)
+                and not path_handler.get_sub_dir(i)):
+                path_handler.set_path(i, "protected_%s" % i, override=True,
+                                      print_new_name=False)
 
         vehi_ids = []
         actv_ids = []
         bipd_ids = []
-        item_ids = []
+        weap_ids = []
+        eqip_ids = []
         tagc_ids = []
         soul_ids = []
         misc_ids = []
         sbsp_ids = []
+        scen_ids = []
         scnr_id = matg_id = yelo_id = None
         for i in range(len(tag_index_array)):
             tag_type = tag_index_array[i].class_1.enum_name
+
+            if tag_type == "scenery":
+                scen_ids.append(i)
+
             if tag_type == "scenario":
                 scnr_id = i
             elif tag_type == "globals":
@@ -1625,8 +1677,10 @@ class Refinery(tk.Tk):
                 actv_ids.append(i)
             elif tag_type == "biped":
                 bipd_ids.append(i)
-            elif tag_type in ("item", "weapon", "equipment"):
-                item_ids.append(i)
+            elif tag_type == "weapon":
+                weap_ids.append(i)
+            elif tag_type == "equipment":
+                eqip_ids.append(i)
             elif tag_type == "tag_collection":
                 tagc_ids.append(i)
             elif tag_type == "ui_widget_collection":
@@ -1636,22 +1690,46 @@ class Refinery(tk.Tk):
             else:
                 misc_ids.append(i)
 
-        print("\ntag_id\tweight\ttag_path\n")
         shallow_nesting = self.shallow_ui_widget_nesting.get()
         # NOTE: These are ordered in this way to allow the most logical sorting
-        for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
-                        soul_ids, (hudg_id, yelo_id, matg_id, scnr_id),
-                        tagc_ids):
+        for id_list, list_type in (
+                (sbsp_ids, "scenario_structure_bsp"), (vehi_ids, "vehicle"),
+                (weap_ids, "weapon"), (eqip_ids, "equipment"),
+                (actv_ids, "actor_variant"), (bipd_ids, "biped"),
+                (soul_ids, "ui_widget_collection"),
+                ((hudg_id, ), "hud_globals"), ((yelo_id, ), "project_yellow"),
+                ((matg_id, ), "globals"), ((scnr_id, ), "scenario"),
+                (tagc_ids, "tag_collection")):
+            print("\nRenaming %s tags:" % list_type)
+            print("tag_id\tweight\ttag_path\n")
 
             for tag_id in id_list:
                 if tag_id is None:
                     continue
 
                 try:
-                    recursive_rename(tag_id, active_map, tag_path_handler,
+                    recursive_rename(tag_id, active_map, path_handler,
                                      shallow_ui_widget_nesting=shallow_nesting)
                 except Exception:
                     print(format_exc())
+
+        print("\nFinal actor_variant rename pass:")
+        print("tag_id\tweight\ttag_path\n")
+        for tag_id in actv_ids:
+            if tag_id is None: continue
+            try:
+                recursive_rename(tag_id, active_map, path_handler, depth=1)
+            except Exception:
+                print(format_exc())
+
+        print("\nFinal scenery rename pass:")
+        print("tag_id\tweight\ttag_path\n")
+        for tag_id in scen_ids:
+            if tag_id is None: continue
+            try:
+                recursive_rename(tag_id, active_map, path_handler, depth=0)
+            except Exception:
+                print(format_exc())
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return

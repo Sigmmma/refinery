@@ -82,7 +82,7 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
-        tags_list_path=tk.StringVar(parent)
+        tags_list_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
         )
 
     settings_vars['rename_string'].set(def_vars.pop('rename_string', ''))
@@ -807,8 +807,8 @@ class RefinerySettingsWindow(tk.Toplevel):
         except Exception:
             print("Could not load window icon.")
 
-        self.geometry("400x250")
-        self.minsize(width=400, height=250)
+        self.geometry("400x270")
+        self.minsize(width=400, height=270)
         self.resizable(1, 0)
         self.title("Settings")
 
@@ -840,7 +840,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "generate_comp_verts", "generate_uncomp_verts",
                      "fix_tag_classes", "autoload_resources", "extract_cheape",
                      "use_hashcaches", "use_heuristics", "rename_cached_tags",
-                     "show_all_fields", "edit_all_fields",
+                     "show_all_fields", "edit_all_fields", "allow_corrupt",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
                      "show_output", "fix_tag_index_offset"):
@@ -959,6 +959,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.edit_all_fields_cbtn = tk.Checkbutton(
             self.other_frame, variable=self.edit_all_fields,
             text="Allow editing all fields when viewing metadata")
+        self.allow_corrupt_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.allow_corrupt,
+            text="Allow previewing corrupt tags")
 
 
         # pack everything
@@ -987,14 +990,15 @@ class RefinerySettingsWindow(tk.Toplevel):
                   self.use_heuristics_cbtn, #self.use_hashcaches_cbtn,
                   self.valid_tag_paths_are_accurate_cbtn,
                   self.rename_cached_tags_cbtn,
-                  #self.scrape_tag_paths_from_scripts_cbtn,
+                  self.scrape_tag_paths_from_scripts_cbtn,
                   self.limit_tag_path_lengths_cbtn,
                   self.shallow_ui_widget_nesting_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
 
         for w in (self.autoload_resources_cbtn, self.extract_cheape_cbtn,
-                  self.show_all_fields_cbtn, self.edit_all_fields_cbtn,):
+                  self.show_all_fields_cbtn, self.edit_all_fields_cbtn,
+                  self.allow_corrupt_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w1, w2 in ((self.tags_dir_entry, self.tags_dir_browse_button),
@@ -1319,7 +1323,9 @@ class RefineryActionsWindow(tk.Toplevel):
                 print("Could not get map.")
                 return
 
-            meta = halo_map.get_meta(index_ref.id & 0xFFff, True)
+            meta = halo_map.get_meta(
+                index_ref.id & 0xFFff, True,
+                allow_corrupt=self.settings["allow_corrupt"].get())
             if meta is None:
                 print("Could not get meta.")
                 return

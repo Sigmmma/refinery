@@ -36,6 +36,10 @@ class TagPathHandler():
                 self._priorities[i] = self._def_priority
             i += 1
 
+    @property
+    def def_priority(self):
+        return self._def_priority
+
     def get_item_string(self, index):
         if index in range(len(self._item_strings)):
             return self._item_strings[index][: self.max_object_str_len]
