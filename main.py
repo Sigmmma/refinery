@@ -1,7 +1,3 @@
-print_startup = True  # __name__ == "__main__"
-if print_startup:
-    print("Refinery is warming up...")
-
 import mmap
 import gc
 import tkinter as tk
@@ -19,17 +15,9 @@ from tkinter.filedialog import askopenfilename, askopenfilenames,\
      asksaveasfilename
 from traceback import format_exc
 
-
-if print_startup:
-    print("    Importing supyr_struct modules")
-
 from supyr_struct.buffer import BytearrayBuffer, PeekableMmap
 from supyr_struct.defs.constants import *
 from supyr_struct.field_types import FieldType
-
-
-if print_startup:
-    print("    Importing refinery modules")
 
 
 from refinery.util import *
@@ -38,8 +26,6 @@ from refinery.widgets import QueueTree,\
      ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
 from refinery.defs.config_def import config_def
 
-if print_startup:
-    print("    Loading map definitions")
 
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
@@ -67,6 +53,8 @@ from reclaimer.meta.class_repair import class_repair_functions,\
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 
+import refinery
+
 from refinery import crc_functions
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, RefineryChecksumEditorWindow,\
@@ -74,10 +62,6 @@ from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      bitmap_file_formats
 from refinery.recursive_rename.tag_path_handler import TagPathHandler
 from refinery.recursive_rename.functions import recursive_rename
-
-
-if print_startup:
-    print("    Initializing Refinery")
 
 
 platform = sys.platform.lower()
@@ -153,7 +137,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (2, 0, 6)
+    version = refinery.__version__
 
     data_extract_window = None
     settings_window     = None
@@ -216,6 +200,7 @@ class Refinery(tk.Tk):
         self.allow_corrupt = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
         self.rename_duplicates_in_scnr = tk.IntVar(self)
+        self.use_tag_index_for_script_paths = tk.IntVar(self)
         self.overwrite = tk.IntVar(self)
         self.recursive = tk.IntVar(self)
         self.autoload_resources = tk.IntVar(self, 1)
@@ -237,6 +222,7 @@ class Refinery(tk.Tk):
             shallow_ui_widget_nesting=self.shallow_ui_widget_nesting,
             rename_cached_tags=self.rename_cached_tags,
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
+            use_tag_index_for_script_paths=self.use_tag_index_for_script_paths,
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
             extract_cheape=self.extract_cheape,
@@ -477,8 +463,8 @@ class Refinery(tk.Tk):
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields", "edit_all_fields",
-                          "allow_corrupt",):
+                          "show_all_fields", "edit_all_fields", "allow_corrupt",
+                          "use_tag_index_for_script_paths",):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         self.bitmap_extract_format.set(header.bitmap_extract_format.data)
@@ -527,8 +513,8 @@ class Refinery(tk.Tk):
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields", "edit_all_fields",
-                          "allow_corrupt"):
+                          "show_all_fields", "edit_all_fields", "allow_corrupt",
+                          "use_tag_index_for_script_paths"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         header.bitmap_extract_format.data = self.bitmap_extract_format.get()
@@ -2047,6 +2033,9 @@ class Refinery(tk.Tk):
                 generate_uncomp_verts=self.generate_uncomp_verts.get(),
                 generate_comp_verts=self.generate_comp_verts.get()
                 )
+
+            if self.use_tag_index_for_script_paths.get():
+                extract_kw["tag_paths"] = [b.path for b in tag_index_array]
 
             while tag_index_refs:
                 next_refs = []
