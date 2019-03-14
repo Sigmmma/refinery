@@ -20,6 +20,7 @@ from supyr_struct.defs.constants import *
 from supyr_struct.field_types import FieldType
 
 
+from binilla.about_window import AboutWindow
 from refinery.util import *
 from refinery.widgets import QueueTree,\
      RefinerySettingsWindow, RefineryRenameWindow,\
@@ -52,8 +53,6 @@ from reclaimer.meta.class_repair import class_repair_functions,\
      get_tagc_refs
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
-
-import refinery
 
 from refinery import crc_functions
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
@@ -154,6 +153,18 @@ class Refinery(tk.Tk):
     _initialized = False
     _display_mode = "hierarchy"
 
+    icon_filepath = ""
+
+    about_module_names = (
+        "arbytmap",
+        "binilla",
+        "mozzarilla",
+        "reclaimer",
+        "refinery",
+        "supyr_struct",
+        "threadsafe_tkinter",
+        )
+
     # dictionary of all loaded map collections by their engine id strings
     maps_by_engine = None
     last_map_by_engine = None
@@ -162,12 +173,16 @@ class Refinery(tk.Tk):
         tk.Tk.__init__(self, *args, **kwargs)
         try:
             try:
-                self.iconbitmap(join(curr_dir, 'refinery.ico'))
+                icon_filepath = join(curr_dir, 'refinery.ico')
+                self.iconbitmap(icon_filepath)
             except Exception:
-                self.iconbitmap(join(curr_dir, 'icons', 'refinery.ico'))
+                icon_filepath = join(join(curr_dir, 'icons', 'refinery.ico'))
+                self.iconbitmap(icon_filepath)
         except Exception:
+            icon_filepath = ""
             print("Could not load window icon.")
 
+        self.icon_filepath = icon_filepath
         self.title("Refinery v%s.%s.%s" % self.version)
         self.minsize(width=500, height=300)
 
@@ -188,7 +203,7 @@ class Refinery(tk.Tk):
         self.fix_tag_classes = tk.IntVar(self, 1)
         self.fix_tag_index_offset = tk.IntVar(self)
         self.use_hashcaches = tk.IntVar(self)
-        self.use_heuristics = tk.IntVar(self)
+        self.use_heuristics = tk.IntVar(self, 1)
         self.valid_tag_paths_are_accurate = tk.IntVar(self, 1)
         self.scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
         self.limit_tag_path_lengths = tk.IntVar(self, 1)
@@ -206,9 +221,9 @@ class Refinery(tk.Tk):
         self.autoload_resources = tk.IntVar(self, 1)
         self.show_output  = tk.IntVar(self, 1)
         self.decode_adpcm = tk.IntVar(self, 1)
-        self.bitmap_extract_format = tk.IntVar(self, 0)
+        self.bitmap_extract_format = tk.IntVar(self)
         self.bitmap_extract_keep_alpha = tk.IntVar(self, 1)
-        self.generate_comp_verts = tk.IntVar(self, 0)
+        self.generate_comp_verts = tk.IntVar(self)
         self.generate_uncomp_verts = tk.IntVar(self, 1)
 
         self.tk_vars = dict(
@@ -294,6 +309,8 @@ class Refinery(tk.Tk):
             label="Switch explorer mode", command=self.toggle_display_mode)
         self.menubar.add_command(
             label="Switch extract mode", command=self.toggle_extract_mode)
+        self.menubar.add_command(
+            label="About", command=self.show_about_window)
         self.config(menu=self.menubar)
 
         # fonts
@@ -2261,3 +2278,15 @@ class Refinery(tk.Tk):
         except Exception:
             print(format_exc())
         self._running = False
+
+    def show_about_window(self):
+        w = getattr(self, "about_window", None)
+        if w is not None:
+            try: w.destroy()
+            except Exception: pass
+            self.about_window = None
+
+        self.about_window = AboutWindow(self,
+                                        module_names=self.about_module_names,
+                                        iconbitmap=self.icon_filepath)
+        self.place_window_relative(self.about_window, 30, 50)
