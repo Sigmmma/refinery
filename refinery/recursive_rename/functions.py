@@ -895,11 +895,6 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
     if not sub_dir:
         sub_dir = obje_dir
 
-    # TODO: Fix this putting all scenario scenery, devices, and other
-    # objects inside the same folder without their own sub-folders.
-    # Might need to partially stay this way so we dont end up with
-    # extremely nested bipeds and actors, but its fucking up the
-    # scenery and devices folders in the scenarios folder.
     if sub_dir.lower().endswith(obje_dir):
         sub_dir += name + "\\"
 

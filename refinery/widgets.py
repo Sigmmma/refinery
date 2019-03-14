@@ -843,7 +843,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "show_all_fields", "edit_all_fields", "allow_corrupt",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
-                     "show_output", "fix_tag_index_offset"):
+                     "show_output", "fix_tag_index_offset",
+                     "use_tag_index_for_script_paths",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("tags_dir", "data_dir", "tags_list_path"):
@@ -878,7 +879,7 @@ class RefinerySettingsWindow(tk.Toplevel):
             self.tag_fixup_frame, text=(
                 "Rename duplicate camera points, cutscene\n"+
                 "flags, and recorded animations in scenario"),
-            variable=self.rename_duplicates_in_scnr)
+            variable=self.rename_duplicates_in_scnr, justify="left")
         self.generate_comp_verts_cbtn = tk.Checkbutton(
             self.tag_fixup_frame, text="Generate compressed lightmap vertices",
             variable=self.generate_comp_verts)
@@ -910,6 +911,12 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.bitmap_extract_keep_alpha_cbtn = tk.Checkbutton(
             self.bitmap_extract_frame, variable=self.bitmap_extract_keep_alpha,
             text="Preserve alpha when extracting to PNG")
+        self.use_tag_index_for_script_paths_cbtn = tk.Checkbutton(
+            self.data_extract_frame, variable=self.use_tag_index_for_script_paths,
+            text=("When extracting scripts, redirect tag references to\n"
+                  "what the tag is currently named(guarantees scripts\n"
+                  "point to a valid tag, even if you rename them)"),
+            justify="left")
         self.bitmap_extract_format_menu = ScrollMenu(
             self.bitmap_extract_frame, menu_width=10,
             options=bitmap_file_formats, variable=self.bitmap_extract_format)
@@ -933,7 +940,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.rename_cached_tags_cbtn = tk.Checkbutton(
             self.deprotect_frame, text=("Rename cached tags using tag paths in\n"
                                         "bitmaps/loc/sounds resource maps"),
-            variable=self.rename_cached_tags)
+            variable=self.rename_cached_tags, justify="left")
         self.limit_tag_path_lengths_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Limit tag paths to 254 characters (tool.exe limitation)",
             variable=self.limit_tag_path_lengths)
@@ -949,7 +956,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.autoload_resources_cbtn = tk.Checkbutton(
             self.other_frame, text=("Load resource maps automatically\n" +
                                     "when loading a non-resource map"),
-            variable=self.autoload_resources)
+            variable=self.autoload_resources, justify="left")
         self.extract_cheape_cbtn = tk.Checkbutton(
             self.other_frame, variable=self.extract_cheape,
             text="Extract cheape.map when extracting from yelo maps")
@@ -978,7 +985,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                   self.bitmap_extract_format_menu,):
             w.pack(padx=16, anchor='w')
 
-        for w in (self.decode_adpcm_cbtn, self.bitmap_extract_frame):
+        for w in (self.decode_adpcm_cbtn, self.bitmap_extract_frame,
+                  self.use_tag_index_for_script_paths_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.rename_duplicates_in_scnr_cbtn,
