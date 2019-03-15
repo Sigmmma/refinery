@@ -2286,7 +2286,7 @@ class Refinery(tk.Tk):
             except Exception: pass
             self.about_window = None
 
-        self.about_window = AboutWindow(self,
-                                        module_names=self.about_module_names,
-                                        iconbitmap=self.icon_filepath)
+        self.about_window = AboutWindow(
+            self, module_names=self.about_module_names,
+            iconbitmap=self.icon_filepath, app_name='Refinery')
         self.place_window_relative(self.about_window, 30, 50)

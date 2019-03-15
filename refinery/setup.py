@@ -33,7 +33,7 @@ setup(
         'refinery.recursive_rename',
         ],
     package_data={
-        '': ['*.txt', '*.md', '*.rst', '*.ico']
+        '': ['*.txt', '*.md', '*.rst', '*.ico', '*.png']
         },
     platforms=['POSIX', 'Windows'],
     keywords='refinery, halo',
