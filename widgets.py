@@ -473,6 +473,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
             except Exception:
                 print(format_exc())
 
+        halo_map = self.active_map
+        is_h1_rsrc_map = (halo_map.is_resource and halo_map.engine in (
+            "halo1pcdemo", "halo1pc", "halo1ce", "halo1yelo"))
         for index_ref in sorted_index_refs:
             tag_path, b = index_ref
             if is_reserved_tag(b): continue
@@ -483,19 +486,19 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
             tag_name = basename(tag_path)
             tag_id = b.id & 0xFFff
-            pointer_converter = self.active_map.map_pointer_converter
-            if hasattr(self.active_map, "bsp_pointer_converters"):
-                pointer_converter = self.active_map.bsp_pointer_converters.get(
+            pointer_converter = halo_map.map_pointer_converter
+            if hasattr(halo_map, "bsp_pointer_converters"):
+                pointer_converter = halo_map.bsp_pointer_converters.get(
                     tag_id, pointer_converter)
 
-            if b.indexed and pointer_converter:
+            if b.indexed and pointer_converter and not is_h1_rsrc_map:
                 pointer = "not in map"
             elif pointer_converter is not None:
                 pointer = pointer_converter.v_ptr_to_f_ptr(b.meta_offset)
             else:
                 pointer = 0
 
-            if not self.active_map.map_magic:
+            if not halo_map.map_magic:
                 # resource cache tag
                 tag_id = b.id
 
@@ -844,7 +847,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
                      "show_output", "fix_tag_index_offset",
-                     "use_tag_index_for_script_paths",):
+                     "use_tag_index_for_script_names",
+                     "use_scenario_names_for_script_names",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("tags_dir", "data_dir", "tags_list_path"):
@@ -904,18 +908,26 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         self.decode_adpcm_cbtn = tk.Checkbutton(
             self.data_extract_frame, variable=self.decode_adpcm,
-            text="Decode Xbox audio (slow)")
+            text="Decode Xbox audio")
         self.bitmap_extract_frame = tk.LabelFrame(
             self.data_extract_frame, relief="flat",
             text="Bitmap extraction format")
         self.bitmap_extract_keep_alpha_cbtn = tk.Checkbutton(
             self.bitmap_extract_frame, variable=self.bitmap_extract_keep_alpha,
             text="Preserve alpha when extracting to PNG")
-        self.use_tag_index_for_script_paths_cbtn = tk.Checkbutton(
-            self.data_extract_frame, variable=self.use_tag_index_for_script_paths,
+        self.use_tag_index_for_script_names_cbtn = tk.Checkbutton(
+            self.data_extract_frame, variable=self.use_tag_index_for_script_names,
             text=("When extracting scripts, redirect tag references to\n"
                   "what the tag is currently named(guarantees scripts\n"
                   "point to a valid tag, even if you rename them)"),
+            justify="left")
+        self.use_scenario_names_for_script_names_cbtn = tk.Checkbutton(
+            self.data_extract_frame, variable=self.use_scenario_names_for_script_names,
+            text=("When extracting scripts, extract names for encounters,\n"
+                  "command lists, scripts, cutscene titles/camera points/flags,\n"
+                  "trigger volumes, recorded animations, ai conversations,\n"
+                  "object names, device groups, and player starting profiles\n"
+                  "from the scenarios reflexives, rather than script strings."),
             justify="left")
         self.bitmap_extract_format_menu = ScrollMenu(
             self.bitmap_extract_frame, menu_width=10,
@@ -986,7 +998,8 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=16, anchor='w')
 
         for w in (self.decode_adpcm_cbtn, self.bitmap_extract_frame,
-                  self.use_tag_index_for_script_paths_cbtn):
+                  self.use_tag_index_for_script_names_cbtn,
+                  self.use_scenario_names_for_script_names_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.rename_duplicates_in_scnr_cbtn,
@@ -1416,13 +1429,12 @@ class RefineryRenameWindow(tk.Toplevel):
         tk.Toplevel.destroy(self)
 
     def rename(self, e=None):
-        MAX_LEN = 31
         new_name = self.rename_string.get()
-        if len(new_name) > MAX_LEN:
+        if len(new_name) > 31:
             messagebox.showerror(
                 "Max name length exceeded",
-                "The max length for a map is limited to %s characters.\n" %
-                MAX_LEN, parent=self)
+                "The max length for a map is limited to 31 characters.\n",
+                parent=self)
         elif is_protected_tag(new_name) or "/" in new_name or "\\" in new_name:
             messagebox.showerror(
                 "Invalid name",
