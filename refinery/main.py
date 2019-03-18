@@ -31,7 +31,8 @@ from refinery.defs.config_def import config_def
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
      h3_data_extractors
-from reclaimer.hsc import get_hsc_data_block
+from reclaimer.hsc import get_h1_scenario_script_object_type_strings,\
+     get_hsc_data_block
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
@@ -215,7 +216,8 @@ class Refinery(tk.Tk):
         self.allow_corrupt = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
         self.rename_duplicates_in_scnr = tk.IntVar(self)
-        self.use_tag_index_for_script_paths = tk.IntVar(self)
+        self.use_tag_index_for_script_names = tk.IntVar(self)
+        self.use_scenario_names_for_script_names = tk.IntVar(self)
         self.overwrite = tk.IntVar(self)
         self.recursive = tk.IntVar(self)
         self.autoload_resources = tk.IntVar(self, 1)
@@ -237,7 +239,8 @@ class Refinery(tk.Tk):
             shallow_ui_widget_nesting=self.shallow_ui_widget_nesting,
             rename_cached_tags=self.rename_cached_tags,
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
-            use_tag_index_for_script_paths=self.use_tag_index_for_script_paths,
+            use_tag_index_for_script_names=self.use_tag_index_for_script_names,
+            use_scenario_names_for_script_names=self.use_scenario_names_for_script_names,
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
             extract_cheape=self.extract_cheape,
@@ -481,7 +484,8 @@ class Refinery(tk.Tk):
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
                           "show_all_fields", "edit_all_fields", "allow_corrupt",
-                          "use_tag_index_for_script_paths",):
+                          "use_tag_index_for_script_names",
+                          "use_scenario_names_for_script_names"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         self.bitmap_extract_format.set(header.bitmap_extract_format.data)
@@ -531,7 +535,8 @@ class Refinery(tk.Tk):
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
                           "show_all_fields", "edit_all_fields", "allow_corrupt",
-                          "use_tag_index_for_script_paths"):
+                          "use_tag_index_for_script_names",
+                          "use_scenario_names_for_script_names"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         header.bitmap_extract_format.data = self.bitmap_extract_format.get()
@@ -1302,7 +1307,8 @@ class Refinery(tk.Tk):
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in self.active_map.engine else '.map')))
 
-        if not self.save_map(save_path, prompt_strings_expand=False):
+        if not self.save_map(save_path, prompt_strings_expand=False,
+                             prompt_internal_rename=False):
             return
 
         start = time()
@@ -1594,7 +1600,8 @@ class Refinery(tk.Tk):
         map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
 
         print("Saving deprotection changes to map...")
-        self.save_map(save_path, prompt_strings_expand=False)
+        self.save_map(save_path, prompt_strings_expand=False,
+                      prompt_internal_rename=False)
 
         # record the original tag_paths so we know if any were changed
         active_map.orig_tag_paths = tuple(
@@ -1764,14 +1771,20 @@ class Refinery(tk.Tk):
             print(format_exc())
         self._running = False
 
-    def save_map(self, save_path=None, engine="<active>", map_name="<active>", *,
-                 reload_window=True, meta_data_expansion=0,
-                 raw_data_expansion=0, vertex_data_expansion=0,
-                 triangle_data_expansion=0, prompt_strings_expand=True):
+    def save_map(self, save_path=None, engine="<active>", map_name="<active>",
+                 *a, **kw):
+        meta_data_expansion = kw.pop("meta_data_expansion", 0)
+        raw_data_expansion = kw.pop("raw_data_expansion", 0)
+        vertex_data_expansion = kw.pop("vertex_data_expansion", 0)
+        triangle_data_expansion = kw.pop("triangle_data_expansion", 0)
         assert meta_data_expansion     >= 0
         assert raw_data_expansion      >= 0
         assert vertex_data_expansion   >= 0
         assert triangle_data_expansion >= 0
+
+        reload_window = kw.pop("reload_window", True)
+        prompt_strings_expand = kw.pop("prompt_strings_expand", True)
+        prompt_internal_rename = kw.pop("prompt_internal_rename", True)
 
         maps = self.maps_by_engine.get(engine, {})
         halo_map = maps.get(map_name)
@@ -1788,10 +1801,21 @@ class Refinery(tk.Tk):
 
         save_dir  = dirname(save_path)
         save_path, ext = splitext(save_path)
+        new_map_name = basename(save_path)
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in halo_map.engine else '.map')))
         if not exists(save_dir):
             os.makedirs(save_dir)
+
+        if (prompt_internal_rename and len(new_map_name) < 32 and
+            halo_map.map_header.map_name.lower() != new_map_name.lower()):
+            if messagebox.askyesno(
+                    "Internal name mismatch",
+                    ("A maps internal and file names must match for Halo "
+                     "to be able to properly load them. Do you want to "
+                     "change the internal name to match its filename?"),
+                    icon='question', parent=self):
+                halo_map.map_header.map_name = new_map_name
 
         print("Saving map...")
         print("    %s" % save_path)
@@ -1852,11 +1876,11 @@ class Refinery(tk.Tk):
             # make sure the user wants to expand the map more if needed
             if strings_size > meta_data_expansion:
                 if prompt_strings_expand and not messagebox.askyesno(
-                    "Metadata size expansion required",
-                    ("Tag paths were edited, requiring the map be expanded to "
-                     "accommodate the new strings.\n\nMap must be expanded by "
-                     "%s more bytes. Allow this?") % strings_size,
-                    icon='warning', parent=self):
+                        "Tagdata size expansion required",
+                        ("Tag paths were edited. The map must be expanded to "
+                         "accommodate the new strings.\n\nMap must be expanded "
+                         "by %s more bytes. Allow this?") % strings_size,
+                        icon='warning', parent=self):
                     print("    Save cancelled")
                     if map_file is not out_file:
                         out_file.close()
@@ -1893,6 +1917,12 @@ class Refinery(tk.Tk):
             out_file.flush()
             if hasattr(out_file, "fileno"):
                 os.fsync(out_file.fileno())
+
+            # set the size of the map in the header to 0 to fix a bug where
+            # halo will leak file handles for very large maps. Also removes
+            # the map size limitation so halo can load stupid big maps.
+            if halo_map.engine in ("halo1ce", "halo1yelo"):
+                map_header.decomp_len = 0
 
             # write the map header so the calculate_ce_checksum can read it
             out_file.seek(0)
@@ -1972,11 +2002,11 @@ class Refinery(tk.Tk):
                 extract_mode   = info['extract_mode'].get()
                 tags_list_path = info['tags_list_path'].get()
                 map_name = curr_map.map_header.map_name
-                is_halo1_tag = ("halo1"  in curr_map.engine or
+                is_halo1_map = ("halo1"  in curr_map.engine or
                                 "stubbs" in curr_map.engine or
                                 "shadowrun" in curr_map.engine)
                 tags_are_extractable = bool(curr_map.tag_headers)
-                recursive &= is_halo1_tag
+                recursive &= is_halo1_map
 
                 extract_bitmap_to = info['bitmap_extract_format'].get()
                 if extract_bitmap_to not in range(len(bitmap_file_formats)):
@@ -2006,8 +2036,8 @@ class Refinery(tk.Tk):
             if last_map_name != map_name:
                 print("\nExtracting from %s" % map_name)
 
-            if self.extract_cheape and (curr_map.engine == "halo1yelo" and
-                                        map_name not in cheapes_extracted):
+            if self.extract_cheape.get() and (curr_map.engine == "halo1yelo" and
+                                              map_name not in cheapes_extracted):
                 cheapes_extracted.add(map_name)
                 filename = map_name + "_cheape.map"
 
@@ -2051,8 +2081,26 @@ class Refinery(tk.Tk):
                 generate_comp_verts=self.generate_comp_verts.get()
                 )
 
-            if self.use_tag_index_for_script_paths.get():
-                extract_kw["tag_paths"] = [b.path for b in tag_index_array]
+            extract_kw["hsc_node_strings_by_type"] = hsc_strings_by_type = {}
+            if is_halo1_map and curr_map.scnr_meta:
+                if self.use_scenario_names_for_script_names.get():
+                    hsc_strings_by_type.update(
+                        get_h1_scenario_script_object_type_strings(
+                            curr_map.scnr_meta))
+
+                if self.use_tag_index_for_script_names.get():
+                    strings = {i: tag_index_array[i].path for
+                               i in range(len(tag_index_array))}
+                    # tag reference path strings
+                    for i in range(24, 32):
+                        hsc_strings_by_type[i] = strings
+
+                    # actor type strings
+                    i = 0
+                    hsc_strings_by_type[35] = names = {}
+                    for b in curr_map.scnr_meta.bipeds_palette.STEPTREE:
+                        names[i] = b.name.filepath.split("/")[-1].split("\\")[-1]
+                        i += 1
 
             while tag_index_refs:
                 next_refs = []
@@ -2140,7 +2188,7 @@ class Refinery(tk.Tk):
                                 if not exists(dirname(abs_file_path)):
                                     os.makedirs(dirname(abs_file_path))
 
-                                if is_halo1_tag: FieldType.force_big()
+                                if is_halo1_map: FieldType.force_big()
                                 mode = 'r+b' if isfile(abs_file_path) else 'w+b'
                                 with open(abs_file_path, mode) as f:
                                     try:
