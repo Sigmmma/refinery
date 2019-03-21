@@ -151,13 +151,25 @@ class TagPathHandler():
             new_path_no_ext += "protected"
 
         if self._path_map.get(new_path_no_ext + ext, None) not in (None, index):
-            i = 1
+            paths = new_path_no_ext.split("\\")
+            path_basename = paths[-1]
+            try:
+                i = int(path_basename.split("#")[-1])
+                path_basename = "#".join(path_basename.split("#")[: -1])
+                # decided to always reset to 1 because this will make sure
+                # all final tag names don't end up stupidly high numbered
+                i = 1
+            except Exception:
+                i = 1
+
+            new_path_no_ext = "\\".join(tuple(paths[: -1]) + (path_basename,))
+
             while (self._path_map.get(
-                   "%s %s%s" % (new_path_no_ext, i, ext), None)
+                   "%s#%s%s" % (new_path_no_ext, i, ext), None)
                    not in (None, index)):
                 i += 1
 
-            new_path_no_ext += " %s" % i
+            new_path_no_ext += "#%s" % i
 
         new_path = new_path_no_ext + ext
 

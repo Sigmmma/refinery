@@ -5,6 +5,7 @@ from traceback import format_exc
 VERY_HIGH_PRIORITY = 10.0
 VEHICLE_WEAP_PRIORITY = 5.0
 HIGH_PRIORITY = 4.0
+UNIT_WEAPON_PRIORITY = 3.0
 SCNR_BSPS_PRIORITY = 2.5
 MEDIUM_HIGH_PRIORITY = 2.0
 MEDIUM_PRIORITY = 1.5
@@ -1470,6 +1471,7 @@ def rename_actv(tag_id, halo_map, tag_path_handler,
     kw.setdefault('priority', DEFAULT_PRIORITY)
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
+    orig_priority = kw["priority"]
 
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -1477,10 +1479,20 @@ def rename_actv(tag_id, halo_map, tag_path_handler,
 
     unit_id = get_tag_id(meta.unit)
     major_id = get_tag_id(meta.major_variant)
-    for sub_id in (unit_id, major_id):
+    for sub_id, name_modifier in ((unit_id, " unit"), (major_id, " major")):
         if tag_path_handler.get_priority(sub_id) > kw['priority']:
+            sub_name = tag_path_handler.get_basename(sub_id)
             sub_dir = tag_path_handler.get_sub_dir(sub_id, root_dir)
-            kw.update(override=True, priority=tag_path_handler.get_priority(sub_id))
+            new_priority = tag_path_handler.get_priority(sub_id)
+            # don't want to override infinite priority
+            kw.update(override=(new_priority < INF), priority=new_priority)
+
+            if sub_id == unit_id and sub_name.endswith(name_modifier):
+                sub_name = "".join(sub_name.split(name_modifier)[:-1])
+
+            if not sub_name.startswith("protected"):
+                name = sub_name.lower()
+
             break
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
@@ -1493,13 +1505,18 @@ def rename_actv(tag_id, halo_map, tag_path_handler,
 
     kw["override"] = True
     recursive_rename(get_tag_id(meta.actor_definition), sub_dir=sub_dir,
-                     name=name + " actor definition", **kw)
+                     name=name + " actor", **kw)
     recursive_rename(get_tag_id(meta.major_variant), sub_dir=sub_dir,
                      name=name + " major", **kw)
+
+    # don't want to tie any items to an actor_variant with infinite priority
+    if kw.get("priority", 0) > UNIT_WEAPON_PRIORITY:
+        kw["priority"] = UNIT_WEAPON_PRIORITY
+
     recursive_rename(get_tag_id(meta.ranged_combat.weapon), sub_dir=sub_dir,
                      name=name + " weapon", **kw)
     recursive_rename(get_tag_id(meta.items.equipment), sub_dir=sub_dir,
-                     name=name + " dropped item", **kw)
+                     name=name + " drop", **kw)
 
 
 def rename_flag(tag_id, halo_map, tag_path_handler,
