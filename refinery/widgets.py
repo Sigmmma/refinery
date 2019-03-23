@@ -19,6 +19,8 @@ from refinery.util import get_cwd, sanitize_path, is_protected_tag, fourcc,\
 from supyr_struct.defs.tag_def import TagDef
 from mozzarilla.tools.shared_widgets import HierarchyFrame
 
+bitmap_file_formats = ("dds", "tga", "png")
+
 
 curr_dir = get_cwd(__file__)
 no_op = lambda *a, **kw: None
@@ -74,11 +76,13 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
         show_output=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
         autoload_resources=tk.IntVar(parent), decode_adpcm=tk.IntVar(parent),
+        bitmap_extract_format=tk.IntVar(parent),
+        bitmap_extract_keep_alpha=tk.IntVar(parent),
         generate_comp_verts=tk.IntVar(parent), generate_uncomp_verts=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
-        tags_list_path=tk.StringVar(parent)
+        tags_list_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
         )
 
     settings_vars['rename_string'].set(def_vars.pop('rename_string', ''))
@@ -141,7 +145,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         if self.sort_by == "index_id":
             for index_ref in sortable_index_refs:
-                key = index_ref[1].id.tag_table_index
+                key = index_ref[1].id & 0xFFff
                 same_list = new_sorting.get(key, [])
                 same_list.append(index_ref)
                 new_sorting[key] = same_list
@@ -330,10 +334,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         for index_ref in index_refs:
             tag_cls_val = index_ref.class_1.data
-            tag_id      = index_ref.id.tag_table_index
+            tag_id      = index_ref.id & 0xFFff
             if not map_magic:
                 # resource cache tag
-                tag_id += (index_ref.id.table_index << 16)
+                tag_id = index_ref.id
             if new_cls:
                 try:
                     tag_cls_val = index_ref.class_1.get_value(new_cls)
@@ -341,7 +345,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                     new_cls = None
 
             # when renaming only one tag, the basenames COULD BE the full names
-            old_name = sanitize_path(index_ref.tag.tag_path.lower())
+            old_name = sanitize_path(index_ref.path.lower())
             new_name = old_name.replace(old_basename, new_basename, 1)
             if not old_name.startswith(old_basename):
                 # tag_path doesnt have the base_name in it
@@ -375,7 +379,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 elif tag_cls_val != sibling_index_ref.class_1.data:
                     # classes are different. no worry
                     continue
-                elif sibling_index_ref.tag.tag_path != new_name:
+                elif sibling_index_ref.path != new_name:
                     # names are different. no worry
                     continue
                 already_exists = True
@@ -386,7 +390,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 continue
 
             if rename_other_trees:
-                index_ref.tag.tag_path = new_name
+                index_ref.path = new_name
                 try:
                     old_cls = index_ref.class_1.enum_name
                 except Exception:
@@ -447,7 +451,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 else:
                     ext = ".INVALID"
 
-                tag_path = b.tag.tag_path.lower()
+                tag_path = b.path.lower()
                 if PATHDIV == "/":
                     tag_path = sanitize_path(tag_path)
                 sorted_index_refs.append((tag_path + ext, b))
@@ -469,6 +473,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
             except Exception:
                 print(format_exc())
 
+        halo_map = self.active_map
+        is_h1_rsrc_map = (halo_map.is_resource and halo_map.engine in (
+            "halo1pcdemo", "halo1pc", "halo1ce", "halo1yelo"))
         for index_ref in sorted_index_refs:
             tag_path, b = index_ref
             if is_reserved_tag(b): continue
@@ -478,19 +485,22 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 dir_path += PATHDIV
 
             tag_name = basename(tag_path)
-            tag_id = b.id.tag_table_index
-            map_magic = self.active_map.map_magic
+            tag_id = b.id & 0xFFff
+            pointer_converter = halo_map.map_pointer_converter
+            if hasattr(halo_map, "bsp_pointer_converters"):
+                pointer_converter = halo_map.bsp_pointer_converters.get(
+                    tag_id, pointer_converter)
 
-            if b.indexed and map_magic:
+            if b.indexed and pointer_converter and not is_h1_rsrc_map:
                 pointer = "not in map"
-            elif map_magic is not None:
-                pointer = b.meta_offset - map_magic
+            elif pointer_converter is not None:
+                pointer = pointer_converter.v_ptr_to_f_ptr(b.meta_offset)
             else:
                 pointer = 0
 
-            if not map_magic:
+            if not halo_map.map_magic:
                 # resource cache tag
-                tag_id += (b.id.table_index << 16)
+                tag_id = b.id
 
             try:
                 cls1 = cls2 = cls3 = ""
@@ -568,7 +578,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     tag_cls = "INVALID"
                     ext = ".INVALID"
 
-                tag_path = b.tag.tag_path.lower()
+                tag_path = b.path.lower()
                 if PATHDIV == "/":
                     tag_path = sanitize_path(tag_path)
                 sorted_index_refs.append(
@@ -596,22 +606,27 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             if is_reserved_tag(b): continue
 
             tag_path = tag_path.split(PATHDIV, 1)[1]
-            tag_id = b.id.tag_table_index
+            tag_id = b.id & 0xFFff
             map_magic = self.active_map.map_magic
             tag_cls = "INVALID"
             if b.class_1.enum_name not in BAD_CLASSES:
                 tag_cls = fourcc(b.class_1.data)
 
-            if b.indexed and map_magic:
+            pointer_converter = self.active_map.map_pointer_converter
+            if hasattr(self.active_map, "bsp_pointer_converters"):
+                pointer_converter = self.active_map.bsp_pointer_converters.get(
+                    tag_id, pointer_converter)
+
+            if b.indexed and pointer_converter:
                 pointer = "not in map"
-            elif map_magic is not None:
-                pointer = b.meta_offset - map_magic
+            elif pointer_converter is not None:
+                pointer = pointer_converter.v_ptr_to_f_ptr(b.meta_offset)
             else:
                 pointer = 0
 
-            if not map_magic:
+            if not self.active_map.map_magic:
                 # resource cache tag
-                tag_id += (b.id.table_index << 16)
+                tag_id = b.id
 
             try:
                 if not self.tags_tree.exists(tag_cls + PATHDIV):
@@ -710,7 +725,7 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
             if b.class_1.enum_name not in BAD_CLASSES:
                 tag_cls = fourcc(b.class_1.data)
 
-            tag_path = b.tag.tag_path.lower()
+            tag_path = b.path.lower()
             if PATHDIV == "/":
                 tag_path = sanitize_path(tag_path)
             sorted_index_refs.append(
@@ -795,21 +810,23 @@ class RefinerySettingsWindow(tk.Toplevel):
         except Exception:
             print("Could not load window icon.")
 
-        self.geometry("340x200")
-        self.minsize(width=340, height=200)
+        self.geometry("400x270")
+        self.minsize(width=400, height=270)
         self.resizable(1, 0)
         self.title("Settings")
 
         self.tabs = ttk.Notebook(self)
-        self.dirs_frame      = tk.Frame(self.tabs)
-        self.extract_frame   = tk.Frame(self.tabs)
-        self.data_fixing_frame = tk.Frame(self.tabs)
-        self.deprotect_frame = tk.Frame(self.tabs)
-        self.other_frame     = tk.Frame(self.tabs)
+        self.dirs_frame         = tk.Frame(self.tabs)
+        self.extract_frame      = tk.Frame(self.tabs)
+        self.data_extract_frame = tk.Frame(self.tabs)
+        self.tag_fixup_frame    = tk.Frame(self.tabs)
+        self.deprotect_frame    = tk.Frame(self.tabs)
+        self.other_frame        = tk.Frame(self.tabs)
 
         self.tabs.add(self.dirs_frame, text="Directories")
         self.tabs.add(self.extract_frame, text="Extraction")
-        self.tabs.add(self.data_fixing_frame, text="Data fixing")
+        self.tabs.add(self.data_extract_frame, text="Data extraction")
+        self.tabs.add(self.tag_fixup_frame, text="Tag fixup")
         self.tabs.add(self.deprotect_frame, text="Deprotection")
         self.tabs.add(self.other_frame, text="Other")
 
@@ -822,82 +839,21 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         for attr in ("extract_from_ce_resources", "overwrite", "recursive",
                      "rename_duplicates_in_scnr", "decode_adpcm",
+                     "bitmap_extract_format", "bitmap_extract_keep_alpha",
                      "generate_comp_verts", "generate_uncomp_verts",
-                     "fix_tag_classes", "use_hashcaches", "use_heuristics",
-                     "autoload_resources", "extract_cheape", "show_all_fields",
+                     "fix_tag_classes", "autoload_resources", "extract_cheape",
+                     "use_hashcaches", "use_heuristics", "rename_cached_tags",
+                     "show_all_fields", "edit_all_fields", "allow_corrupt",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
-                     "show_output", "fix_tag_index_offset"):
+                     "show_output", "fix_tag_index_offset",
+                     "use_tag_index_for_script_names",
+                     "use_scenario_names_for_script_names",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("tags_dir", "data_dir", "tags_list_path"):
             object.__setattr__(self, attr, settings.get(attr, tk.StringVar(self)))
 
-        self.extract_from_ce_resources_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Extract from Halo CE resource maps",
-            variable=self.extract_from_ce_resources)
-        self.overwrite_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Overwrite files(not recommended)",
-            variable=self.overwrite)
-        self.recursive_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Recursive extraction",
-            variable=settings.get("recursive", tk.IntVar(self)))
-        self.show_output_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Print extracted file names",
-            variable=self.show_output)
-
-        self.rename_duplicates_in_scnr_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, text=(
-                "Rename duplicate camera points, cutscene\n"+
-                "flags, and recorded animations in scenario"),
-            variable=self.rename_duplicates_in_scnr)
-        self.generate_comp_verts_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, text="Generate compressed lightmap vertices",
-            variable=self.generate_comp_verts)
-        self.generate_uncomp_verts_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, text="Generate uncompressed lightmap vertices",
-            variable=self.generate_uncomp_verts)
-        self.decode_adpcm_cbtn = tk.Checkbutton(
-            self.data_fixing_frame, variable=self.decode_adpcm,
-            text="Decode Xbox audio when extracting data (slow)")
-
-        self.fix_tag_classes_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Fix tag classes",
-            variable=self.fix_tag_classes)
-        self.use_hashcaches_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use hashcaches",
-            variable=self.use_hashcaches)
-        self.use_heuristics_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use heuristics",
-            variable=self.use_heuristics)
-        self.valid_tag_paths_are_accurate_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Do not rename non-protected tag paths",
-            variable=self.valid_tag_paths_are_accurate)
-        self.scrape_tag_paths_from_scripts_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Scrape tag paths from scenario scripts",
-            variable=self.scrape_tag_paths_from_scripts)
-        self.limit_tag_path_lengths_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Limit tag paths to 254 characters (tool.exe limitation)",
-            variable=self.limit_tag_path_lengths)
-        self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use shallow ui_widget_definition nesting",
-            variable=self.shallow_ui_widget_nesting)
-
-        self.fix_tag_index_offset_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text=("Fix tag index offset when saving\n" +
-                                        "WARNING: Can corrupt certain maps"),
-            variable=self.fix_tag_index_offset, justify='left')
-
-        self.autoload_resources_cbtn = tk.Checkbutton(
-            self.other_frame, text=("Load resource maps automatically\n" +
-                                    "when loading a non-resource map"),
-            variable=self.autoload_resources)
-        self.extract_cheape_cbtn = tk.Checkbutton(
-            self.other_frame, variable=self.extract_cheape,
-            text="Extract cheape.map when extracting from yelo maps")
-        self.show_all_fields_cbtn = tk.Checkbutton(
-            self.other_frame, variable=self.show_all_fields,
-            text="Show hidden fields when viewing metadata")
 
         # tags directory
         self.tags_dir_entry = tk.Entry(
@@ -922,37 +878,148 @@ class RefinerySettingsWindow(tk.Toplevel):
             self.tags_list_frame, text="Browse",
             command=self.tags_list_browse, width=6)
 
+
+        self.rename_duplicates_in_scnr_cbtn = tk.Checkbutton(
+            self.tag_fixup_frame, text=(
+                "Rename duplicate camera points, cutscene\n"+
+                "flags, and recorded animations in scenario"),
+            variable=self.rename_duplicates_in_scnr, justify="left")
+        self.generate_comp_verts_cbtn = tk.Checkbutton(
+            self.tag_fixup_frame, text="Generate compressed lightmap vertices",
+            variable=self.generate_comp_verts)
+        self.generate_uncomp_verts_cbtn = tk.Checkbutton(
+            self.tag_fixup_frame, text="Generate uncompressed lightmap vertices",
+            variable=self.generate_uncomp_verts)
+
+
+        self.extract_from_ce_resources_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Extract from Halo CE resource maps",
+            variable=self.extract_from_ce_resources)
+        self.overwrite_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Overwrite files(not recommended)",
+            variable=self.overwrite)
+        self.recursive_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Recursive extraction",
+            variable=self.recursive)
+        self.show_output_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Print extracted file names",
+            variable=self.show_output)
+
+
+        self.decode_adpcm_cbtn = tk.Checkbutton(
+            self.data_extract_frame, variable=self.decode_adpcm,
+            text="Decode Xbox audio")
+        self.bitmap_extract_frame = tk.LabelFrame(
+            self.data_extract_frame, relief="flat",
+            text="Bitmap extraction format")
+        self.bitmap_extract_keep_alpha_cbtn = tk.Checkbutton(
+            self.bitmap_extract_frame, variable=self.bitmap_extract_keep_alpha,
+            text="Preserve alpha when extracting to PNG")
+        self.use_tag_index_for_script_names_cbtn = tk.Checkbutton(
+            self.data_extract_frame, variable=self.use_tag_index_for_script_names,
+            text=("When extracting scripts, redirect tag references to\n"
+                  "what the tag is currently named(guarantees scripts\n"
+                  "point to a valid tag, even if you rename them)"),
+            justify="left")
+        self.use_scenario_names_for_script_names_cbtn = tk.Checkbutton(
+            self.data_extract_frame, variable=self.use_scenario_names_for_script_names,
+            text=("When extracting scripts, extract names for encounters,\n"
+                  "command lists, scripts, cutscene titles/camera points/flags,\n"
+                  "trigger volumes, recorded animations, ai conversations,\n"
+                  "object names, device groups, and player starting profiles\n"
+                  "from the scenarios reflexives, rather than script strings."),
+            justify="left")
+        self.bitmap_extract_format_menu = ScrollMenu(
+            self.bitmap_extract_frame, menu_width=10,
+            options=bitmap_file_formats, variable=self.bitmap_extract_format)
+
+
+        self.fix_tag_classes_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Fix tag classes",
+            variable=self.fix_tag_classes)
+        self.use_hashcaches_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Use hashcaches",
+            variable=self.use_hashcaches)
+        self.use_heuristics_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Use heuristics",
+            variable=self.use_heuristics)
+        self.valid_tag_paths_are_accurate_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Do not rename non-protected tag paths",
+            variable=self.valid_tag_paths_are_accurate)
+        self.scrape_tag_paths_from_scripts_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Scrape tag paths from scenario scripts",
+            variable=self.scrape_tag_paths_from_scripts)
+        self.rename_cached_tags_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text=("Rename cached tags using tag paths in\n"
+                                        "bitmaps/loc/sounds resource maps"),
+            variable=self.rename_cached_tags, justify="left")
+        self.limit_tag_path_lengths_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Limit tag paths to 254 characters (tool.exe limitation)",
+            variable=self.limit_tag_path_lengths)
+        self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Use shallow ui_widget_definition nesting",
+            variable=self.shallow_ui_widget_nesting)
+        self.fix_tag_index_offset_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text=("Fix tag index offset when saving\n"
+                                        "WARNING: Can corrupt certain maps"),
+            variable=self.fix_tag_index_offset, justify='left')
+
+
+        self.autoload_resources_cbtn = tk.Checkbutton(
+            self.other_frame, text=("Load resource maps automatically\n" +
+                                    "when loading a non-resource map"),
+            variable=self.autoload_resources, justify="left")
+        self.extract_cheape_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.extract_cheape,
+            text="Extract cheape.map when extracting from yelo maps")
+        self.show_all_fields_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.show_all_fields,
+            text="Show hidden fields when viewing metadata")
+        self.edit_all_fields_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.edit_all_fields,
+            text="Allow editing all fields when viewing metadata")
+        self.allow_corrupt_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.allow_corrupt,
+            text="Allow previewing corrupt tags")
+
+
         # pack everything
         self.tabs.pack(fill="both", expand=True)
-        for w in (self.dirs_frame, self.extract_frame, self.data_fixing_frame,
-                  self.deprotect_frame, self.other_frame):
-            pass#w.pack(fill="both", expand=True)
-
         for w in (self.tags_dir_frame, self.data_dir_frame,
                   self.tags_list_frame):
-            w.pack(padx=4, pady=2, expand=True, fill="x")
+            w.pack(padx=4, pady=2, fill="x")
 
         for w in (self.extract_from_ce_resources_cbtn, self.overwrite_cbtn,
                   self.recursive_cbtn, self.show_output_cbtn):
             w.pack(padx=4, anchor='w')
 
+        for w in (self.bitmap_extract_keep_alpha_cbtn,
+                  self.bitmap_extract_format_menu,):
+            w.pack(padx=16, anchor='w')
+
+        for w in (self.decode_adpcm_cbtn, self.bitmap_extract_frame,
+                  self.use_tag_index_for_script_names_cbtn,
+                  self.use_scenario_names_for_script_names_cbtn):
+            w.pack(padx=4, anchor='w')
+
         for w in (self.rename_duplicates_in_scnr_cbtn,
                   self.generate_uncomp_verts_cbtn,
-                  self.generate_comp_verts_cbtn,
-                  self.decode_adpcm_cbtn):
+                  self.generate_comp_verts_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.fix_tag_index_offset_cbtn,
                   self.use_heuristics_cbtn, #self.use_hashcaches_cbtn,
                   self.valid_tag_paths_are_accurate_cbtn,
-                  #self.scrape_tag_paths_from_scripts_cbtn,
+                  self.rename_cached_tags_cbtn,
+                  self.scrape_tag_paths_from_scripts_cbtn,
                   self.limit_tag_path_lengths_cbtn,
                   self.shallow_ui_widget_nesting_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
 
         for w in (self.autoload_resources_cbtn, self.extract_cheape_cbtn,
-                  self.show_all_fields_cbtn,):
+                  self.show_all_fields_cbtn, self.edit_all_fields_cbtn,
+                  self.allow_corrupt_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w1, w2 in ((self.tags_dir_entry, self.tags_dir_browse_button),
@@ -1277,21 +1344,24 @@ class RefineryActionsWindow(tk.Toplevel):
                 print("Could not get map.")
                 return
 
-            meta = halo_map.get_meta(index_ref.id.tag_table_index, True)
+            meta = halo_map.get_meta(
+                index_ref.id & 0xFFff, True,
+                allow_corrupt=self.settings["allow_corrupt"].get())
             if meta is None:
                 print("Could not get meta.")
                 return
 
             meta_tag = meta_tag_def.build()
             meta_tag.data.tagdata = meta
-            tag_path = index_ref.tag.tag_path
+            tag_path = index_ref.path
             meta_tag.filepath = tag_path
             if index_ref.class_1.enum_name not in BAD_CLASSES:
                 ext = ".%s" % index_ref.class_1.enum_name
             else:
                 ext = ".INVALID"
 
-            w = MetaWindow(self.app_root, meta_tag, tag_path=tag_path + ext)
+            w = MetaWindow(self.app_root, meta_tag, engine=halo_map.engine,
+                           tag_path=tag_path + ext)
             self.destroy()
             w.focus_set()
         except Exception:
@@ -1359,13 +1429,12 @@ class RefineryRenameWindow(tk.Toplevel):
         tk.Toplevel.destroy(self)
 
     def rename(self, e=None):
-        MAX_LEN = 31
         new_name = self.rename_string.get()
-        if len(new_name) > MAX_LEN:
+        if len(new_name) > 31:
             messagebox.showerror(
                 "Max name length exceeded",
-                "The max length for a map is limited to %s characters.\n" %
-                MAX_LEN, parent=self)
+                "The max length for a map is limited to 31 characters.\n",
+                parent=self)
         elif is_protected_tag(new_name) or "/" in new_name or "\\" in new_name:
             messagebox.showerror(
                 "Invalid name",
