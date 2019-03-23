@@ -137,6 +137,7 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
+    app_name = "Refinery"
     version = refinery.__version__
 
     data_extract_window = None
@@ -166,12 +167,22 @@ class Refinery(tk.Tk):
         "threadsafe_tkinter",
         )
 
+    about_messages = ()
+
     # dictionary of all loaded map collections by their engine id strings
     maps_by_engine = None
     last_map_by_engine = None
 
     def __init__(self, *args, **kwargs):
+        self.app_name = str(kwargs.pop('app_name', self.app_name))
+
         tk.Tk.__init__(self, *args, **kwargs)
+        try:
+            with open(os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
+                setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
+        except Exception:
+            pass
+
         try:
             try:
                 icon_filepath = join(curr_dir, 'refinery.ico')
@@ -184,7 +195,7 @@ class Refinery(tk.Tk):
             print("Could not load window icon.")
 
         self.icon_filepath = icon_filepath
-        self.title("Refinery v%s.%s.%s" % self.version)
+        self.title('%s v%s.%s.%s' % ((self.app_name,) + self.version))
         self.minsize(width=500, height=300)
 
         self.maps_by_engine = {}
@@ -2336,5 +2347,6 @@ class Refinery(tk.Tk):
 
         self.about_window = AboutWindow(
             self, module_names=self.about_module_names,
-            iconbitmap=self.icon_filepath, app_name='Refinery')
+            iconbitmap=self.icon_filepath, app_name=self.app_name,
+            messages=self.about_messages)
         self.place_window_relative(self.about_window, 30, 50)
