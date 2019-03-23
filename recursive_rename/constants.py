@@ -10,26 +10,28 @@ MAX_TAG_NAME_LEN = 243
 
 
 # directories inside the root_dir
-camera_dir     = "camera\\"
-characters_dir = "characters\\"
-cinematics_dir = "cinematics\\"
-devices_dir    = "devices\\"
-decals_dir     = "decals\\"
-dialog_dir     = "dialog\\"
-effects_dir    = "effects\\"
-garbage_dir    = "garbage\\"
-globals_dir    = "globals\\"
-item_coll_dir  = "item collections\\"
-levels_dir     = "levels\\"
-powerups_dir   = "powerups\\"
-rasterizer_dir = "rasterizer\\"
-scenery_dir    = "scenery\\"
-sky_dir        = "sky\\"
-sound_dir      = "sound\\"
-ui_dir         = "ui\\"
-vehicles_dir   = "vehicles\\"
-weapons_dir    = "weapons\\"
-weather_dir    = "weather\\"
+camera_dir       = "camera\\"
+characters_dir   = "characters\\"
+cinematics_dir   = "cinematics\\"
+devices_dir      = "devices\\"
+decals_dir       = "decals\\"
+dialog_dir       = "dialog\\"
+effects_dir      = "effects\\"
+garbage_dir      = "garbage\\"
+globals_dir      = "globals\\"
+item_coll_dir    = "item collections\\"
+levels_dir       = "levels\\"
+powerups_dir     = "powerups\\"
+rasterizer_dir   = "rasterizer\\"
+scenery_dir      = "scenery\\"
+sky_dir          = "sky\\"
+sound_dir        = "sound\\"
+placeholders_dir = "placeholders\\"
+sfx_emitters_dir = "sfx emitters\\"
+ui_dir           = "ui\\"
+vehicles_dir     = "vehicles\\"
+weapons_dir      = "weapons\\"
+weather_dir      = "weather\\"
 
 
 # general purpose directories used in MANY things
@@ -38,16 +40,11 @@ bitmaps_dir = "bitmaps\\"
 sounds_dir  = "sounds\\"
 shared_dir  = "shared\\"  # for anything shared between tags
 
+machines_dir       = devices_dir + "machines\\"
+controls_dir       = devices_dir + "controls\\"
+light_fixtures_dir = devices_dir + "light fixtures\\"
 
-# directories inside the levels directory
-level_bitmaps_dir = bitmaps_dir
-level_decals_dir  = decals_dir
-level_devices_dir = devices_dir
-level_music_dir   = "music\\"
-level_scenery_dir = scenery_dir
-level_shaders_dir = shaders_dir
-level_item_coll_dir = item_coll_dir
-level_weather_dir = weather_dir
+projectiles_dir = weapons_dir + "projectiles\\"
 
 # directories inside ui/hud directory
 hud_bitmaps_dir = bitmaps_dir
