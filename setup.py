@@ -7,9 +7,7 @@ except ImportError:
 
 curr_dir = dirname(__file__)
 
-#               YYYY.MM.DD
-release_date = "2018.10.23"  # DONT FORGET TO UPDATE THE VERSION IN main.py
-version = (1, 9, 1)
+import refinery
 
 try:
     try:
@@ -24,7 +22,7 @@ setup(
     name='refinery',
     description='A map extractor for games built with the Blam engine',
     long_description=long_desc,
-    version='%s.%s.%s' % version,
+    version='%s.%s.%s' % refinery.__version__,
     url='https://bitbucket.org/Moses_of_Egypt/refinery',
     author='Devin Bobadilla',
     author_email='MosesBobadilla@gmail.com',
@@ -35,7 +33,7 @@ setup(
         'refinery.recursive_rename',
         ],
     package_data={
-        '': ['*.txt', '*.md', '*.rst', '*.ico']
+        '': ['*.txt', '*.md', '*.rst', '*.ico', '*.png', 'msg.dat']
         },
     platforms=['POSIX', 'Windows'],
     keywords='refinery, halo',

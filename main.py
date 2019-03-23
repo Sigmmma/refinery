@@ -1,7 +1,3 @@
-print_startup = True  # __name__ == "__main__"
-if print_startup:
-    print("Refinery is warming up...")
-
 import mmap
 import gc
 import tkinter as tk
@@ -18,35 +14,40 @@ from tkinter import messagebox
 from tkinter.filedialog import askopenfilename, askopenfilenames,\
      asksaveasfilename
 from traceback import format_exc
-     
-
-if print_startup:
-    print("    Importing supyr_struct modules")
 
 from supyr_struct.buffer import BytearrayBuffer, PeekableMmap
 from supyr_struct.defs.constants import *
 from supyr_struct.field_types import FieldType
 
 
-if print_startup:
-    print("    Importing refinery modules")
-
-
+from binilla.about_window import AboutWindow
 from refinery.util import *
 from refinery.widgets import QueueTree,\
      RefinerySettingsWindow, RefineryRenameWindow,\
      ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
 from refinery.defs.config_def import config_def
 
-if print_startup:
-    print("    Loading map definitions")
 
-from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors
-from reclaimer.meta.objs.halo1_map import Halo1Map
-from reclaimer.meta.objs.halo1_rsrc_map import Halo1RsrcMap
-from reclaimer.meta.objs.halo2_map import Halo2Map
-from reclaimer.meta.objs.stubbs_map import StubbsMap
-from reclaimer.meta.objs.shadowrun_map import ShadowrunMap
+from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
+from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
+     h3_data_extractors
+from reclaimer.hsc import get_h1_scenario_script_object_type_strings,\
+     get_hsc_data_block
+from reclaimer.meta.wrappers.halo1_map import Halo1Map
+from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
+from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
+from reclaimer.meta.wrappers.halo2_map import Halo2Map
+from reclaimer.meta.wrappers.halo3_map import Halo3Map
+from reclaimer.meta.wrappers.halo3_beta_map import Halo3BetaMap
+from reclaimer.meta.wrappers.halo_reach_map import HaloReachMap
+from reclaimer.meta.wrappers.halo_reach_beta_map import HaloReachBetaMap
+from reclaimer.meta.wrappers.halo3_odst_map import Halo3OdstMap
+from reclaimer.meta.wrappers.halo4_map import Halo4Map
+from reclaimer.meta.wrappers.halo4_beta_map import Halo4BetaMap
+from reclaimer.meta.wrappers.halo5_map import Halo5Map
+from reclaimer.meta.wrappers.stubbs_map import StubbsMap
+from reclaimer.meta.wrappers.shadowrun_map import ShadowrunMap
+
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
      get_tag_index
 from reclaimer.meta.class_repair import class_repair_functions,\
@@ -57,13 +58,10 @@ from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 from refinery import crc_functions
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, RefineryChecksumEditorWindow,\
-     ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
+     ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree,\
+     bitmap_file_formats
 from refinery.recursive_rename.tag_path_handler import TagPathHandler
 from refinery.recursive_rename.functions import recursive_rename
-
-
-if print_startup:
-    print("    Initializing Refinery")
 
 
 platform = sys.platform.lower()
@@ -72,6 +70,7 @@ default_config_path = join(curr_dir, 'refinery.cfg')
 
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
 VALID_EXTRACT_MODES = frozenset(("tags", "data"))
+INF = float("inf")
 
 
 def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
@@ -110,7 +109,8 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
                                       triangle_data_expansion)
     halo_map.map_magic                 -= meta_ptr_diff
     map_header.tag_index_header_offset += meta_ptr_diff
-    map_header.tag_index_meta_len = map_end - map_header.tag_index_header_offset
+    map_header.decomp_len = map_end
+    map_header.tag_data_size = map_end - map_header.tag_index_header_offset
 
     # adjust rawdata pointers in various tags if the index header moved
     if meta_ptr_diff:
@@ -118,7 +118,7 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
             func = rawdata_ref_move_functions.get(fourcc(ref.class_1.data))
             if func is None or ref.indexed:
                 continue
-            func(ref.id.tag_table_index, tag_index_array, map_file,
+            func(ref.id & 0xFFff, tag_index_array, map_file,
                  halo_map.map_magic, halo_map.engine, diffs_by_offsets)
 
     map_file.flush()
@@ -126,6 +126,7 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
 
 
 class Refinery(tk.Tk):
+    tk_active_engine = None
     tk_active_map_name = None
     tk_map_path = None
     tk_tags_dir = None
@@ -136,7 +137,8 @@ class Refinery(tk.Tk):
     config_file = None
 
     config_version = 2
-    version = (1, 9, 1)
+    app_name = "Refinery"
+    version = refinery.__version__
 
     data_extract_window = None
     settings_window     = None
@@ -152,29 +154,57 @@ class Refinery(tk.Tk):
     _running = False
     _initialized = False
     _display_mode = "hierarchy"
-    stop_processing = False
 
-    # dictionary of all loaded maps by their names
-    maps = None
+    icon_filepath = ""
+
+    about_module_names = (
+        "arbytmap",
+        "binilla",
+        "mozzarilla",
+        "reclaimer",
+        "refinery",
+        "supyr_struct",
+        "threadsafe_tkinter",
+        )
+
+    about_messages = ()
+
+    # dictionary of all loaded map collections by their engine id strings
+    maps_by_engine = None
+    last_map_by_engine = None
 
     def __init__(self, *args, **kwargs):
+        self.app_name = str(kwargs.pop('app_name', self.app_name))
+
         tk.Tk.__init__(self, *args, **kwargs)
         try:
-            try:
-                self.iconbitmap(join(curr_dir, 'refinery.ico'))
-            except Exception:
-                self.iconbitmap(join(curr_dir, 'icons', 'refinery.ico'))
+            with open(os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
+                setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
         except Exception:
+            pass
+
+        try:
+            try:
+                icon_filepath = join(curr_dir, 'refinery.ico')
+                self.iconbitmap(icon_filepath)
+            except Exception:
+                icon_filepath = join(join(curr_dir, 'icons', 'refinery.ico'))
+                self.iconbitmap(icon_filepath)
+        except Exception:
+            icon_filepath = ""
             print("Could not load window icon.")
 
-        self.title("Refinery v%s.%s.%s" % self.version)
+        self.icon_filepath = icon_filepath
+        self.title('%s v%s.%s.%s' % ((self.app_name,) + self.version))
         self.minsize(width=500, height=300)
 
-        self.maps = {}
+        self.maps_by_engine = {}
+        self.last_map_by_engine = {}
 
         # make the tkinter variables
         self.tk_map_path = tk.StringVar(self)
         self.tk_active_map_name = tk.StringVar(self)
+        self.tk_active_engine = tk.StringVar(self)
         self.tk_tags_dir = tk.StringVar(
             self, join(curr_dir, "tags", ""))
         self.tk_data_dir = tk.StringVar(
@@ -185,21 +215,28 @@ class Refinery(tk.Tk):
         self.fix_tag_classes = tk.IntVar(self, 1)
         self.fix_tag_index_offset = tk.IntVar(self)
         self.use_hashcaches = tk.IntVar(self)
-        self.use_heuristics = tk.IntVar(self)
+        self.use_heuristics = tk.IntVar(self, 1)
         self.valid_tag_paths_are_accurate = tk.IntVar(self, 1)
         self.scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
         self.limit_tag_path_lengths = tk.IntVar(self, 1)
         self.shallow_ui_widget_nesting = tk.IntVar(self, 1)
+        self.rename_cached_tags = tk.IntVar(self, 1)
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
+        self.edit_all_fields = tk.IntVar(self)
+        self.allow_corrupt = tk.IntVar(self)
         self.extract_from_ce_resources = tk.IntVar(self, 1)
         self.rename_duplicates_in_scnr = tk.IntVar(self)
+        self.use_tag_index_for_script_names = tk.IntVar(self)
+        self.use_scenario_names_for_script_names = tk.IntVar(self)
         self.overwrite = tk.IntVar(self)
         self.recursive = tk.IntVar(self)
         self.autoload_resources = tk.IntVar(self, 1)
         self.show_output  = tk.IntVar(self, 1)
         self.decode_adpcm = tk.IntVar(self, 1)
-        self.generate_comp_verts = tk.IntVar(self, 0)
+        self.bitmap_extract_format = tk.IntVar(self)
+        self.bitmap_extract_keep_alpha = tk.IntVar(self, 1)
+        self.generate_comp_verts = tk.IntVar(self)
         self.generate_uncomp_verts = tk.IntVar(self, 1)
 
         self.tk_vars = dict(
@@ -211,11 +248,16 @@ class Refinery(tk.Tk):
             scrape_tag_paths_from_scripts=self.scrape_tag_paths_from_scripts,
             limit_tag_path_lengths=self.limit_tag_path_lengths,
             shallow_ui_widget_nesting=self.shallow_ui_widget_nesting,
+            rename_cached_tags=self.rename_cached_tags,
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
+            use_tag_index_for_script_names=self.use_tag_index_for_script_names,
+            use_scenario_names_for_script_names=self.use_scenario_names_for_script_names,
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
             extract_cheape=self.extract_cheape,
             show_all_fields=self.show_all_fields,
+            edit_all_fields=self.edit_all_fields,
+            allow_corrupt=self.allow_corrupt,
             recursive=self.recursive,
             autoload_resources=self.autoload_resources,
             show_output=self.show_output,
@@ -224,6 +266,8 @@ class Refinery(tk.Tk):
             tags_list_path=self.tags_list_path,
             extract_mode=self.extract_mode,
             decode_adpcm=self.decode_adpcm,
+            bitmap_extract_format=self.bitmap_extract_format,
+            bitmap_extract_keep_alpha=self.bitmap_extract_keep_alpha,
             generate_comp_verts=self.generate_comp_verts,
             generate_uncomp_verts=self.generate_uncomp_verts,
             )
@@ -253,11 +297,14 @@ class Refinery(tk.Tk):
             label="Unload active map",
             command=lambda s=self: s.unload_maps_clicked(None))
         self.file_menu.add_command(
-            label="Unload all maps",
-            command=lambda s=self: s.unload_maps_clicked(False, None))
+            label="Unload all non-resource maps",
+            command=lambda s=self: s.unload_maps_clicked(False, ("<active>",), None))
         self.file_menu.add_command(
-            label="Unload resource maps",
-            command=lambda s=self: s.unload_maps_clicked(True, None))
+            label="Unload all resource maps",
+            command=lambda s=self: s.unload_maps_clicked(True, ("<active>",), None))
+        self.file_menu.add_command(
+            label="Unload all maps",
+            command=lambda s=self: s.unload_maps_clicked(None, None, None))
         self.file_menu.add_separator()
         self.file_menu.add_command(
             label="Save map as", command=self.save_map_as)
@@ -276,6 +323,8 @@ class Refinery(tk.Tk):
             label="Switch explorer mode", command=self.toggle_display_mode)
         self.menubar.add_command(
             label="Switch extract mode", command=self.toggle_extract_mode)
+        self.menubar.add_command(
+            label="About", command=self.show_about_window)
         self.config(menu=self.menubar)
 
         # fonts
@@ -332,9 +381,6 @@ class Refinery(tk.Tk):
         self.begin_button = tk.Button(
             self.map_action_frame, text="Run extraction",
             command=self.start_extraction)
-        self.cancel_button = tk.Button(
-            self.map_action_frame, text="Cancel",
-            command=self.cancel_action)
 
 
         self.add_button = tk.Button(
@@ -351,8 +397,7 @@ class Refinery(tk.Tk):
             command=self.queue_del_all)
 
         # pack everything
-        self.rebuild_map_select_menu()
-        #self.cancel_button.pack(side='right', padx=4, pady=4)
+        self.rebuild_engine_select_menu()
         self.begin_button.pack(side='right', padx=4, pady=4)
         self.deprotect_button.pack(side='right', padx=4, pady=4)
 
@@ -394,8 +439,12 @@ class Refinery(tk.Tk):
         return self.tk_tags_dir.get()
 
     @property
+    def active_maps(self):
+        return self.maps_by_engine.get("<active>", {})
+
+    @property
     def active_map(self):
-        return self.maps.get("active")
+        return self.active_maps.get("<active>")
 
     def load_config(self, filepath=None):
         if filepath is None:
@@ -445,14 +494,18 @@ class Refinery(tk.Tk):
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields",):
+                          "show_all_fields", "edit_all_fields", "allow_corrupt",
+                          "use_tag_index_for_script_names",
+                          "use_scenario_names_for_script_names"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
+        self.bitmap_extract_format.set(header.bitmap_extract_format.data)
+        self.bitmap_extract_keep_alpha.set(bool(header.bitmap_extract_flags.keep_alpha))
         flags = header.deprotection_flags
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
                           "use_hashcaches", "use_heuristics",
                           "valid_tag_paths_are_accurate",
-                          "scrape_tag_paths_from_scripts",
+                          "scrape_tag_paths_from_scripts", "rename_cached_tags",
                           "limit_tag_path_lengths", "shallow_ui_widget_nesting"):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
@@ -481,7 +534,7 @@ class Refinery(tk.Tk):
         paths.tags_dir.path  = self.tk_tags_dir.get()
         paths.data_dir.path  = self.tk_data_dir.get()
         paths.last_dir.path  = self.last_dir
-        
+
         flags = header.flags
         flags.display_mode.set_to(self._display_mode)
         for attr_name in ("show_output", "autoload_resources"):
@@ -492,14 +545,18 @@ class Refinery(tk.Tk):
                           "extract_from_ce_resources", "recursive",
                           "rename_duplicates_in_scnr", "decode_adpcm",
                           "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields",):
+                          "show_all_fields", "edit_all_fields", "allow_corrupt",
+                          "use_tag_index_for_script_names",
+                          "use_scenario_names_for_script_names"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
+        header.bitmap_extract_format.data = self.bitmap_extract_format.get()
+        header.bitmap_extract_flags.keep_alpha = self.bitmap_extract_keep_alpha.get()
         flags = header.deprotection_flags
         for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
                           "use_hashcaches", "use_heuristics",
                           "valid_tag_paths_are_accurate",
-                          "scrape_tag_paths_from_scripts",
+                          "scrape_tag_paths_from_scripts", "rename_cached_tags",
                           "limit_tag_path_lengths", "shallow_ui_widget_nesting"):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
@@ -591,6 +648,8 @@ class Refinery(tk.Tk):
                 valid_classes = h1_data_extractors.keys()
             elif "halo2" in engine:
                 valid_classes = h2_data_extractors.keys()
+            elif "halo3" in engine:
+                valid_classes = h3_data_extractors.keys()
             else:
                 return
 
@@ -647,7 +706,7 @@ class Refinery(tk.Tk):
 
     def destroy(self, e=None):
         self._running = False
-        self.unload_maps(None, None)
+        self.unload_maps(None, None, None)
         FieldType.force_normal()
         try:
             self.update_config()
@@ -702,57 +761,93 @@ class Refinery(tk.Tk):
 
         self.queue_tree.remove_items()
 
+    def set_active_engine(self, e=None):
+        engine_name = self.tk_active_engine.get()
+        if not (engine_name and self.maps_by_engine):
+            self.tk_active_engine.set("")
+            return
+
+        curr_maps = self.active_maps
+        if not self.maps_by_engine.get(engine_name):
+            self.maps_by_engine[engine_name] = {}
+
+        next_maps = self.maps_by_engine[engine_name]
+        if curr_maps is next_maps:
+            # selected same engine. nothing to change
+            return
+        elif curr_maps and next_maps:
+            # selected a different engine and both were valid.
+            # select a new map to set as active
+            next_map_name = self.last_map_by_engine.get(engine_name, "")
+            if next_map_name not in next_maps:
+                next_map_name = ""
+                for next_map_name in next_maps: break
+
+            self.tk_active_map_name.set(next_map_name)
+
+        self.maps_by_engine["<active>"] = next_maps
+        next_maps.pop("<active>", None)
+        curr_maps.pop("<active>", None)
+        self.rebuild_map_select_menu()
+        self.set_active_map()
+
     def set_active_map(self, e=None):
         map_name = self.tk_active_map_name.get()
-        if not self.maps:
+        maps = self.active_maps
+        if not (map_name and maps):
             self.tk_active_map_name.set("")
             return
 
-        if map_name in self.maps:
+        if map_name in maps:
             curr_map = self.active_map
-            next_map = self.maps[map_name]
+            next_map = maps[map_name]
+            self.last_map_by_engine[self.tk_active_engine.get()] = map_name
             if curr_map is next_map:
                 return
-            elif curr_map is not None and curr_map not in self.maps.values():
-                curr_map.unload(False)
 
             self.tk_map_path.set(next_map.filepath)
-            self.maps["active"] = next_map
+            maps["<active>"] = next_map
             self.display_map_info()
             self.reload_explorers()
         else:
             print('"%s" is not loaded.' % map_name)
 
-    def unload_maps_clicked(self, map_type=False, maps_to_unload=("active", )):
+    def unload_maps_clicked(self, map_type=False, engines_to_unload=("<active>", ),
+                            maps_to_unload=("<active>", )):
         if self._running:
             return
         self._running = True
 
         try:
-            self.unload_maps(map_type, maps_to_unload)
+            self.unload_maps(map_type, engines_to_unload, maps_to_unload)
         except Exception:
             print(format_exc())
         self._running = False
 
-    def unload_maps(self, map_type=False, maps_to_unload=("active", )):
-        if maps_to_unload is None:
-            maps_to_unload = tuple(self.maps.keys())
+    def unload_maps(self, map_type=False, engines_to_unload=("<active>", ),
+                    maps_to_unload=("<active>", )):
+        if engines_to_unload is None:
+            engines_to_unload = tuple(self.maps_by_engine.keys())
 
-        active_map = self.active_map
-        for map_name in maps_to_unload:
-            try:
-                curr_map = self.maps[map_name]
-                if map_type is None or map_type == curr_map.is_resource:
-                    self.maps[map_name].unload_map(False)
-                    if curr_map is active_map:
-                        self.tk_active_map_name.set("")
-            except Exception:
-                pass
+        for engine in engines_to_unload:
+            maps = self.maps_by_engine.get(engine, {})
+            map_names = maps_to_unload
+            if map_names is None:
+                map_names = tuple(maps.keys())
 
-        self.rebuild_map_select_menu()
+            active_map = self.active_map
+            for map_name in map_names:
+                try:
+                    curr_map = maps[map_name]
+                    if map_type is None or map_type == curr_map.is_resource:
+                        maps[map_name].unload_map(False)
+                        if curr_map is active_map:
+                            self.tk_active_map_name.set("")
+                except Exception:
+                    pass
+
+        self.rebuild_engine_select_menu()
         if self.map_loaded: return
-
-        self.stop_processing = True
 
         self.display_map_info()
         for tree in self.tree_frames.values():
@@ -773,7 +868,7 @@ class Refinery(tk.Tk):
             print("Loading resource maps for: %s" % halo_map.map_header.map_name)
             self.update()
             halo_map.load_all_resource_maps()
-            self.rebuild_map_select_menu()
+            self.rebuild_engine_select_menu()
             print("    Finished")
         except Exception:
             print(format_exc())
@@ -805,13 +900,20 @@ class Refinery(tk.Tk):
                     engine     = get_map_version(map_header)
                     comp_data.close()
 
+                    if engine is None and head_sig in (1, 2, 3):
+                        # gotta do some hacky shit to figure out this engine
+                        rsrc_map = Halo1RsrcMap({})
+                        rsrc_map.load_map(map_path)
+                        engine = rsrc_map.engine
+
+                maps = self.maps_by_engine.get(engine, {})
+
                 if map_header is None:
                     map_name = {1:"bitmaps", 2:"sounds", 3:"loc"}.get(head_sig)
                 else:
                     map_name = map_header.map_name
 
-                do_load = (self.maps.get(map_name) is None or
-                           not ask_close_open)
+                do_load = (maps.get(map_name) is None or not ask_close_open)
 
                 if not do_load:
                     do_load = messagebox.askyesno(
@@ -820,19 +922,21 @@ class Refinery(tk.Tk):
                          "Close that map and load this one instead?") % map_name,
                         icon='warning', parent=self)
 
-                if not do_load:
+                if not do_load or engine is None:
                     print("    Skipped")
                     continue
-                
-                if self.active_map is self.maps.get(map_name):
+
+                maps = self.maps_by_engine.setdefault(engine, {})
+
+                if self.active_map is maps.get(map_name):
                     will_be_active = True
                     new_active_map = map_name
 
-                if self.maps.get(map_name) is not None:
-                    self.unload_maps(None, (map_name, ))
+                if maps.get(map_name) is not None:
+                    self.unload_maps(None, (engine, ), (map_name, ))
 
                 if head_sig in (1, 2, 3):
-                    new_map = Halo1RsrcMap(self.maps)
+                    new_map = Halo1RsrcMap(maps)
                 elif map_header is None:
                     print("    Could not read map header.")
                     continue
@@ -840,13 +944,31 @@ class Refinery(tk.Tk):
                     print("    Could not determine map version.")
                     continue
                 elif "stubbs" in engine:
-                    new_map = StubbsMap(self.maps)
+                    new_map = StubbsMap(maps)
                 elif "shadowrun" in engine:
-                    new_map = ShadowrunMap(self.maps)
-                elif "halo1" in engine:
-                    new_map = Halo1Map(self.maps)
-                elif "halo2" in engine:
-                    new_map = Halo2Map(self.maps)
+                    new_map = ShadowrunMap(maps)
+                elif "halo1anni" in engine:
+                    new_map = Halo1AnniMap(maps)
+                elif engine in GEN_1_HALO_ENGINES:
+                    new_map = Halo1Map(maps)
+                elif engine in GEN_2_ENGINES:
+                    new_map = Halo2Map(maps)
+                elif engine == "halo3":
+                    new_map = Halo3Map(maps)
+                elif engine == "halo3beta":
+                    new_map = Halo3BetaMap(maps)
+                elif engine == "haloreach":
+                    new_map = HaloReachMap(maps)
+                elif engine == "haloreachbeta":
+                    new_map = HaloReachBetaMap(maps)
+                elif engine == "halo3odst":
+                    new_map = Halo3OdstMap(maps)
+                elif engine == "halo4":
+                    new_map = Halo4Map(maps)
+                elif engine == "halo4beta":
+                    new_map = Halo4BetaMap(maps)
+                elif engine == "halo5":
+                    new_map = Halo5Map(maps)
                 else:
                     print("    Cant let you do that.")
                     map_header.pprint(printout=True)
@@ -857,13 +979,14 @@ class Refinery(tk.Tk):
                                  autoload_resources=self.autoload_resources.get())
                 if will_be_active and not new_active_map:
                     new_active_map = map_name
+                    self.tk_active_engine.set(engine)
                     self.tk_active_map_name.set(map_name)
                 print("    Finished")
             except Exception:
                 try:
                     self.display_map_info(
                         "Could not load map.\nCheck console window for error.")
-                    self.unload_maps()
+                    self.unload_maps(None)
                 except Exception:
                     print(format_exc())
                 print(format_exc())
@@ -874,18 +997,41 @@ class Refinery(tk.Tk):
                       "Refinery opens maps in read-write mode in case edits are\n"
                       "made, and opening in this mode fails on read-only files.\n")
 
-        self.rebuild_map_select_menu()
+        self.rebuild_engine_select_menu()
         if will_be_active and new_active_map:
-            self.maps.pop("active", None)  # self.set_active_map must set this
+            # self.set_active_map must set this
+            maps.pop("<active>", None)
+            # self.tk_active_engine must set this
+            self.maps_by_engine.pop("<active>", None)
+            self.tk_active_engine.set(engine)
             self.tk_active_map_name.set(new_active_map)
-            self.set_active_map()
+            self.set_active_engine()
+
+    def rebuild_engine_select_menu(self):
+        if getattr(self, "engine_select_menu", None) is not None:
+            self.engine_select_menu.destroy()
+
+        options = dict(self.maps_by_engine)
+        options.pop("<active>", None)
+        if options:
+            options = sorted(options.keys())
+        else:
+            options = ("Loaded engines", )
+
+        self.engine_select_menu = tk.OptionMenu(
+            self.map_action_frame, self.tk_active_engine, *options,
+            command=self.set_active_engine)
+        self.engine_select_menu.config(anchor="w", width=15)
+        self.engine_select_menu.pack(side='left', padx=4, pady=4,
+                                     fill='x', expand=False)
+        self.rebuild_map_select_menu()
 
     def rebuild_map_select_menu(self):
         if getattr(self, "map_select_menu", None) is not None:
             self.map_select_menu.destroy()
 
-        options = dict(self.maps)
-        options.pop("active", None)
+        options = dict(self.active_maps)
+        options.pop("<active>", None)
         if options:
             options = sorted(options.keys())
         else:
@@ -927,15 +1073,15 @@ class Refinery(tk.Tk):
                     decomp_size = "unknown"
 
                 if not active_map.is_compressed:
-                    decomp_size += "(uncompressed)"
+                    decomp_size += "(is already uncompressed)"
 
                 map_type = header.map_type.enum_name
-                if active_map.is_resource: map_type = "resource cache"
-                elif map_type == "sp":     map_type = "singleplayer"
+                if map_type == "sp":       map_type = "singleplayer"
                 elif map_type == "mp":     map_type = "multiplayer"
                 elif map_type == "ui":     map_type = "mainmenu"
                 elif map_type == "shared":   map_type = "shared"
                 elif map_type == "sharedsp": map_type = "shared single player"
+                elif active_map.is_resource: map_type = "resource cache"
                 elif "INVALID" in map_type:  map_type = "unknown"
 
                 string += ((
@@ -963,7 +1109,7 @@ class Refinery(tk.Tk):
                         "    scenario tag id     == %s\n" +
                         "    index array pointer == %s\n") %
                     (orig_index.tag_count,
-                     orig_index.scenario_tag_id[0], tag_index_offset))
+                     orig_index.scenario_tag_id & 0xFFff, tag_index_offset))
                 elif "halo2" in active_map.engine:
                     used_tag_count = 0
                     local_tag_count = 0
@@ -985,8 +1131,8 @@ class Refinery(tk.Tk):
                         "    index array pointer == %s\n") %
                     (orig_index.tag_count, used_tag_count, local_tag_count,
                      orig_index.tag_types_count,
-                     orig_index.scenario_tag_id[0],
-                     orig_index.globals_tag_id[0], tag_index_offset))
+                     orig_index.scenario_tag_id,
+                     orig_index.globals_tag_id, tag_index_offset))
                 elif active_map.engine == "halo3":
                     string += ((
                         "\nTag index:\n" +
@@ -997,6 +1143,21 @@ class Refinery(tk.Tk):
                     (orig_index.tag_count, orig_index.tag_types_count,
                      orig_index.root_tags_count,
                      tag_index_offset - active_map.map_magic))
+
+                    for arr_name, arr in (("Partitions", header.partitions),
+                                          ("Sections", header.sections),):
+                        string += "\n%s:\n" % arr_name
+                        names = ("debug", "resource", "tag", "locale")\
+                                if arr.NAME_MAP else range(len(arr))
+                        for name in names:
+                            section = arr[name]
+                            string += ((
+                                "    %s:\n" +
+                                "        address == %s\n" +
+                                "        size    == %s\n" +
+                                "        offset  == %s\n") %
+                            (name, section[0], section[1], section.file_offset)
+                            )
                 else:
                     string += ((
                         "\nTag index:\n" +
@@ -1007,9 +1168,9 @@ class Refinery(tk.Tk):
                         "    meta data length    == %s\n" +
                         "    vertex parts count  == %s\n" +
                         "    index  parts count  == %s\n") %
-                    (index.tag_count, index.scenario_tag_id[0],
+                    (index.tag_count, index.scenario_tag_id & 0xFFff,
                      tag_index_offset, tag_index_offset - active_map.map_magic,
-                     index.model_data_offset, header.tag_index_meta_len,
+                     index.model_data_offset, header.tag_data_size,
                      index.vertex_parts_count, index.index_parts_count))
 
                     if index.SIZE == 36:
@@ -1083,36 +1244,36 @@ class Refinery(tk.Tk):
                      rsrc.tag_string_to_id_storage_header_offset,
                     ))
 
-                if active_map.bsp_magics:
+                if hasattr(active_map, "bsp_magics"):
                     string += "\nSbsp magic and headers:\n"
 
-                for tag_id in active_map.bsp_magics:
-                    header = active_map.bsp_headers.get(tag_id)
-                    if header is None: continue
+                    for tag_id in active_map.bsp_magics:
+                        header = active_map.bsp_headers.get(tag_id)
+                        if header is None: continue
 
-                    magic  = active_map.bsp_magics[tag_id]
-                    string += ((
-                        "    %s.structure_scenario_bsp\n" +
-                        "        bsp base pointer               == %s\n" +
-                        "        bsp magic                      == %s\n" +
-                        "        bsp size                       == %s\n" +
-                        "        bsp metadata pointer           == %s   non-magic == %s\n"
-                        #"        uncompressed lightmaps count   == %s\n" +
-                        #"        uncompressed lightmaps pointer == %s   non-magic == %s\n" +
-                        #"        compressed   lightmaps count   == %s\n" +
-                        #"        compressed   lightmaps pointer == %s   non-magic == %s\n"
-                        ) %
-                    (index.tag_index[tag_id].tag.tag_path,
-                     active_map.bsp_header_offsets[tag_id],
-                     magic, active_map.bsp_sizes[tag_id],
-                     header.meta_pointer, header.meta_pointer - magic,
-                     #header.uncompressed_lightmap_materials_count,
-                     #header.uncompressed_lightmap_materials_pointer,
-                     #header.uncompressed_lightmap_materials_pointer - magic,
-                     #header.compressed_lightmap_materials_count,
-                     #header.compressed_lightmap_materials_pointer,
-                     #header.compressed_lightmap_materials_pointer - magic,
-                     ))
+                        magic  = active_map.bsp_magics[tag_id]
+                        string += ((
+                            "    %s.structure_scenario_bsp\n" +
+                            "        bsp base pointer               == %s\n" +
+                            "        bsp magic                      == %s\n" +
+                            "        bsp size                       == %s\n" +
+                            "        bsp metadata pointer           == %s   non-magic == %s\n"
+                            #"        uncompressed lightmaps count   == %s\n" +
+                            #"        uncompressed lightmaps pointer == %s   non-magic == %s\n" +
+                            #"        compressed   lightmaps count   == %s\n" +
+                            #"        compressed   lightmaps pointer == %s   non-magic == %s\n"
+                            ) %
+                        (index.tag_index[tag_id].path,
+                         active_map.bsp_header_offsets[tag_id],
+                         magic, active_map.bsp_sizes[tag_id],
+                         header.meta_pointer, header.meta_pointer - magic,
+                         #header.uncompressed_lightmap_materials_count,
+                         #header.uncompressed_lightmap_materials_pointer,
+                         #header.uncompressed_lightmap_materials_pointer - magic,
+                         #header.compressed_lightmap_materials_count,
+                         #header.compressed_lightmap_materials_pointer,
+                         #header.compressed_lightmap_materials_pointer - magic,
+                         ))
             except Exception:
                 string = ""
                 print(format_exc())
@@ -1139,6 +1300,9 @@ class Refinery(tk.Tk):
         self._running = False
 
     def _deprotect(self):
+        if self.active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+            return
+
         save_path = asksaveasfilename(
             initialdir=dirname(self.tk_map_path.get()), parent=self,
             title="Choose where to save the deprotected map",
@@ -1154,11 +1318,11 @@ class Refinery(tk.Tk):
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in self.active_map.engine else '.map')))
 
-        if not self.save_map(save_path, prompt_strings_expand=False):
+        if not self.save_map(save_path, prompt_strings_expand=False,
+                             prompt_internal_rename=False):
             return
 
         start = time()
-        self.stop_processing = False
 
         # get the active map AFTER saving because it WILL have changed
         active_map      = self.active_map
@@ -1177,9 +1341,9 @@ class Refinery(tk.Tk):
 
         if self.valid_tag_paths_are_accurate.get():
             for tag_id in range(len(tag_index_array)):
-                if not (tag_index_array[tag_id].tag.tag_path.lower().
+                if not (tag_index_array[tag_id].path.lower().
                         startswith("protected")):
-                    tag_path_handler.set_priority(tag_id, float("inf"))
+                    tag_path_handler.set_priority(tag_id, INF)
 
         if self.fix_tag_classes.get() and not("stubbs" in active_map.engine or
                                               "shadowrun" in active_map.engine):
@@ -1188,12 +1352,8 @@ class Refinery(tk.Tk):
             # locate the tags to start deprotecting with
             repair = {}
             for b in tag_index_array:
-                if self.stop_processing:
-                    print("    Deprotection stopped by user.")
-                    return
-
-                tag_id = b.id.tag_table_index
-                if tag_id == tag_index.scenario_tag_id.tag_table_index:
+                tag_id = b.id & 0xFFff
+                if tag_id == tag_index.scenario_tag_id & 0xFFff:
                     tag_cls = "scnr"
                 elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
                     tag_cls = fourcc(b.class_1.data)
@@ -1202,10 +1362,8 @@ class Refinery(tk.Tk):
 
                 if tag_cls in ("scnr", "DeLa"):
                     repair[tag_id] = tag_cls
-                elif tag_cls == "matg" and b.tag.tag_path == "globals\\globals":
+                elif tag_cls == "matg" and b.path == "globals\\globals":
                     repair[tag_id] = tag_cls
-                else:
-                    continue
 
             # scan the tags that need repairing and repair them
             repaired = {}
@@ -1224,10 +1382,6 @@ class Refinery(tk.Tk):
                         continue
                     repaired[tag_id] = tag_cls
 
-                    if self.stop_processing:
-                        print("    Deprotection stopped by user.")
-                        return
-
                     # DEBUG
                     # print('    %s %s' % (tag_id, tag_cls))
                     if (tag_cls not in class_repair_functions or
@@ -1235,6 +1389,10 @@ class Refinery(tk.Tk):
                         continue
 
                     if tag_cls == "sbsp":
+                        if tag_id not in bsp_headers:
+                            print("    Bsp header missing for tag %s" % tag_id)
+                            continue
+
                         class_repair_functions[tag_cls](
                             bsp_headers[tag_id].meta_pointer,
                             tag_index_array, map_data,
@@ -1257,11 +1415,7 @@ class Refinery(tk.Tk):
                 # exhausted tags to repair. try to repair tag colletions now
                 if not repair:
                     for b in tag_index_array:
-                        if self.stop_processing:
-                            print("    Deprotection stopped by user.")
-                            return
-
-                        tag_id = b.id.tag_table_index
+                        tag_id = b.id & 0xFFff
                         tag_cls = None
                         if tag_id in repaired:
                             continue
@@ -1283,14 +1437,16 @@ class Refinery(tk.Tk):
                         elif tag_cls in ("Soul", "tagc", "yelo", "gelo", "gelc"):
                             repair[tag_id] = tag_cls
 
+
             for b in tag_index_array:
-                tag_id = b.id.tag_table_index
+                tag_id = b.id & 0xFFff
                 if b.class_1.enum_name in ("tag_collection",
                                            "ui_widget_collection"):
                     reffed_tag_ids, reffed_tag_types = get_tagc_refs(
                         b.meta_offset, map_data, map_magic, repaired)
                     if set(reffed_tag_types) == set(["DeLa"]):
                         repaired[tag_id] = "Soul"
+
 
             # write the deprotected tag classes fourcc's to each
             # tag's header in the tag index in the map buffer
@@ -1311,7 +1467,7 @@ class Refinery(tk.Tk):
 
             print()
             if len(repaired) != len(tag_index_array):
-                print("The deprotector could not find these tags:\n"
+                print("The deprotector could not reach these tags:\n"
                       "  (This does not mean they are protected however)\n"
                       "  [ id,  offset,  type,  path ]\n")
                 for i in range(len(tag_index_array)):
@@ -1321,17 +1477,16 @@ class Refinery(tk.Tk):
                     try:
                         print("  [ %s, %s, %s, %s ]" % (
                             i, b.meta_offset - map_magic,
-                            b.class_1.enum_name, b.tag.tag_path))
+                            b.class_1.enum_name, b.path))
                     except Exception:
                         print("  [ %s, %s, %s ]" % (
                             i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
                 print()
 
 
-        tag_classes_by_id = {}
-        for i in range(len(tag_index_array)):
-            tag_classes_by_id[i] = tag_index_array[i].class_1.\
-                                   data.to_bytes(4, "big").decode('latin-1')
+        tag_classes_by_id = {i: tag_index_array[i].class_1.data.
+                             to_bytes(4, "big").decode('latin-1')
+                             for i in range(len(tag_index_array))}
 
 
         # try to locate the Soul tag out of all the tags thought to be tagc
@@ -1339,14 +1494,10 @@ class Refinery(tk.Tk):
         map_type = map_header.map_type.enum_name
         tagc_ids_reffed_in_other_tagc = set()
         for b in tag_index_array:
-            tag_id = b.id.tag_table_index
+            tag_id = b.id & 0xFFff
             if b.class_1.enum_name not in ("tag_collection",
                                            "ui_widget_collection"):
                 continue
-
-            if self.stop_processing:
-                print("    Deprotection stopped by user.")
-                return
 
             reffed_tag_ids, reffed_tag_types = get_tagc_refs(
                 b.meta_offset, map_data, map_magic, tag_classes_by_id)
@@ -1356,65 +1507,89 @@ class Refinery(tk.Tk):
                     sp="ui\\shell\\solo",
                     mp="ui\\shell\\multiplayer",
                     ui="ui\\shell\\main_menu"
-                    ).get(map_type, b.tag.tag_path)
-                tag_path_handler.set_path(tag_id, tag_path, float("inf"),
-                                          True, False)
+                    ).get(map_type, b.path)
+                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
             elif reffed_tag_types == set(["devc"]):
                 tag_path_handler.set_path(
-                    tag_id, "ui\\ui_input_device_defaults", float("inf"),
-                                          True, False)
+                    tag_id, "ui\\ui_input_device_defaults", INF, True, False)
 
             if tag_id not in tagc_ids_reffed_in_other_tagc:
                 tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
 
 
+        # rename cached tags using tag paths found in resource maps
+        if self.rename_cached_tags.get():
+            for b in tag_index_array:
+                tag_id = b.id & 0xFFff
+                rsrc_tag_id = b.meta_offset
+                rsrc_map = None
+                if not b.indexed:
+                    continue
+                elif b.class_1.enum_name == "bitmap":
+                    rsrc_map = self.active_maps.get("bitmaps")
+                elif b.class_1.enum_name == "sound":
+                    rsrc_map = self.active_maps.get("sounds")
+                elif b.class_1.enum_name in ("font", "hud_message_text",
+                                             "unicode_string_list"):
+                    rsrc_map = self.active_maps.get("loc")
+
+                rsrc_tag_index = getattr(rsrc_map, "orig_tag_index", ())
+                if rsrc_tag_id not in range(len(rsrc_tag_index)):
+                    continue
+
+                tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
+                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
+
+
         # find out if there are any explicit scenario refs in the yelo tag
-        has_yelo_explicit_refs = False
+        ui_all_scnr_idx = 0
         for tag_id, tag_cls in tag_classes_by_id.items():
-            if tag_cls == "yelo":
-                yelo_meta = active_map.get_meta(tag_id)
-                if yelo_meta:
-                    has_yelo_explicit_refs = (
-                        yelo_meta.scenario_explicit_references.id[0] != 0xFFff)
+            if tag_cls != "yelo": continue
+
+            yelo_meta = active_map.get_meta(tag_id)
+            if not yelo_meta: continue
+
+            explicit_yelo_refs_id = yelo_meta.scenario_explicit_references.id & 0xFFff
+            if explicit_yelo_refs_id != 0xFFff:
+                ui_all_scnr_idx += 1
 
 
+        # rename tag collections based on what order they're found
+        # first one will will always be the yelo explicit refs(if it exists)
+        # next will be ui_tags_loaded_all_scenario_types
+        # last will be ui_tags_loaded_XXXX_scenario_type
         for b in tag_index_array:
-            tag_id = b.id.tag_table_index
+            tag_id = b.id & 0xFFff
             if (tag_classes_by_id.get(tag_id) != "tagc" or
                 tag_id in tagc_ids_reffed_in_other_tagc):
                 continue
 
-            if self.stop_processing:
-                print("    Deprotection stopped by user.")
-                return
-
-            if ((tagc_i == 0 and not has_yelo_explicit_refs) or
-                (tagc_i == 1 and has_yelo_explicit_refs)):
+            if tagc_i == ui_all_scnr_idx:
                 tag_path_handler.set_path(
                     tag_id, "ui\\ui_tags_loaded_all_scenario_types",
-                    float("inf"), True, False)
-            elif ((tagc_i == 1 and not has_yelo_explicit_refs) or
-                  (tagc_i == 2 and has_yelo_explicit_refs)):
+                    INF, True, False)
+            elif tagc_i == ui_all_scnr_idx + 1:
                 tag_path = dict(
                     sp="ui\\ui_tags_loaded_solo_scenario_type",
                     mp="ui\\ui_tags_loaded_multiplayer_scenario_type",
                     ui="ui\\ui_tags_loaded_mainmenu_scenario_type"
-                    ).get(map_type, b.tag.tag_path)
-                tag_path_handler.set_path(tag_id, tag_path, float("inf"),
-                                          True, False)
+                    ).get(map_type, b.path)
+                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
 
             tagc_i += 1
 
-
-        if self.stop_processing:
-            print("    Deprotection stopped by user.")
-            return
-
+        if self.scrape_tag_paths_from_scripts.get():
+            print("Renaming tags using script strings...")
+            try:
+                self._script_scrape_deprotect(tag_path_handler)
+            except Exception:
+                print(format_exc())
+            print("    Finished")
 
         if self.use_hashcaches.get():
             print("Hashcaches are not implemented.")
             # print("Renaming tags using hashcaches...")
-            # print("    Finished")
+            # print("    Finished\n")
 
         if self.use_heuristics.get():
             print("Renaming tags using heuristics...")
@@ -1422,7 +1597,7 @@ class Refinery(tk.Tk):
                 self._heuristics_deprotect(tag_path_handler)
             except Exception:
                 print(format_exc())
-            print("    Finished")
+            print("    Finished\n")
 
         if self.limit_tag_path_lengths.get():
             print("Limiting tag paths to 254 characters...")
@@ -1430,56 +1605,87 @@ class Refinery(tk.Tk):
                 tag_path_handler.shorten_paths(254)
             except Exception:
                 print(format_exc())
-            print("    Finished")
-
-        if self.stop_processing:
-            print("    Deprotection stopped by user.")
-            return
+            print("    Finished\n")
 
         # calculate the maps new checksum
         map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
 
         print("Saving deprotection changes to map...")
-        self.save_map(save_path, prompt_strings_expand=False)
+        self.save_map(save_path, prompt_strings_expand=False,
+                      prompt_internal_rename=False)
 
         # record the original tag_paths so we know if any were changed
         active_map.orig_tag_paths = tuple(
-            b.tag.tag_path for b in active_map.tag_index.tag_index)
+            b.path for b in active_map.tag_index.tag_index)
 
         print("Completed. Took %s seconds." % round(time()-start, 1))
 
-    
-    def _heuristics_deprotect(self, tag_path_handler):
+    def _script_scrape_deprotect(self, path_handler):
+        scnr_meta = self.active_map.scnr_meta
+
+        string_data = scnr_meta.script_string_data.data.decode("latin-1")
+        syntax_data = get_hsc_data_block(raw_syntax_data=scnr_meta.script_syntax_data.data)
+
+        seen = set()
+        for i in range(min(syntax_data.last_node, len(syntax_data.nodes))):
+            node = syntax_data.nodes[i]
+            # make sure the node references some kind of tag
+            if node.type not in range(24, 32):
+                continue
+
+            # make sure the tag id points to a valid tag
+            tag_id = node.data & 0xFFff
+            if tag_id in seen or path_handler.get_index_ref(tag_id) is None:
+                continue
+
+            seen.add(tag_id)
+
+            string_end = string_data.find("\x00", node.string_offset)
+            new_tag_path = string_data[node.string_offset: string_end]
+            if new_tag_path:
+                path_handler.set_path(tag_id, new_tag_path, INF, True)
+
+    def _heuristics_deprotect(self, path_handler):
         active_map = self.active_map
         tag_index_array = active_map.tag_index.tag_index
         matg_meta = active_map.matg_meta
         hudg_id = 0xFFFF if not matg_meta else\
-                  matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id[0]
+                  matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id & 0xFFff
         hudg_meta = active_map.get_meta(hudg_id, True)
 
         if hudg_meta:
             block = hudg_meta.messaging_parameters
-            items_meta = active_map.get_meta(block.item_message_text.id[0], True)
-            icons_meta = active_map.get_meta(block.alternate_icon_text.id[0], True)
+            items_meta = active_map.get_meta(block.item_message_text.id & 0xFFff, True)
+            icons_meta = active_map.get_meta(block.alternate_icon_text.id & 0xFFff, True)
 
-            if items_meta: tag_path_handler.set_item_strings(items_meta)
-            if icons_meta: tag_path_handler.set_icon_strings(icons_meta)
+            if items_meta: path_handler.set_item_strings(items_meta)
+            if icons_meta: path_handler.set_icon_strings(icons_meta)
+
+        # reset the name of each tag with a default priority and that
+        # currently resides in the tags directory root to "protected_XXXX"
+        for i in range(len(tag_index_array)):
+            if ((path_handler.get_priority(i) == path_handler.def_priority)
+                and not path_handler.get_sub_dir(i)):
+                path_handler.set_path(i, "protected_%s" % i, override=True,
+                                      print_new_name=False)
 
         vehi_ids = []
         actv_ids = []
         bipd_ids = []
-        item_ids = []
+        weap_ids = []
+        eqip_ids = []
         tagc_ids = []
         soul_ids = []
         misc_ids = []
         sbsp_ids = []
+        scen_ids = []
         scnr_id = matg_id = yelo_id = None
         for i in range(len(tag_index_array)):
-            if self.stop_processing:
-                print("    Deprotection stopped by user.")
-                return
-
             tag_type = tag_index_array[i].class_1.enum_name
+
+            if tag_type == "scenery":
+                scen_ids.append(i)
+
             if tag_type == "scenario":
                 scnr_id = i
             elif tag_type == "globals":
@@ -1492,8 +1698,10 @@ class Refinery(tk.Tk):
                 actv_ids.append(i)
             elif tag_type == "biped":
                 bipd_ids.append(i)
-            elif tag_type in ("item", "weapon", "equipment"):
-                item_ids.append(i)
+            elif tag_type == "weapon":
+                weap_ids.append(i)
+            elif tag_type == "equipment":
+                eqip_ids.append(i)
             elif tag_type == "tag_collection":
                 tagc_ids.append(i)
             elif tag_type == "ui_widget_collection":
@@ -1503,26 +1711,46 @@ class Refinery(tk.Tk):
             else:
                 misc_ids.append(i)
 
-        print("\ntag_id\tweight\ttag_path\n")
         shallow_nesting = self.shallow_ui_widget_nesting.get()
         # NOTE: These are ordered in this way to allow the most logical sorting
-        for id_list in (sbsp_ids, vehi_ids, item_ids, actv_ids, bipd_ids,
-                        soul_ids, (hudg_id, yelo_id, matg_id, scnr_id),
-                        tagc_ids):
-
-            if self.stop_processing:
-                print("    Deprotection stopped by user.")
-                return
+        for id_list, list_type in (
+                (sbsp_ids, "scenario_structure_bsp"), (vehi_ids, "vehicle"),
+                (weap_ids, "weapon"), (eqip_ids, "equipment"),
+                (actv_ids, "actor_variant"), (bipd_ids, "biped"),
+                (soul_ids, "ui_widget_collection"),
+                ((hudg_id, ), "hud_globals"), ((yelo_id, ), "project_yellow"),
+                ((matg_id, ), "globals"), ((scnr_id, ), "scenario"),
+                (tagc_ids, "tag_collection")):
+            print("\nRenaming %s tags:" % list_type)
+            print("tag_id\tweight\ttag_path\n")
 
             for tag_id in id_list:
                 if tag_id is None:
                     continue
 
                 try:
-                    recursive_rename(tag_id, active_map, tag_path_handler,
+                    recursive_rename(tag_id, active_map, path_handler,
                                      shallow_ui_widget_nesting=shallow_nesting)
                 except Exception:
                     print(format_exc())
+
+        print("\nFinal actor_variant rename pass:")
+        print("tag_id\tweight\ttag_path\n")
+        for tag_id in actv_ids:
+            if tag_id is None: continue
+            try:
+                recursive_rename(tag_id, active_map, path_handler, depth=1)
+            except Exception:
+                print(format_exc())
+
+        print("\nFinal scenery rename pass:")
+        print("tag_id\tweight\ttag_path\n")
+        for tag_id in scen_ids:
+            if tag_id is None: continue
+            try:
+                recursive_rename(tag_id, active_map, path_handler, depth=0)
+            except Exception:
+                print(format_exc())
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return
@@ -1554,16 +1782,23 @@ class Refinery(tk.Tk):
             print(format_exc())
         self._running = False
 
-    def save_map(self, save_path=None, map_name="active", *, reload_window=True,
-                 meta_data_expansion=0, raw_data_expansion=0,
-                 vertex_data_expansion=0, triangle_data_expansion=0,
-                 prompt_strings_expand=True):
+    def save_map(self, save_path=None, engine="<active>", map_name="<active>",
+                 *a, **kw):
+        meta_data_expansion = kw.pop("meta_data_expansion", 0)
+        raw_data_expansion = kw.pop("raw_data_expansion", 0)
+        vertex_data_expansion = kw.pop("vertex_data_expansion", 0)
+        triangle_data_expansion = kw.pop("triangle_data_expansion", 0)
         assert meta_data_expansion     >= 0
         assert raw_data_expansion      >= 0
         assert vertex_data_expansion   >= 0
         assert triangle_data_expansion >= 0
 
-        halo_map = self.maps.get(map_name)
+        reload_window = kw.pop("reload_window", True)
+        prompt_strings_expand = kw.pop("prompt_strings_expand", True)
+        prompt_internal_rename = kw.pop("prompt_internal_rename", True)
+
+        maps = self.maps_by_engine.get(engine, {})
+        halo_map = maps.get(map_name)
         if halo_map is None:
             return
         elif halo_map.is_resource:
@@ -1577,10 +1812,21 @@ class Refinery(tk.Tk):
 
         save_dir  = dirname(save_path)
         save_path, ext = splitext(save_path)
+        new_map_name = basename(save_path)
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in halo_map.engine else '.map')))
         if not exists(save_dir):
             os.makedirs(save_dir)
+
+        if (prompt_internal_rename and len(new_map_name) < 32 and
+            halo_map.map_header.map_name.lower() != new_map_name.lower()):
+            if messagebox.askyesno(
+                    "Internal name mismatch",
+                    ("A maps internal and file names must match for Halo "
+                     "to be able to properly load them. Do you want to "
+                     "change the internal name to match its filename?"),
+                    icon='question', parent=self):
+                halo_map.map_header.map_name = new_map_name
 
         print("Saving map...")
         print("    %s" % save_path)
@@ -1629,7 +1875,7 @@ class Refinery(tk.Tk):
             # recalculate pointers for the strings if they were changed
             strings_size, string_offs = 0, {}
             for i in range(len(index_array)):
-                tag_path = index_array[i].tag.tag_path
+                tag_path = index_array[i].path
                 if orig_tag_paths[i].lower() == tag_path.lower():
                     # path wasnt changed
                     continue
@@ -1641,11 +1887,11 @@ class Refinery(tk.Tk):
             # make sure the user wants to expand the map more if needed
             if strings_size > meta_data_expansion:
                 if prompt_strings_expand and not messagebox.askyesno(
-                    "Metadata size expansion required",
-                    ("Tag paths were edited, requiring the map be expanded to "
-                     "accommodate the new strings.\n\nMap must be expanded by "
-                     "%s more bytes. Allow this?") % strings_size,
-                    icon='warning', parent=self):
+                        "Tagdata size expansion required",
+                        ("Tag paths were edited. The map must be expanded to "
+                         "accommodate the new strings.\n\nMap must be expanded "
+                         "by %s more bytes. Allow this?") % strings_size,
+                        icon='warning', parent=self):
                     print("    Save cancelled")
                     if map_file is not out_file:
                         out_file.close()
@@ -1682,6 +1928,12 @@ class Refinery(tk.Tk):
             out_file.flush()
             if hasattr(out_file, "fileno"):
                 os.fsync(out_file.fileno())
+
+            # set the size of the map in the header to 0 to fix a bug where
+            # halo will leak file handles for very large maps. Also removes
+            # the map size limitation so halo can load stupid big maps.
+            if halo_map.engine in ("halo1ce", "halo1yelo"):
+                map_header.decomp_len = 0
 
             # write the map header so the calculate_ce_checksum can read it
             out_file.seek(0)
@@ -1736,7 +1988,6 @@ class Refinery(tk.Tk):
         queue_tree = self.queue_tree.tags_tree
 
         print("Starting extraction...")
-        self.stop_processing = False
         start = time()
 
         queue_info = self.queue_tree.queue_info
@@ -1747,10 +1998,6 @@ class Refinery(tk.Tk):
 
         for iid in tuple(queue_items):
             self.update_idletasks()
-            if self.stop_processing:
-                print("Extraction stopped by user\n")
-                break
-
             try:
                 info = queue_info.get(iid)
                 if not info:
@@ -1766,20 +2013,28 @@ class Refinery(tk.Tk):
                 extract_mode   = info['extract_mode'].get()
                 tags_list_path = info['tags_list_path'].get()
                 map_name = curr_map.map_header.map_name
-                is_halo1_tag = ("halo1"  in curr_map.engine or
+                is_halo1_map = ("halo1"  in curr_map.engine or
                                 "stubbs" in curr_map.engine or
                                 "shadowrun" in curr_map.engine)
-                recursive &= is_halo1_tag
+                tags_are_extractable = bool(curr_map.tag_headers)
+                recursive &= is_halo1_map
 
-                extract_kw = dict(out_dir=out_dir, overwrite=overwrite,
-                                  decode_adpcm=info['decode_adpcm'].get())
+                extract_bitmap_to = info['bitmap_extract_format'].get()
+                if extract_bitmap_to not in range(len(bitmap_file_formats)):
+                    extract_bitmap_to = 0
+
+                extract_kw = dict(
+                    out_dir=out_dir, overwrite=overwrite,
+                    decode_adpcm=info['decode_adpcm'].get(),
+                    bitmap_ext=bitmap_file_formats[extract_bitmap_to],
+                    bitmap_keep_alpha=info["bitmap_extract_keep_alpha"].get(),
+                    )
 
             except Exception:
                 print(format_exc())
                 continue
 
-            if extract_mode == "tags" and not is_halo1_tag:
-                # cant extract anything other than halo 1 tags yet
+            if extract_mode == "tags" and not tags_are_extractable:
                 try: queue_tree.delete(iid)
                 except Exception: pass
                 continue
@@ -1792,8 +2047,8 @@ class Refinery(tk.Tk):
             if last_map_name != map_name:
                 print("\nExtracting from %s" % map_name)
 
-            if self.extract_cheape and (curr_map.engine == "halo1yelo" and
-                                        map_name not in cheapes_extracted):
+            if self.extract_cheape.get() and (curr_map.engine == "halo1yelo" and
+                                              map_name not in cheapes_extracted):
                 cheapes_extracted.add(map_name)
                 filename = map_name + "_cheape.map"
 
@@ -1837,6 +2092,27 @@ class Refinery(tk.Tk):
                 generate_comp_verts=self.generate_comp_verts.get()
                 )
 
+            extract_kw["hsc_node_strings_by_type"] = hsc_strings_by_type = {}
+            if is_halo1_map and curr_map.scnr_meta:
+                if self.use_scenario_names_for_script_names.get():
+                    hsc_strings_by_type.update(
+                        get_h1_scenario_script_object_type_strings(
+                            curr_map.scnr_meta))
+
+                if self.use_tag_index_for_script_names.get():
+                    strings = {i: tag_index_array[i].path for
+                               i in range(len(tag_index_array))}
+                    # tag reference path strings
+                    for i in range(24, 32):
+                        hsc_strings_by_type[i] = strings
+
+                    # actor type strings
+                    i = 0
+                    hsc_strings_by_type[35] = names = {}
+                    for b in curr_map.scnr_meta.bipeds_palette.STEPTREE:
+                        names[i] = b.name.filepath.split("/")[-1].split("\\")[-1]
+                        i += 1
+
             while tag_index_refs:
                 next_refs = []
 
@@ -1844,16 +2120,13 @@ class Refinery(tk.Tk):
                     file_path = "<Could not get filepath>"
                     try:
                         file_path = sanitize_path("%s.%s" %
-                            (tag_index_ref.tag.tag_path,
+                            (tag_index_ref.path,
                              tag_index_ref.class_1.enum_name))
                         self.update()
-                        if self.stop_processing:
-                            break
-
-                        tag_id = tag_index_ref.id.tag_table_index
+                        tag_id = tag_index_ref.id & 0xFFff
                         if not map_magic:
                             # resource cache tag
-                            tag_id += (tag_index_ref.id.table_index << 16)
+                            tag_id = tag_index_ref.id
 
                         # dont want to re-extract tags
                         if (tag_id, extract_mode) in extracted:
@@ -1877,6 +2150,8 @@ class Refinery(tk.Tk):
                             continue
 
                         tag_cls = fourcc(tag_index_ref.class_1.data)
+                        if extract_mode == "tags" and tag_cls not in curr_map.tag_headers:
+                            continue
 
                         if show_output and not dont_extract:
                             print("%s: %s" % (extract_mode, file_path))
@@ -1903,7 +2178,7 @@ class Refinery(tk.Tk):
 
                             extracting = set(extracted)
                             for ref in refs:
-                                index = ref.id.tag_table_index
+                                index = ref.id & 0xFFff
                                 key = (index, extract_mode)
                                 if key not in extracting and index < index_len:
                                     extracting.add(key)
@@ -1924,7 +2199,7 @@ class Refinery(tk.Tk):
                                 if not exists(dirname(abs_file_path)):
                                     os.makedirs(dirname(abs_file_path))
 
-                                if is_halo1_tag: FieldType.force_big()
+                                if is_halo1_map: FieldType.force_big()
                                 mode = 'r+b' if isfile(abs_file_path) else 'w+b'
                                 with open(abs_file_path, mode) as f:
                                     try:
@@ -1975,7 +2250,7 @@ class Refinery(tk.Tk):
 
             if last_map_name != map_name:
                 curr_map.clear_map_cache()
-                for halo_map in self.maps.values():
+                for halo_map in curr_map.maps.values():
                     if halo_map.is_resource:
                         halo_map.clear_map_cache()
 
@@ -2022,10 +2297,6 @@ class Refinery(tk.Tk):
         print("Extracted %s tags. Took %s seconds\n" %
               (total, round(time()-start, 1)))
 
-    def cancel_action(self, e=None):
-        if not self.map_loaded: return
-        self.stop_processing = True
-
     def reload_explorers(self):
         if not self.map_loaded: return
         print("Reloading map explorer...")
@@ -2036,7 +2307,8 @@ class Refinery(tk.Tk):
             else:
                 tree.reload()
 
-        if not(self.maps):
+        maps = self.active_maps
+        if not maps:
             self.queue_tree.reload()
 
         print("    Finished\n")
@@ -2065,3 +2337,16 @@ class Refinery(tk.Tk):
         except Exception:
             print(format_exc())
         self._running = False
+
+    def show_about_window(self):
+        w = getattr(self, "about_window", None)
+        if w is not None:
+            try: w.destroy()
+            except Exception: pass
+            self.about_window = None
+
+        self.about_window = AboutWindow(
+            self, module_names=self.about_module_names,
+            iconbitmap=self.icon_filepath, app_name=self.app_name,
+            messages=self.about_messages)
+        self.place_window_relative(self.about_window, 30, 50)
