@@ -810,8 +810,8 @@ class RefinerySettingsWindow(tk.Toplevel):
         except Exception:
             print("Could not load window icon.")
 
-        self.geometry("400x270")
-        self.minsize(width=400, height=270)
+        self.geometry("400x300")
+        self.minsize(width=400, height=300)
         self.resizable(1, 0)
         self.title("Settings")
 
@@ -846,8 +846,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "show_all_fields", "edit_all_fields", "allow_corrupt",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
-                     "show_output", "fix_tag_index_offset",
-                     "use_tag_index_for_script_names",
+                     "fix_tag_index_offset", "use_tag_index_for_script_names",
+                     "show_output", "print_heuristic_name_changes",
                      "use_scenario_names_for_script_names",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
@@ -963,6 +963,9 @@ class RefinerySettingsWindow(tk.Toplevel):
             self.deprotect_frame, text=("Fix tag index offset when saving\n"
                                         "WARNING: Can corrupt certain maps"),
             variable=self.fix_tag_index_offset, justify='left')
+        self.print_heuristic_progress_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text=("Print heuristic tag path changes"),
+            variable=self.print_heuristic_name_changes, justify='left')
 
 
         self.autoload_resources_cbtn = tk.Checkbutton(
@@ -1014,6 +1017,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                   self.scrape_tag_paths_from_scripts_cbtn,
                   self.limit_tag_path_lengths_cbtn,
                   self.shallow_ui_widget_nesting_cbtn,
+                  self.print_heuristic_progress_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
 
