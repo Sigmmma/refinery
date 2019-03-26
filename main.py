@@ -1367,7 +1367,6 @@ class Refinery(tk.Tk):
 
             # scan the tags that need repairing and repair them
             repaired = {}
-            tagc_i = 0
             while repair:
                 # DEBUG
                 # print("Repairing %s tags." % len(repair))
@@ -1558,6 +1557,7 @@ class Refinery(tk.Tk):
         # first one will will always be the yelo explicit refs(if it exists)
         # next will be ui_tags_loaded_all_scenario_types
         # last will be ui_tags_loaded_XXXX_scenario_type
+        tagc_i = 0
         for b in tag_index_array:
             tag_id = b.id & 0xFFff
             if (tag_classes_by_id.get(tag_id) != "tagc" or
