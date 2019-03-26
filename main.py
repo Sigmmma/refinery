@@ -221,6 +221,7 @@ class Refinery(tk.Tk):
         self.limit_tag_path_lengths = tk.IntVar(self, 1)
         self.shallow_ui_widget_nesting = tk.IntVar(self, 1)
         self.rename_cached_tags = tk.IntVar(self, 1)
+        self.print_heuristic_name_changes = tk.IntVar(self)
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
         self.edit_all_fields = tk.IntVar(self)
@@ -249,6 +250,7 @@ class Refinery(tk.Tk):
             limit_tag_path_lengths=self.limit_tag_path_lengths,
             shallow_ui_widget_nesting=self.shallow_ui_widget_nesting,
             rename_cached_tags=self.rename_cached_tags,
+            print_heuristic_name_changes=self.print_heuristic_name_changes,
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
             use_tag_index_for_script_names=self.use_tag_index_for_script_names,
             use_scenario_names_for_script_names=self.use_scenario_names_for_script_names,
@@ -310,6 +312,8 @@ class Refinery(tk.Tk):
             label="Save map as", command=self.save_map_as)
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Exit", command=self.destroy)
+
+        self.bind('<Control-o>', lambda *a, s=self: s.browse_for_maps())
 
         self.edit_menu.add_command(
             label="Rename map", command=self.show_rename)
@@ -375,6 +379,9 @@ class Refinery(tk.Tk):
         self.map_info_scrollbar.config(command=self.map_info_text.yview)
 
         # make the buttons
+        self.deprotect_all_button = tk.Button(
+            self.map_action_frame, text="Run mass deprotection",
+            command=self.deprotect_all)
         self.deprotect_button = tk.Button(
             self.map_action_frame, text="Run deprotection",
             command=self.deprotect)
@@ -400,6 +407,7 @@ class Refinery(tk.Tk):
         self.rebuild_engine_select_menu()
         self.begin_button.pack(side='right', padx=4, pady=4)
         self.deprotect_button.pack(side='right', padx=4, pady=4)
+        #self.deprotect_all_button.pack(side='right', padx=4, pady=4)
 
         self.map_info_scrollbar.pack(fill='y', side='right', padx=1)
         self.map_info_text.pack(fill='x', side='right', expand=True, padx=1)
@@ -490,23 +498,13 @@ class Refinery(tk.Tk):
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         flags = header.extraction_flags
-        for attr_name in ("extract_cheape", "overwrite",
-                          "extract_from_ce_resources", "recursive",
-                          "rename_duplicates_in_scnr", "decode_adpcm",
-                          "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields", "edit_all_fields", "allow_corrupt",
-                          "use_tag_index_for_script_names",
-                          "use_scenario_names_for_script_names"):
+        for attr_name in flags.NAME_MAP:
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
         self.bitmap_extract_format.set(header.bitmap_extract_format.data)
         self.bitmap_extract_keep_alpha.set(bool(header.bitmap_extract_flags.keep_alpha))
         flags = header.deprotection_flags
-        for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
-                          "use_hashcaches", "use_heuristics",
-                          "valid_tag_paths_are_accurate",
-                          "scrape_tag_paths_from_scripts", "rename_cached_tags",
-                          "limit_tag_path_lengths", "shallow_ui_widget_nesting"):
+        for attr_name in flags.NAME_MAP:
             getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
 
     def update_config(self, config_file=None):
@@ -541,23 +539,13 @@ class Refinery(tk.Tk):
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         flags = header.extraction_flags
-        for attr_name in ("extract_cheape", "overwrite",
-                          "extract_from_ce_resources", "recursive",
-                          "rename_duplicates_in_scnr", "decode_adpcm",
-                          "generate_uncomp_verts", "generate_comp_verts",
-                          "show_all_fields", "edit_all_fields", "allow_corrupt",
-                          "use_tag_index_for_script_names",
-                          "use_scenario_names_for_script_names"):
+        for attr_name in flags.NAME_MAP:
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
         header.bitmap_extract_format.data = self.bitmap_extract_format.get()
         header.bitmap_extract_flags.keep_alpha = self.bitmap_extract_keep_alpha.get()
         flags = header.deprotection_flags
-        for attr_name in ("fix_tag_classes", "fix_tag_index_offset",
-                          "use_hashcaches", "use_heuristics",
-                          "valid_tag_paths_are_accurate",
-                          "scrape_tag_paths_from_scripts", "rename_cached_tags",
-                          "limit_tag_path_lengths", "shallow_ui_widget_nesting"):
+        for attr_name in flags.NAME_MAP:
             setattr(flags, attr_name, getattr(self, attr_name).get())
 
     def save_config(self, e=None):
@@ -1299,16 +1287,51 @@ class Refinery(tk.Tk):
 
         self._running = False
 
-    def _deprotect(self):
+    def deprotect_all(self, e=None):
+        if not self.map_loaded or self.running: return
+
+        self._running = True
+        try:
+            for engine_name in self.maps_by_engine:
+                if engine_name not in ("halo1ce", "halo1yelo", "halo1pc"):
+                    continue
+    
+                engine_set = False
+                maps = self.maps_by_engine[engine_name]
+
+                for map_name in sorted(maps):
+                    halo_map = maps[map_name]
+                    if halo_map.is_resource or map_name == "<active>":
+                        continue
+                    elif not engine_set:
+                        self.tk_active_engine.set(engine_name)
+                        self.last_map_by_engine[engine_name] = map_name
+                        self.set_active_engine()
+                        engine_set = True
+                    else:
+                        self.tk_active_map_name.set(map_name)
+                        self.set_active_map()
+
+                    try:
+                        self._deprotect(halo_map.filepath)
+                    except Exception:
+                        print(format_exc())
+        except Exception:
+            print(format_exc())
+
+        self._running = False
+
+    def _deprotect(self, save_path=None):
         if self.active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
             return
 
-        save_path = asksaveasfilename(
-            initialdir=dirname(self.tk_map_path.get()), parent=self,
-            title="Choose where to save the deprotected map",
-            filetypes=(("Halo mapfile", "*.map"),
-                       ("Halo mapfile(extra sauce)", "*.yelo"),
-                       ("All", "*")))
+        if not save_path:
+            save_path = asksaveasfilename(
+                initialdir=dirname(self.tk_map_path.get()), parent=self,
+                title="Choose where to save the deprotected map",
+                filetypes=(("Halo mapfile", "*.map"),
+                           ("Halo mapfile(extra sauce)", "*.yelo"),
+                           ("All", "*")))
 
         if not save_path:
             print("Deprotection cancelled.")
@@ -1653,6 +1676,8 @@ class Refinery(tk.Tk):
                   matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id & 0xFFff
         hudg_meta = active_map.get_meta(hudg_id, True)
 
+        print_heuristic_name_changes = self.print_heuristic_name_changes.get()
+
         if hudg_meta:
             block = hudg_meta.messaging_parameters
             items_meta = active_map.get_meta(block.item_message_text.id & 0xFFff, True)
@@ -1721,8 +1746,9 @@ class Refinery(tk.Tk):
                 ((hudg_id, ), "hud_globals"), ((yelo_id, ), "project_yellow"),
                 ((matg_id, ), "globals"), ((scnr_id, ), "scenario"),
                 (tagc_ids, "tag_collection")):
-            print("\nRenaming %s tags:" % list_type)
-            print("tag_id\tweight\ttag_path\n")
+            print("\nRenaming %s tags" % list_type, end="")
+            if print_heuristic_name_changes:
+                print("\ntag_id\tweight\ttag_path\n")
 
             for tag_id in id_list:
                 if tag_id is None:
@@ -1730,12 +1756,14 @@ class Refinery(tk.Tk):
 
                 try:
                     recursive_rename(tag_id, active_map, path_handler,
-                                     shallow_ui_widget_nesting=shallow_nesting)
+                                     shallow_ui_widget_nesting=shallow_nesting,
+                                     print_new_name=print_heuristic_name_changes)
                 except Exception:
                     print(format_exc())
 
-        print("\nFinal actor_variant rename pass:")
-        print("tag_id\tweight\ttag_path\n")
+        print("\nFinal actor_variant rename pass")
+        if print_heuristic_name_changes:
+            print("tag_id\tweight\ttag_path\n")
         for tag_id in actv_ids:
             if tag_id is None: continue
             try:
@@ -1743,8 +1771,9 @@ class Refinery(tk.Tk):
             except Exception:
                 print(format_exc())
 
-        print("\nFinal scenery rename pass:")
-        print("tag_id\tweight\ttag_path\n")
+        print("\nFinal scenery rename pass")
+        if print_heuristic_name_changes:
+            print("tag_id\tweight\ttag_path\n")
         for tag_id in scen_ids:
             if tag_id is None: continue
             try:

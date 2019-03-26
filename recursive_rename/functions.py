@@ -193,7 +193,8 @@ def recursive_rename(tag_id, halo_map, tag_path_handler,
             print(format_exc())
     else:
         tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                                  kw.get("priority"), kw.get("override"))
+                                  kw.get("priority"), kw.get("override"),
+                                  kw.get("print_new_name"))
     # remove the tag_id so this tag can be revisited by higher up references
     seen.remove(tag_id)
 
@@ -213,8 +214,8 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     level_dir = sub_dir + '%s\\' % name
 
-    tag_path_handler.set_path(tag_id, root_dir + level_dir + name,
-                              INF, kw.get("override"))
+    tag_path_handler.set_path(tag_id, root_dir + level_dir + name, INF,
+                              kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -228,16 +229,16 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     # rename the references at the bottom of the scenario tag
     tag_path_handler.set_path(get_tag_id(meta.custom_object_names),
-                              sub_dir + "object_names",
-                              INF, kw.get("override"))
+                              sub_dir + "object_names", INF,
+                              kw.get("override"), kw.get("print_new_name"))
 
     tag_path_handler.set_path(get_tag_id(meta.ingame_help_text),
-                              sub_dir + "help_text",
-                              INF, kw.get("override"))
+                              sub_dir + "help_text", INF,
+                              kw.get("override"), kw.get("print_new_name"))
 
     tag_path_handler.set_path(get_tag_id(meta.hud_messages),
-                              sub_dir + "hud_messages",
-                              INF, kw.get("override"))
+                              sub_dir + "hud_messages", INF,
+                              kw.get("override"), kw.get("print_new_name"))
 
     # rename sky references
     for b in meta.skies.STEPTREE:
@@ -459,7 +460,8 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
 
     # rename this globals tag
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -679,7 +681,8 @@ def rename_hudg(tag_id, halo_map, tag_path_handler,
         return
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -697,8 +700,8 @@ def rename_hudg(tag_id, halo_map, tag_path_handler,
                      name="hud msg icons", **kw)
 
     tag_path_handler.set_path(get_tag_id(meta.hud_messages),
-                              sub_dir + "hud_messages",
-                              INF, kw.get("override"))
+                              sub_dir + "hud_messages", INF,
+                              kw.get("override"), kw.get("print_new_name"))
 
     recursive_rename(get_tag_id(meta.waypoint_parameters.arrow_bitmaps),
                      sub_dir=ui_hud_dir + bitmaps_dir + "combined\\",
@@ -724,7 +727,7 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"))
+                              kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -807,7 +810,7 @@ def rename_sky_(tag_id, halo_map, tag_path_handler,
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"))
+                              kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -902,7 +905,8 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
         sub_dir += name + "\\"
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
 
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
@@ -1004,7 +1008,8 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
         name = func_name
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
 
     name = tag_path_handler.get_basename(tag_id)
     bitmaps_sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
@@ -1498,7 +1503,8 @@ def rename_actv(tag_id, halo_map, tag_path_handler,
             break
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1534,7 +1540,7 @@ def rename_flag(tag_id, halo_map, tag_path_handler,
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"))
+                              kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1560,7 +1566,8 @@ def rename_mode(tag_id, halo_map, tag_path_handler,
         return
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1611,7 +1618,8 @@ def rename_coll(tag_id, halo_map, tag_path_handler,
         return
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1656,7 +1664,8 @@ def rename_rain(tag_id, halo_map, tag_path_handler,
         return
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1690,7 +1699,8 @@ def rename_fog_(tag_id, halo_map, tag_path_handler,
         return
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1720,7 +1730,7 @@ def rename_foot(tag_id, halo_map, tag_path_handler,
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"))
+                              kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1749,7 +1759,7 @@ def rename_antr(tag_id, halo_map, tag_path_handler,
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"))
+                              kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1787,7 +1797,7 @@ def rename_deca(tag_id, halo_map, tag_path_handler,
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"))
+                              kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1813,7 +1823,7 @@ def rename_ant_(tag_id, halo_map, tag_path_handler,
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"))
+                              kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1842,7 +1852,8 @@ def rename_dobc(tag_id, halo_map, tag_path_handler,
     if (not name or "protected" in name) and dobc_name: name = dobc_name
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1858,7 +1869,8 @@ def rename_udlg(tag_id, halo_map, tag_path_handler,
         return
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
     name = tag_path_handler.get_basename(tag_id)
     sub_dir = snd_dialog_dir + name + "\\"
 
@@ -1901,7 +1913,8 @@ def rename_DeLa(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1965,7 +1978,8 @@ def rename_lsnd(tag_id, halo_map, tag_path_handler,
               tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2010,7 +2024,8 @@ def rename_snd_(tag_id, halo_map, tag_path_handler,
         name = name2
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"))
+                              kw.get('priority'), kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2032,7 +2047,8 @@ def rename_vcky(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2069,7 +2085,8 @@ def rename_soul(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
     for b in meta.ui_widget_definitions.STEPTREE:
@@ -2092,7 +2109,8 @@ def rename_tagc(tag_id, halo_map, tag_path_handler,
     #                                their contents should share the tag
     #                                collection's priority or directory
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2105,14 +2123,16 @@ def rename_trak(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     tag_path_handler.set_path(
         tag_id, root_dir + (sub_dir if sub_dir else camera_dir) + name,
-        kw.get('priority', LOW_PRIORITY), kw.get("override"))
+        kw.get('priority', LOW_PRIORITY), kw.get("override"),
+        kw.get("print_new_name"))
 
 
 def rename_snde(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     tag_path_handler.set_path(
         tag_id, root_dir + (sub_dir if sub_dir else snd_sound_env_dir) + name,
-        kw.get('priority', LOW_PRIORITY), kw.get("override"))
+        kw.get('priority', LOW_PRIORITY), kw.get("override"),
+        kw.get("print_new_name"))
 
 
 def rename_devc(tag_id, halo_map, tag_path_handler,
@@ -2125,7 +2145,7 @@ def rename_devc(tag_id, halo_map, tag_path_handler,
 
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
                               kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"))
+                              kw.get("override"), kw.get("print_new_name"))
 
 
 def rename_ligh(tag_id, halo_map, tag_path_handler,
@@ -2141,7 +2161,8 @@ def rename_ligh(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2168,7 +2189,8 @@ def rename_glw_(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2189,7 +2211,8 @@ def rename_lens(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2211,7 +2234,8 @@ def rename_mgs2(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2232,11 +2256,12 @@ def rename_elec(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.bitmap), name=name + " electricity map",
+    recursive_rename(get_tag_id(meta.bitmap), name=name + " elec map",
                      sub_dir=sub_dir + bitmaps_dir, **kw)
 
 
@@ -2253,7 +2278,8 @@ def rename_part(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2290,7 +2316,8 @@ def rename_pctl(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2330,7 +2357,8 @@ def rename_cont(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2359,7 +2387,8 @@ def rename_jpt_(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2377,7 +2406,8 @@ def rename_effe(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2443,7 +2473,8 @@ def rename_grhi(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = "hud " + tag_path_handler.get_basename(tag_id)
 
@@ -2476,7 +2507,8 @@ def rename_unhi(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = "hud " + tag_path_handler.get_basename(tag_id)
 
@@ -2523,7 +2555,8 @@ def rename_wphi(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2568,7 +2601,8 @@ def rename_mply(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2595,7 +2629,8 @@ def rename_ngpr(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2618,7 +2653,8 @@ def rename_hud_(tag_id, halo_map, tag_path_handler,
               tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2644,7 +2680,8 @@ def rename_yelo(tag_id, halo_map, tag_path_handler,
 
     # rename this project_yellow tag
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2691,7 +2728,8 @@ def rename_gelo(tag_id, halo_map, tag_path_handler,
 
     # rename this project_yellow_globals tag
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2734,7 +2772,8 @@ def rename_gelc(tag_id, halo_map, tag_path_handler,
 
     # rename this project_yellow_globals tag
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2751,7 +2790,8 @@ def rename_efpc(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2772,7 +2812,8 @@ def rename_efpg(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2793,7 +2834,8 @@ def rename_shpg(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2819,7 +2861,8 @@ def rename_sppg(tag_id, halo_map, tag_path_handler,
         tag_path_handler.set_path(
             tag_id, root_dir + "postprocess\\%s postprocess globals" %
             sanitize_name(halo_map.map_header.map_name),
-            kw.get('priority', DEFAULT_PRIORITY), kw.get("override"))
+            kw.get('priority', DEFAULT_PRIORITY),
+            kw.get("override"), kw.get("print_new_name"))
 
 
 def rename_efpp(tag_id, halo_map, tag_path_handler,
@@ -2829,7 +2872,8 @@ def rename_efpp(tag_id, halo_map, tag_path_handler,
     if meta is not None:
         tag_path_handler.set_path(
             tag_id, root_dir + "postprocess\\" + name,
-            kw.get('priority', DEFAULT_PRIORITY), kw.get("override"))
+            kw.get('priority', DEFAULT_PRIORITY),
+            kw.get("override"), kw.get("print_new_name"))
 
 
 def rename_sily(tag_id, halo_map, tag_path_handler,
@@ -2842,7 +2886,8 @@ def rename_sily(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2876,7 +2921,8 @@ def rename_unic(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2895,7 +2941,8 @@ def rename_avtc(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', VERY_HIGH_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + name, kw['priority'], True)
+    tag_path_handler.set_path(tag_id, root_dir + name, kw['priority'],
+                              True, kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2937,7 +2984,8 @@ def rename_atvi(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2971,7 +3019,8 @@ def rename_atvo(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
     tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"))
+                              kw['priority'], kw.get("override"),
+                              kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
