@@ -67,7 +67,7 @@ def sanitize_tag_name(name, def_name):
 
 def get_model_name(halo_map, tag_id, model_name=""):
     meta = halo_map.get_meta(tag_id)
-    if not meta or not meta.regions.STEPTREE:
+    if not(hasattr(meta, "regions") and meta.regions.STEPTREE):
         return model_name
 
     names = []
@@ -90,7 +90,7 @@ def get_model_name(halo_map, tag_id, model_name=""):
 
 
 def get_sound_sub_dir_and_name(snd_meta, sub_dir="", snd_name=""):
-    if not snd_meta:
+    if not hasattr(snd_meta, "sound_class"):
         return sub_dir, snd_name
 
     snd_class = snd_meta.sound_class.enum_name
@@ -130,7 +130,7 @@ def get_sound_sub_dir_and_name(snd_meta, sub_dir="", snd_name=""):
 def get_sound_looping_name(meta, halo_map, def_name=""):
     if meta is None:
         return def_name
-    elif not hasattr(meta, "tracks") and not hasattr(meta, "detail_sounds"):
+    elif not(hasattr(meta, "tracks") and hasattr(meta, "detail_sounds")):
         return def_name
 
     # try and determine a name for this sound_looping from its sound tags
@@ -154,15 +154,17 @@ def get_sound_looping_name(meta, halo_map, def_name=""):
 
 
 def get_sound_scenery_name(meta, halo_map, def_name=""):
-    if not meta or not meta.obje_attrs.attachments.STEPTREE:
+    if not(hasattr(meta, "obje_attrs") and meta.obje_attrs.attachments.STEPTREE):
         return def_name
 
     for b in meta.obje_attrs.attachments.STEPTREE:
         lsnd_meta = halo_map.get_meta(get_tag_id(b.type))
-        if lsnd_meta:
-            lsnd_name = get_sound_looping_name(lsnd_meta, halo_map, "")
-            if lsnd_name:
-                return lsnd_name
+        if not hasattr(lsnd_meta, "tracks"):
+            continue
+
+        lsnd_name = get_sound_looping_name(lsnd_meta, halo_map, "")
+        if lsnd_name:
+            return lsnd_name
 
     return def_name
 
@@ -295,7 +297,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     for b in meta.netgame_equipments.STEPTREE:
         ng_name = ""
         ng_coll_meta = halo_map.get_meta(get_tag_id(b.item_collection))
-        if ng_coll_meta:
+        if hasattr(ng_coll_meta, "item_permutations"):
             item_names = []
             for item in ng_coll_meta.item_permutations.STEPTREE:
                 item_name = tag_path_handler.get_basename(get_tag_id(item.item))
