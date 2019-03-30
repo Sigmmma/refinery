@@ -1,14 +1,14 @@
-import gc
+import os
 import mmap
+import shutil
+import traceback
 
 from reclaimer.util import *
 from binilla.util import get_cwd
 
-
 def inject_file_padding(file, *off_padsize_pairs, padchar=b'\xCA'):
     file.seek(0, 2)
     map_size = file.tell()
-
     dcbs = dstoff_cpysize_by_srcoff = dict(off_padsize_pairs)
     assert len(padchar) == 1
 
@@ -24,42 +24,69 @@ def inject_file_padding(file, *off_padsize_pairs, padchar=b'\xCA'):
         dcbs[srcoff][1] = last_end - srcoff
         last_end = srcoff
 
-    if isinstance(file, mmap.mmap):
-        file.resize(map_size)
-    else:
-        file.truncate(map_size)
+    close_mmap = False
+    try:
+        if not isinstance(file, mmap.mmap):
+            file = mmap.mmap(file.fileno(), 0)
+            close_mmap = True
+    except Exception:
+        pass
 
-    for srcoff in sorted(dcbs)[::-1]:
+    try:
+        if isinstance(file, mmap.mmap):
+            file.resize(map_size)
+        else:
+            file.truncate(map_size)
+
+        intra_file_move(file, dcbs)
+    except Exception:
+        if close_mmap:
+            try: file.close()
+            except Exception: pass
+        raise
+
+    return map_size
+
+
+def intra_file_move(file, dstoff_cpysize_by_srcoff, padchar=b'\xCA'):
+    is_mmap = isinstance(file, mmap.mmap)
+
+    for srcoff in sorted(dstoff_cpysize_by_srcoff)[::-1]:
         # copy in chunks starting at the end of the copy section so
         # data doesnt get overwritten if  dstoff < srcoff + cpysize
-        dstoff, cpysize, padsize = dcbs[srcoff][:]
+        dstoff, cpysize, padsize = dstoff_cpysize_by_srcoff[srcoff][:]
         copied = padded = 0
-        if not padsize:
+        if not padsize or cpysize <= 0:
             continue
 
-        while copied < cpysize:
-            remainder = cpysize - copied
-            chunksize = min(4*1024**2, remainder)  # copy of 4MB chunks
+        if is_mmap:
+            # mmap.move is much faster than our method below
+            file.move(dstoff, srcoff, cpysize)
+        else:
+            while copied < cpysize:
+                remainder = cpysize - copied
+                chunksize = min(4*1024**2, remainder)  # copy of 4MB chunks
 
-            file.seek(srcoff + remainder - chunksize)
-            chunk = file.read(chunksize)
-            file.seek(dstoff + remainder - chunksize)
-            file.write(chunk)
+                file.seek(srcoff + remainder - chunksize)
+                chunk = file.read(chunksize)
+                file.seek(dstoff + remainder - chunksize)
+                file.write(chunk)
+                copied += chunksize
 
-            copied += chunksize
-            chunk = None
-            gc.collect()
+            del chunk
 
         file.seek(srcoff)
-        padding = padchar * 1024**2  # write padding in 1MB chunks
-        while padded < padsize:
-            if padsize - padded < len(padding):
-                padding = padchar * (padsize - padded)
+        if padsize >= 1024**2:
+            # default to writing padding in 1MB chunks
+            padding = padchar * 1024**2
+
+        while padsize > 0:
+            if padsize < 1024**2:
+                padding = padchar * padsize
             file.write(padding)
-            padded += len(padding)
+            padsize -= len(padding)
 
     file.flush()
-    return map_size
 
 
 def sanitize_filename(name):

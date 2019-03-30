@@ -3,6 +3,7 @@ import gc
 import tkinter as tk
 import os
 import refinery
+import shutil
 import sys
 import zlib
 
@@ -21,6 +22,8 @@ from supyr_struct.field_types import FieldType
 
 
 from binilla.about_window import AboutWindow
+from binilla.widgets import ScrollMenu
+
 from refinery.util import *
 from refinery.widgets import QueueTree,\
      RefinerySettingsWindow, RefineryRenameWindow,\
@@ -73,25 +76,32 @@ VALID_EXTRACT_MODES = frozenset(("tags", "data"))
 INF = float("inf")
 
 
-def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
-                   vertex_data_expansion=0, triangle_data_expansion=0):
+def get_halo_map_section_ends(halo_map):
+    head  = halo_map.map_header
+    index = halo_map.tag_index
+    raw_data_end    = index.model_data_offset
+    vertex_data_end = index.vertex_data_size + raw_data_end
+    index_data_end  = index.model_data_size  + raw_data_end
+    meta_data_end   = head.tag_data_size +  head.tag_index_header_offset
+    return raw_data_end, vertex_data_end, index_data_end, meta_data_end
+
+
+def expand_halo_map(halo_map, raw_data_expansion=0, meta_data_expansion=0,
+                    vertex_data_expansion=0, triangle_data_expansion=0):
     map_file   = halo_map.map_data
     map_header = halo_map.map_header
     tag_index  = halo_map.tag_index
     tag_index_array = tag_index.tag_index
     index_header_offset = map_header.tag_index_header_offset
 
-    raw_data_end    = tag_index.model_data_offset
-    vertex_data_end = tag_index.vertex_data_size + raw_data_end
-    index_data_end  = tag_index.model_data_size  + raw_data_end
-    tag_index.tag_index = tag_index_array
+    raw_data_end, vertex_data_end, index_data_end, meta_data_end = \
+                  get_halo_map_section_ends(halo_map)
 
-    # seek to the end so we can measure the map
-    map_file.seek(0, 2)
+
     expansions = ((raw_data_end,    raw_data_expansion),
                   (vertex_data_end, vertex_data_expansion),
                   (index_data_end,  triangle_data_expansion),
-                  (map_file.tell(), meta_data_expansion))
+                  (meta_data_end,   meta_data_expansion))
 
     # expand the map's sections
     map_end = inject_file_padding(map_file, *expansions)
@@ -103,14 +113,13 @@ def expand_halomap(halo_map, raw_data_expansion=0, meta_data_expansion=0,
     meta_ptr_diff = diff - meta_data_expansion
 
     # update the map_header and tag_index_header's offsets and sizes
-    tag_index.model_data_offset   += raw_data_expansion
-    tag_index.vertex_data_size    += vertex_data_expansion
-    tag_index.model_data_size     += (vertex_data_expansion +
-                                      triangle_data_expansion)
+    tag_index.model_data_offset += raw_data_expansion
+    tag_index.vertex_data_size  += vertex_data_expansion
+    tag_index.model_data_size   += vertex_data_expansion + triangle_data_expansion
     halo_map.map_magic                 -= meta_ptr_diff
     map_header.tag_index_header_offset += meta_ptr_diff
     map_header.decomp_len = map_end
-    map_header.tag_data_size = map_end - map_header.tag_index_header_offset
+    map_header.tag_data_size += meta_data_expansion
 
     # adjust rawdata pointers in various tags if the index header moved
     if meta_ptr_diff:
@@ -222,6 +231,7 @@ class Refinery(tk.Tk):
         self.shallow_ui_widget_nesting = tk.IntVar(self, 1)
         self.rename_cached_tags = tk.IntVar(self, 1)
         self.print_heuristic_name_changes = tk.IntVar(self)
+        self.force_lower_case_paths = tk.IntVar(self, 1)
         self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
         self.edit_all_fields = tk.IntVar(self)
@@ -256,6 +266,7 @@ class Refinery(tk.Tk):
             use_scenario_names_for_script_names=self.use_scenario_names_for_script_names,
             extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
+            force_lower_case_paths=self.force_lower_case_paths,
             extract_cheape=self.extract_cheape,
             show_all_fields=self.show_all_fields,
             edit_all_fields=self.edit_all_fields,
@@ -306,6 +317,9 @@ class Refinery(tk.Tk):
             command=lambda s=self: s.unload_maps_clicked(True, ("<active>",), None))
         self.file_menu.add_command(
             label="Unload all maps",
+            command=lambda s=self: s.unload_maps_clicked(None, ("<active>",), None))
+        self.file_menu.add_command(
+            label="Unload all maps from all engines",
             command=lambda s=self: s.unload_maps_clicked(None, None, None))
         self.file_menu.add_separator()
         self.file_menu.add_command(
@@ -403,11 +417,23 @@ class Refinery(tk.Tk):
             self.add_del_frame, text="Del\nAll", width=4,
             command=self.queue_del_all)
 
+        self.engine_select_menu = ScrollMenu(
+            self.map_action_frame, str_variable=self.tk_active_engine,
+            callback=self.set_active_engine, menu_width=15)
+        self.map_select_menu = ScrollMenu(
+            self.map_action_frame, str_variable=self.tk_active_map_name,
+            callback=self.set_active_map)
+        self.reload_engine_select_options()
+        self.reload_map_select_options()
+
         # pack everything
-        self.rebuild_engine_select_menu()
         self.begin_button.pack(side='right', padx=4, pady=4)
         self.deprotect_button.pack(side='right', padx=4, pady=4)
         #self.deprotect_all_button.pack(side='right', padx=4, pady=4)
+        self.engine_select_menu.pack(side='left', padx=4, pady=4,
+                                     fill='x', expand=False)
+        self.map_select_menu.pack(side='left', padx=(4, 100), pady=4,
+                                  fill='x', expand=True)
 
         self.map_info_scrollbar.pack(fill='y', side='right', padx=1)
         self.map_info_text.pack(fill='x', side='right', expand=True, padx=1)
@@ -776,7 +802,7 @@ class Refinery(tk.Tk):
         self.maps_by_engine["<active>"] = next_maps
         next_maps.pop("<active>", None)
         curr_maps.pop("<active>", None)
-        self.rebuild_map_select_menu()
+        self.reload_map_select_options()
         self.set_active_map()
 
     def set_active_map(self, e=None):
@@ -799,6 +825,35 @@ class Refinery(tk.Tk):
             self.reload_explorers()
         else:
             print('"%s" is not loaded.' % map_name)
+
+    def reload_engine_select_options(self):
+        opts = dict(self.maps_by_engine)
+        opts.pop("<active>", None)
+        if opts:
+            opts = sorted(opts.keys())
+        else:
+            opts = ("Loaded engines", )
+
+        menu = self.engine_select_menu
+        sel_name = self.tk_active_engine.get()
+        sel_index = opts.index(sel_name) if sel_name in opts else 0
+        menu.set_options(opts)
+        menu.sel_index = sel_index
+        self.reload_map_select_options()
+
+    def reload_map_select_options(self):
+        opts = dict(self.active_maps)
+        opts.pop("<active>", None)
+        if opts:
+            opts = sorted(opts.keys())
+        else:
+            opts = ("Loaded maps", )
+
+        menu = self.map_select_menu
+        sel_name = self.tk_active_map_name.get()
+        sel_index = opts.index(sel_name) if sel_name in opts else 0
+        menu.set_options(opts)
+        menu.sel_index = sel_index
 
     def unload_maps_clicked(self, map_type=False, engines_to_unload=("<active>", ),
                             maps_to_unload=("<active>", )):
@@ -834,7 +889,7 @@ class Refinery(tk.Tk):
                 except Exception:
                     pass
 
-        self.rebuild_engine_select_menu()
+        self.reload_engine_select_options()
         if self.map_loaded: return
 
         self.display_map_info()
@@ -856,7 +911,7 @@ class Refinery(tk.Tk):
             print("Loading resource maps for: %s" % halo_map.map_header.map_name)
             self.update()
             halo_map.load_all_resource_maps()
-            self.rebuild_engine_select_menu()
+            self.reload_engine_select_options()
             print("    Finished")
         except Exception:
             print(format_exc())
@@ -870,7 +925,7 @@ class Refinery(tk.Tk):
         if not map_paths:
             return
 
-        new_active_map = ''
+        new_active_map_name = ''
         for map_path in map_paths:
             try:
                 if map_path is None:
@@ -918,7 +973,7 @@ class Refinery(tk.Tk):
 
                 if self.active_map is maps.get(map_name):
                     will_be_active = True
-                    new_active_map = map_name
+                    new_active_map_name = map_name
 
                 if maps.get(map_name) is not None:
                     self.unload_maps(None, (engine, ), (map_name, ))
@@ -965,8 +1020,8 @@ class Refinery(tk.Tk):
                 new_map.app = self
                 new_map.load_map(map_path, will_be_active=will_be_active,
                                  autoload_resources=self.autoload_resources.get())
-                if will_be_active and not new_active_map:
-                    new_active_map = map_name
+                if will_be_active and not new_active_map_name:
+                    new_active_map_name = map_name
                     self.tk_active_engine.set(engine)
                     self.tk_active_map_name.set(map_name)
                 print("    Finished")
@@ -978,59 +1033,22 @@ class Refinery(tk.Tk):
                 except Exception:
                     print(format_exc())
                 print(format_exc())
-                print("Error occurred while atempting to load map.\n"
+                print("Error occurred while attempting to load map.\n"
                       "If this is a PermissionError and the map is located in\n"
                       "a protected location, Refinery may need to run as admin.\n"
                       "    Make sure the map you are accessing is not read-only.\n"
                       "Refinery opens maps in read-write mode in case edits are\n"
                       "made, and opening in this mode fails on read-only files.\n")
 
-        self.rebuild_engine_select_menu()
-        if will_be_active and new_active_map:
+        self.reload_engine_select_options()
+        if will_be_active and new_active_map_name:
             # self.set_active_map must set this
             maps.pop("<active>", None)
-            # self.tk_active_engine must set this
+            # self.set_active_engine must set this
             self.maps_by_engine.pop("<active>", None)
             self.tk_active_engine.set(engine)
-            self.tk_active_map_name.set(new_active_map)
+            self.tk_active_map_name.set(new_active_map_name)
             self.set_active_engine()
-
-    def rebuild_engine_select_menu(self):
-        if getattr(self, "engine_select_menu", None) is not None:
-            self.engine_select_menu.destroy()
-
-        options = dict(self.maps_by_engine)
-        options.pop("<active>", None)
-        if options:
-            options = sorted(options.keys())
-        else:
-            options = ("Loaded engines", )
-
-        self.engine_select_menu = tk.OptionMenu(
-            self.map_action_frame, self.tk_active_engine, *options,
-            command=self.set_active_engine)
-        self.engine_select_menu.config(anchor="w", width=15)
-        self.engine_select_menu.pack(side='left', padx=4, pady=4,
-                                     fill='x', expand=False)
-        self.rebuild_map_select_menu()
-
-    def rebuild_map_select_menu(self):
-        if getattr(self, "map_select_menu", None) is not None:
-            self.map_select_menu.destroy()
-
-        options = dict(self.active_maps)
-        options.pop("<active>", None)
-        if options:
-            options = sorted(options.keys())
-        else:
-            options = ("Loaded maps", )
-
-        self.map_select_menu = tk.OptionMenu(
-            self.map_action_frame, self.tk_active_map_name, *options,
-            command=self.set_active_map)
-        self.map_select_menu.config(anchor="w")
-        self.map_select_menu.pack(side='left', padx=(4, 100), pady=4,
-                                  fill='x', expand=True)
 
     def display_map_info(self, string=None):
         try:
@@ -1039,237 +1057,244 @@ class Refinery(tk.Tk):
         finally:
             self.map_info_text.config(state='disabled')
 
-        if string is None:
-            if not self.map_loaded:
-                return
-            try:
-                active_map = self.active_map
-                string = "%s\n" % self.tk_map_path.get()
+        try:
+            if string is None:
+                string = self.generate_map_info_string()
+        except Exception:
+            string = ""
+            print(format_exc())
 
-                header     = active_map.map_header
-                index      = active_map.tag_index
-                orig_index = active_map.orig_tag_index
-                if hasattr(active_map.map_data, '__len__'):
-                    decomp_size = str(len(active_map.map_data))
-                elif (hasattr(active_map.map_data, 'seek') and
-                      hasattr(active_map.map_data, 'tell')):
-                    curr_pos = active_map.map_data.tell()
-                    active_map.map_data.seek(0, 2)
-                    decomp_size = str(active_map.map_data.tell())
-                    active_map.map_data.seek(curr_pos)
-                else:
-                    decomp_size = "unknown"
-
-                if not active_map.is_compressed:
-                    decomp_size += "(is already uncompressed)"
-
-                map_type = header.map_type.enum_name
-                if map_type == "sp":       map_type = "singleplayer"
-                elif map_type == "mp":     map_type = "multiplayer"
-                elif map_type == "ui":     map_type = "mainmenu"
-                elif map_type == "shared":   map_type = "shared"
-                elif map_type == "sharedsp": map_type = "shared single player"
-                elif active_map.is_resource: map_type = "resource cache"
-                elif "INVALID" in map_type:  map_type = "unknown"
-
-                string += ((
-                    "Header:\n" +
-                    "    engine version      == %s\n" +
-                    "    name                == %s\n" +
-                    "    build date          == %s\n" +
-                    "    type                == %s\n" +
-                    "    decompressed size   == %s\n" +
-                    "    index header offset == %s\n") %
-                (active_map.engine, header.map_name, header.build_date,
-                 map_type, decomp_size, header.tag_index_header_offset))
-
-                string += ((
-                    "\nCalculated information:\n" +
-                    "    index magic    == %s\n" +
-                    "    map magic      == %s\n") %
-                (active_map.index_magic, active_map.map_magic))
-
-                tag_index_offset = index.tag_index_offset
-                if active_map.engine == "halo2alpha":
-                    string += ((
-                        "\nTag index:\n" +
-                        "    tag count           == %s\n" +
-                        "    scenario tag id     == %s\n" +
-                        "    index array pointer == %s\n") %
-                    (orig_index.tag_count,
-                     orig_index.scenario_tag_id & 0xFFff, tag_index_offset))
-                elif "halo2" in active_map.engine:
-                    used_tag_count = 0
-                    local_tag_count = 0
-                    for index_ref in index.tag_index:
-                        if is_reserved_tag(index_ref):
-                            continue
-                        elif index_ref.meta_offset != 0:
-                            local_tag_count += 1
-                        used_tag_count += 1
-
-                    string += ((
-                        "\nTag index:\n" +
-                        "    tag count           == %s\n" +
-                        "    used tag count      == %s\n" +
-                        "    local tag count     == %s\n" +
-                        "    tag types count     == %s\n" +
-                        "    scenario tag id     == %s\n" +
-                        "    globals  tag id     == %s\n" +
-                        "    index array pointer == %s\n") %
-                    (orig_index.tag_count, used_tag_count, local_tag_count,
-                     orig_index.tag_types_count,
-                     orig_index.scenario_tag_id,
-                     orig_index.globals_tag_id, tag_index_offset))
-                elif active_map.engine == "halo3":
-                    string += ((
-                        "\nTag index:\n" +
-                        "    tag count           == %s\n" +
-                        "    tag types count     == %s\n" +
-                        "    root tags count     == %s\n" +
-                        "    index array pointer == %s\n") %
-                    (orig_index.tag_count, orig_index.tag_types_count,
-                     orig_index.root_tags_count,
-                     tag_index_offset - active_map.map_magic))
-
-                    for arr_name, arr in (("Partitions", header.partitions),
-                                          ("Sections", header.sections),):
-                        string += "\n%s:\n" % arr_name
-                        names = ("debug", "resource", "tag", "locale")\
-                                if arr.NAME_MAP else range(len(arr))
-                        for name in names:
-                            section = arr[name]
-                            string += ((
-                                "    %s:\n" +
-                                "        address == %s\n" +
-                                "        size    == %s\n" +
-                                "        offset  == %s\n") %
-                            (name, section[0], section[1], section.file_offset)
-                            )
-                else:
-                    string += ((
-                        "\nTag index:\n" +
-                        "    tag count           == %s\n" +
-                        "    scenario tag id     == %s\n" +
-                        "    index array pointer == %s   non-magic == %s\n" +
-                        "    model data pointer  == %s\n" +
-                        "    meta data length    == %s\n" +
-                        "    vertex parts count  == %s\n" +
-                        "    index  parts count  == %s\n") %
-                    (index.tag_count, index.scenario_tag_id & 0xFFff,
-                     tag_index_offset, tag_index_offset - active_map.map_magic,
-                     index.model_data_offset, header.tag_data_size,
-                     index.vertex_parts_count, index.index_parts_count))
-
-                    if index.SIZE == 36:
-                        string += (
-                            "    index parts pointer == %s   non-magic == %s\n"
-                            % (index.index_parts_offset,
-                               index.index_parts_offset - active_map.map_magic))
-                    else:
-                        string += ((
-                            "    vertex data size    == %s\n" +
-                            "    index  data size    == %s\n" +
-                            "    model  data size    == %s\n") %
-                        (index.vertex_data_size,
-                         index.model_data_size - index.vertex_data_size,
-                         index.model_data_size))
-
-                if active_map.engine == "halo1yelo":
-                    yelo    = header.yelo_header
-                    flags   = yelo.flags
-                    info    = yelo.build_info
-                    version = yelo.tag_versioning
-                    cheape  = yelo.cheape_definitions
-                    rsrc    = yelo.resources
-                    min_os  = info.minimum_os_build
-                    string += ((
-                        "\nYelo information:\n" +
-                        "    Mod name              == %s\n" +
-                        "    Memory upgrade amount == %sx\n" +
-                        "\n    Flags:\n" +
-                        "        uses memory upgrades       == %s\n" +
-                        "        uses mod data files        == %s\n" +
-                        "        is protected               == %s\n" +
-                        "        uses game state upgrades   == %s\n" +
-                        "        has compression parameters == %s\n" +
-                        "\n    Build info:\n" +
-                        "        build string  == %s\n" +
-                        "        timestamp     == %s\n" +
-                        "        stage         == %s\n" +
-                        "        revision      == %s\n" +
-                        "\n    Cheape:\n" +
-                        "        build string      == %s\n" +
-                        "        version           == %s.%s.%s\n" +
-                        "        size              == %s\n" +
-                        "        offset            == %s\n" +
-                        "        decompressed size == %s\n" +
-                        "\n    Versioning:\n" +
-                        "        minimum open sauce     == %s.%s.%s\n" +
-                        "        project yellow         == %s\n" +
-                        "        project yellow globals == %s\n" +
-                        "\n    Resources:\n" +
-                        "        compression parameters header offset   == %s\n" +
-                        "        tag symbol storage header offset       == %s\n" +
-                        "        string id storage header offset        == %s\n" +
-                        "        tag string to id storage header offset == %s\n"
-                        ) %
-                    (yelo.mod_name, yelo.memory_upgrade_multiplier,
-                     bool(flags.uses_memory_upgrades),
-                     bool(flags.uses_mod_data_files),
-                     bool(flags.is_protected),
-                     bool(flags.uses_game_state_upgrades),
-                     bool(flags.has_compression_params),
-                     info.build_string, info.timestamp, info.stage.enum_name,
-                     info.revision, cheape.build_string,
-                     info.cheape.maj, info.cheape.min, info.cheape.build,
-                     cheape.size, cheape.offset, cheape.decompressed_size,
-                     min_os.maj, min_os.min, min_os.build,
-                     version.project_yellow, version.project_yellow_globals,
-                     rsrc.compression_params_header_offset,
-                     rsrc.tag_symbol_storage_header_offset,
-                     rsrc.string_id_storage_header_offset,
-                     rsrc.tag_string_to_id_storage_header_offset,
-                    ))
-
-                if hasattr(active_map, "bsp_magics"):
-                    string += "\nSbsp magic and headers:\n"
-
-                    for tag_id in active_map.bsp_magics:
-                        header = active_map.bsp_headers.get(tag_id)
-                        if header is None: continue
-
-                        magic  = active_map.bsp_magics[tag_id]
-                        string += ((
-                            "    %s.structure_scenario_bsp\n" +
-                            "        bsp base pointer               == %s\n" +
-                            "        bsp magic                      == %s\n" +
-                            "        bsp size                       == %s\n" +
-                            "        bsp metadata pointer           == %s   non-magic == %s\n"
-                            #"        uncompressed lightmaps count   == %s\n" +
-                            #"        uncompressed lightmaps pointer == %s   non-magic == %s\n" +
-                            #"        compressed   lightmaps count   == %s\n" +
-                            #"        compressed   lightmaps pointer == %s   non-magic == %s\n"
-                            ) %
-                        (index.tag_index[tag_id].path,
-                         active_map.bsp_header_offsets[tag_id],
-                         magic, active_map.bsp_sizes[tag_id],
-                         header.meta_pointer, header.meta_pointer - magic,
-                         #header.uncompressed_lightmap_materials_count,
-                         #header.uncompressed_lightmap_materials_pointer,
-                         #header.uncompressed_lightmap_materials_pointer - magic,
-                         #header.compressed_lightmap_materials_count,
-                         #header.compressed_lightmap_materials_pointer,
-                         #header.compressed_lightmap_materials_pointer - magic,
-                         ))
-            except Exception:
-                string = ""
-                print(format_exc())
         try:
             self.map_info_text.config(state='normal')
             self.map_info_text.insert('end', string)
         finally:
             self.map_info_text.config(state='disabled')
+
+    def generate_map_info_string(self):
+        if not self.map_loaded:
+            return ""
+
+        active_map = self.active_map
+        string = "%s\n" % self.tk_map_path.get()
+
+        header     = active_map.map_header
+        index      = active_map.tag_index
+        orig_index = active_map.orig_tag_index
+        if hasattr(active_map.map_data, '__len__'):
+            decomp_size = str(len(active_map.map_data))
+        elif (hasattr(active_map.map_data, 'seek') and
+              hasattr(active_map.map_data, 'tell')):
+            curr_pos = active_map.map_data.tell()
+            active_map.map_data.seek(0, 2)
+            decomp_size = str(active_map.map_data.tell())
+            active_map.map_data.seek(curr_pos)
+        else:
+            decomp_size = "unknown"
+
+        if not active_map.is_compressed:
+            decomp_size += "(is already uncompressed)"
+
+        map_type = header.map_type.enum_name
+        if map_type == "sp":       map_type = "singleplayer"
+        elif map_type == "mp":     map_type = "multiplayer"
+        elif map_type == "ui":     map_type = "mainmenu"
+        elif map_type == "shared":   map_type = "shared"
+        elif map_type == "sharedsp": map_type = "shared single player"
+        elif active_map.is_resource: map_type = "resource cache"
+        elif "INVALID" in map_type:  map_type = "unknown"
+
+        string += ((
+            "Header:\n" +
+            "    engine version      == %s\n" +
+            "    name                == %s\n" +
+            "    build date          == %s\n" +
+            "    type                == %s\n" +
+            "    decompressed size   == %s\n" +
+            "    index header offset == %s\n") %
+        (active_map.engine, header.map_name, header.build_date,
+         map_type, decomp_size, header.tag_index_header_offset))
+
+        string += ((
+            "\nCalculated information:\n" +
+            "    index magic    == %s\n" +
+            "    map magic      == %s\n") %
+        (active_map.index_magic, active_map.map_magic))
+
+        tag_index_offset = index.tag_index_offset
+        if active_map.engine == "halo2alpha":
+            string += ((
+                "\nTag index:\n" +
+                "    tag count           == %s\n" +
+                "    scenario tag id     == %s\n" +
+                "    index array pointer == %s\n") %
+            (orig_index.tag_count,
+             orig_index.scenario_tag_id & 0xFFff, tag_index_offset))
+        elif "halo2" in active_map.engine:
+            used_tag_count = 0
+            local_tag_count = 0
+            for index_ref in index.tag_index:
+                if is_reserved_tag(index_ref):
+                    continue
+                elif index_ref.meta_offset != 0:
+                    local_tag_count += 1
+                used_tag_count += 1
+
+            string += ((
+                "\nTag index:\n" +
+                "    tag count           == %s\n" +
+                "    used tag count      == %s\n" +
+                "    local tag count     == %s\n" +
+                "    tag types count     == %s\n" +
+                "    scenario tag id     == %s\n" +
+                "    globals  tag id     == %s\n" +
+                "    index array pointer == %s\n") %
+            (orig_index.tag_count, used_tag_count, local_tag_count,
+             orig_index.tag_types_count,
+             orig_index.scenario_tag_id,
+             orig_index.globals_tag_id, tag_index_offset))
+        elif active_map.engine == "halo3":
+            string += ((
+                "\nTag index:\n" +
+                "    tag count           == %s\n" +
+                "    tag types count     == %s\n" +
+                "    root tags count     == %s\n" +
+                "    index array pointer == %s\n") %
+            (orig_index.tag_count, orig_index.tag_types_count,
+             orig_index.root_tags_count,
+             tag_index_offset - active_map.map_magic))
+
+            for arr_name, arr in (("Partitions", header.partitions),
+                                  ("Sections", header.sections),):
+                string += "\n%s:\n" % arr_name
+                names = ("debug", "resource", "tag", "locale")\
+                        if arr.NAME_MAP else range(len(arr))
+                for name in names:
+                    section = arr[name]
+                    string += ((
+                        "    %s:\n" +
+                        "        address == %s\n" +
+                        "        size    == %s\n" +
+                        "        offset  == %s\n") %
+                    (name, section[0], section[1], section.file_offset)
+                    )
+        else:
+            string += ((
+                "\nTag index:\n" +
+                "    tag count           == %s\n" +
+                "    scenario tag id     == %s\n" +
+                "    index array pointer == %s   non-magic == %s\n" +
+                "    model data pointer  == %s\n" +
+                "    meta data length    == %s\n" +
+                "    vertex parts count  == %s\n" +
+                "    index  parts count  == %s\n") %
+            (index.tag_count, index.scenario_tag_id & 0xFFff,
+             tag_index_offset, tag_index_offset - active_map.map_magic,
+             index.model_data_offset, header.tag_data_size,
+             index.vertex_parts_count, index.index_parts_count))
+
+            if index.SIZE == 36:
+                string += (
+                    "    index parts pointer == %s   non-magic == %s\n"
+                    % (index.index_parts_offset,
+                       index.index_parts_offset - active_map.map_magic))
+            else:
+                string += ((
+                    "    vertex data size    == %s\n" +
+                    "    index  data size    == %s\n" +
+                    "    model  data size    == %s\n") %
+                (index.vertex_data_size,
+                 index.model_data_size - index.vertex_data_size,
+                 index.model_data_size))
+
+        if active_map.engine == "halo1yelo":
+            yelo    = header.yelo_header
+            flags   = yelo.flags
+            info    = yelo.build_info
+            version = yelo.tag_versioning
+            cheape  = yelo.cheape_definitions
+            rsrc    = yelo.resources
+            min_os  = info.minimum_os_build
+            string += ((
+                "\nYelo information:\n" +
+                "    Mod name              == %s\n" +
+                "    Memory upgrade amount == %sx\n" +
+                "\n    Flags:\n" +
+                "        uses memory upgrades       == %s\n" +
+                "        uses mod data files        == %s\n" +
+                "        is protected               == %s\n" +
+                "        uses game state upgrades   == %s\n" +
+                "        has compression parameters == %s\n" +
+                "\n    Build info:\n" +
+                "        build string  == %s\n" +
+                "        timestamp     == %s\n" +
+                "        stage         == %s\n" +
+                "        revision      == %s\n" +
+                "\n    Cheape:\n" +
+                "        build string      == %s\n" +
+                "        version           == %s.%s.%s\n" +
+                "        size              == %s\n" +
+                "        offset            == %s\n" +
+                "        decompressed size == %s\n" +
+                "\n    Versioning:\n" +
+                "        minimum open sauce     == %s.%s.%s\n" +
+                "        project yellow         == %s\n" +
+                "        project yellow globals == %s\n" +
+                "\n    Resources:\n" +
+                "        compression parameters header offset   == %s\n" +
+                "        tag symbol storage header offset       == %s\n" +
+                "        string id storage header offset        == %s\n" +
+                "        tag string to id storage header offset == %s\n"
+                ) %
+            (yelo.mod_name, yelo.memory_upgrade_multiplier,
+             bool(flags.uses_memory_upgrades),
+             bool(flags.uses_mod_data_files),
+             bool(flags.is_protected),
+             bool(flags.uses_game_state_upgrades),
+             bool(flags.has_compression_params),
+             info.build_string, info.timestamp, info.stage.enum_name,
+             info.revision, cheape.build_string,
+             info.cheape.maj, info.cheape.min, info.cheape.build,
+             cheape.size, cheape.offset, cheape.decompressed_size,
+             min_os.maj, min_os.min, min_os.build,
+             version.project_yellow, version.project_yellow_globals,
+             rsrc.compression_params_header_offset,
+             rsrc.tag_symbol_storage_header_offset,
+             rsrc.string_id_storage_header_offset,
+             rsrc.tag_string_to_id_storage_header_offset,
+            ))
+
+        if hasattr(active_map, "bsp_magics"):
+            string += "\nSbsp magic and headers:\n"
+
+            for tag_id in active_map.bsp_magics:
+                header = active_map.bsp_headers.get(tag_id)
+                if header is None: continue
+
+                magic  = active_map.bsp_magics[tag_id]
+                string += ((
+                    "    %s.structure_scenario_bsp\n" +
+                    "        bsp base pointer               == %s\n" +
+                    "        bsp magic                      == %s\n" +
+                    "        bsp size                       == %s\n" +
+                    "        bsp metadata pointer           == %s   non-magic == %s\n"
+                    #"        uncompressed lightmaps count   == %s\n" +
+                    #"        uncompressed lightmaps pointer == %s   non-magic == %s\n" +
+                    #"        compressed   lightmaps count   == %s\n" +
+                    #"        compressed   lightmaps pointer == %s   non-magic == %s\n"
+                    ) %
+                (index.tag_index[tag_id].path,
+                 active_map.bsp_header_offsets[tag_id],
+                 magic, active_map.bsp_sizes[tag_id],
+                 header.meta_pointer, header.meta_pointer - magic,
+                 #header.uncompressed_lightmap_materials_count,
+                 #header.uncompressed_lightmap_materials_pointer,
+                 #header.uncompressed_lightmap_materials_pointer - magic,
+                 #header.compressed_lightmap_materials_count,
+                 #header.compressed_lightmap_materials_pointer,
+                 #header.compressed_lightmap_materials_pointer - magic,
+                 ))
+
+        return string
 
     def deprotect(self, e=None):
         if not self.map_loaded: return
@@ -1891,18 +1916,20 @@ class Refinery(tk.Tk):
             do_spoof  = halo_map.force_checksum and func is not None
 
             # copy the map to the new save location
-            map_size, chunk = 0, True
-            map_file.seek(0)  # DO copy the header(crc calculator reads from it)
-            out_file.seek(0)
-            while chunk:
-                chunk = map_file.read(4*1024**2)  # work with 4Mb chunks
-                map_size += len(chunk)
-                if map_file is not out_file:
-                    out_file.write(chunk)
-                gc.collect()
+            map_file.seek(0, 2)
+            map_size = map_file.tell()
+            map_file.seek(0) # need to seek to 0 as shutil.copyfileobj uses
+            out_file.seek(0) # the current file offsets for copying to/from
+            if map_file is not out_file:
+                shutil.copyfileobj(map_file, out_file)
 
             # recalculate pointers for the strings if they were changed
+            # NOTE: Can't optimize this by writing changed paths back to
+            # any existing path pointers, as we cannot assume they point
+            # to areas reserved for tag paths(map might be damaged and
+            # the pointers are actually pointing into tag data.)
             strings_size, string_offs = 0, {}
+            meta_data_end = map_header.tag_data_size + index_header_offset
             for i in range(len(index_array)):
                 tag_path = index_array[i].path
                 if orig_tag_paths[i].lower() == tag_path.lower():
@@ -1910,16 +1937,16 @@ class Refinery(tk.Tk):
                     continue
 
                 # put the new string at the end of the metadata
-                string_offs[i] = map_size + map_magic + strings_size
+                string_offs[i] = meta_data_end + map_magic + strings_size
                 strings_size += len(tag_path) + 1
 
             # make sure the user wants to expand the map more if needed
             if strings_size > meta_data_expansion:
                 if prompt_strings_expand and not messagebox.askyesno(
                         "Tagdata size expansion required",
-                        ("Tag paths were edited. The map must be expanded to "
-                         "accommodate the new strings.\n\nMap must be expanded "
-                         "by %s more bytes. Allow this?") % strings_size,
+                        ("Tag paths were edited. This maps tag data section "
+                         "must be expanded by %s bytes to fit the new strings."
+                         "\n\nContinue?") % strings_size,
                         icon='warning', parent=self):
                     print("    Save cancelled")
                     if map_file is not out_file:
@@ -1944,8 +1971,21 @@ class Refinery(tk.Tk):
             halo_map.map_data = out_file
             if map_file is not out_file and hasattr(map_file, "close"):
                 map_file.close()
-            expand_halomap(halo_map, raw_data_expansion, meta_data_expansion,
-                           vertex_data_expansion, triangle_data_expansion)
+
+            expansions = (raw_data_expansion, meta_data_expansion,
+                          vertex_data_expansion, triangle_data_expansion)
+            section_ends = get_halo_map_section_ends(halo_map)
+
+            expand_halo_map(halo_map, *expansions)
+
+            # move the cheape.map pointer
+            if halo_map.engine == "halo1yelo":
+                cheape = map_header.yelo_header.cheape_definitions
+                move_amount = 0
+                for end, exp in zip(section_ends, expansions):
+                    if end <= cheape.offset:
+                        move_amount += exp
+                cheape.offset += move_amount
 
             # get the tag_index_header_offset and map_magic if they changed
             index_header_offset = map_header.tag_index_header_offset
@@ -2013,6 +2053,33 @@ class Refinery(tk.Tk):
             print(format_exc())
         self._running = False
 
+    def extract_cheape_from_halo_map(self, halo_map, output_path=""):
+        if halo_map.engine != "halo1yelo":
+            return ""
+
+        if not output_path:
+            output_path = sanitize_path(
+                join(self.tk_tags_dir.get(),
+                     halo_map.map_header.map_name + "_cheape.map"))
+
+        if not exists(dirname(output_path)):
+            os.makedirs(dirname(output_path))
+
+        cheape = halo_map.map_header.yelo_header.cheape_definitions
+        size        = cheape.size
+        decomp_size = cheape.decompressed_size
+
+        halo_map.map_data.seek(cheape.offset)
+        cheape_data = halo_map.map_data.read(size)
+        mode = 'r+b' if isfile(output_path) else 'w+b'
+        with open(output_path, mode) as f:
+            f.truncate(0)
+            if decomp_size and decomp_size != size:
+                cheape_data = zlib.decompress(cheape_data)
+            f.write(cheape_data)
+
+        return output_path
+
     def _start_extraction(self):
         queue_tree = self.queue_tree.tags_tree
 
@@ -2078,36 +2145,16 @@ class Refinery(tk.Tk):
 
             if self.extract_cheape.get() and (curr_map.engine == "halo1yelo" and
                                               map_name not in cheapes_extracted):
-                cheapes_extracted.add(map_name)
-                filename = map_name + "_cheape.map"
-
-                abs_tag_path = sanitize_path(
-                    join(self.tk_tags_dir.get(), filename))
-
-                print(abs_tag_path)
                 try:
-                    if not exists(dirname(abs_tag_path)):
-                        os.makedirs(dirname(abs_tag_path))
-
-                    cheape = curr_map.map_header.yelo_header.cheape_definitions
-                    size        = cheape.size
-                    decomp_size = cheape.decompressed_size
-
-                    curr_map.map_data.seek(cheape.offset)
-                    cheape_data = curr_map.map_data.read(size)
-                    mode = 'r+b' if isfile(abs_tag_path) else 'w+b'
-                    with open(abs_tag_path, mode) as f:
-                        f.truncate(0)
-                        if decomp_size and decomp_size != size:
-                            cheape_data = zlib.decompress(cheape_data)
-                        f.write(cheape_data)
-
+                    cheapes_extracted.add(map_name)
+                    print(self.extract_cheape_from_halo_map(curr_map))
                 except Exception:
                     print(format_exc())
                     print("Error ocurred while extracting cheape.map")
 
             extract_rsrc = curr_map.engine in ("halo1ce", "halo1yelo") and \
                            self.extract_from_ce_resources.get()
+            force_lower_case_paths = self.force_lower_case_paths.get()
 
             map_magic = curr_map.map_magic
             tag_index = curr_map.tag_index
@@ -2118,7 +2165,8 @@ class Refinery(tk.Tk):
             convert_kwargs = dict(
                 rename_scnr_dups=self.rename_duplicates_in_scnr.get(),
                 generate_uncomp_verts=self.generate_uncomp_verts.get(),
-                generate_comp_verts=self.generate_comp_verts.get()
+                generate_comp_verts=self.generate_comp_verts.get(),
+                force_lower_case_paths=force_lower_case_paths
                 )
 
             extract_kw["hsc_node_strings_by_type"] = hsc_strings_by_type = {}
@@ -2129,18 +2177,22 @@ class Refinery(tk.Tk):
                             curr_map.scnr_meta))
 
                 if self.use_tag_index_for_script_names.get():
-                    strings = {i: tag_index_array[i].path for
+                    bipeds = curr_map.scnr_meta.bipeds_palette.STEPTREE
+                    strings = {i: tag_index_array[i].path.lower() for
                                i in range(len(tag_index_array))}
+                    actors = {i: bipeds[i].name.filepath.split("/")\
+                              [-1].split("\\")[-1] for i in range(len(bipeds))}
+
+                    if force_lower_case_paths:
+                        strings = {k: v.lower() for k, v in strings.items()}
+                        actors  = {k: v.lower() for k, v in actors.items()}
+
                     # tag reference path strings
                     for i in range(24, 32):
                         hsc_strings_by_type[i] = strings
 
                     # actor type strings
-                    i = 0
-                    hsc_strings_by_type[35] = names = {}
-                    for b in curr_map.scnr_meta.bipeds_palette.STEPTREE:
-                        names[i] = b.name.filepath.split("/")[-1].split("\\")[-1]
-                        i += 1
+                    hsc_strings_by_type[35] = actors
 
             while tag_index_refs:
                 next_refs = []
@@ -2148,10 +2200,13 @@ class Refinery(tk.Tk):
                 for tag_index_ref in tag_index_refs:
                     file_path = "<Could not get filepath>"
                     try:
+                        self.update()
                         file_path = sanitize_path("%s.%s" %
                             (tag_index_ref.path,
                              tag_index_ref.class_1.enum_name))
-                        self.update()
+                        if force_lower_case_paths:
+                            file_path = file_path.lower()
+
                         tag_id = tag_index_ref.id & 0xFFff
                         if not map_magic:
                             # resource cache tag
@@ -2194,19 +2249,25 @@ class Refinery(tk.Tk):
                         if tags_list_path:
                             tagslist += "%s: %s\n" % (extract_mode, file_path)
 
-                        if recursive:
-                            # add dependencies to list to be extracted
-                            index_len = len(tag_index_array)
-                            refs = ()
+                        tag_refs = ()
+                        if recursive or force_lower_case_paths:
                             try:
-                                refs = curr_map.get_dependencies(
+                                tag_refs = curr_map.get_dependencies(
                                     meta, tag_id, tag_cls)
                             except Exception:
                                 print(format_exc())
-                                print("    Could not recursively extract.")
+                                print("    Could not get tag references.")
 
+                        if force_lower_case_paths:
+                            # force all tag references to lowercase
+                            for ref in tag_refs:
+                                ref.filepath = ref.filepath.lower()
+
+                        if recursive:
+                            # add dependencies to list to be extracted
+                            index_len = len(tag_index_array)
                             extracting = set(extracted)
-                            for ref in refs:
+                            for ref in tag_refs:
                                 index = ref.id & 0xFFff
                                 key = (index, extract_mode)
                                 if key not in extracting and index < index_len:
