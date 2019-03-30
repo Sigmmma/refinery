@@ -22,7 +22,7 @@ config_header = Struct("header",
         SIZE=4
         ),
     Bool32("extraction_flags",
-        Pad(1),
+        "force_lower_case_paths",
         "extract_cheape",
         "extract_from_ce_resources",
         "rename_duplicates_in_scnr",

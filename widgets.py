@@ -810,8 +810,8 @@ class RefinerySettingsWindow(tk.Toplevel):
         except Exception:
             print("Could not load window icon.")
 
-        self.geometry("400x300")
-        self.minsize(width=400, height=300)
+        self.geometry("450x300")
+        self.minsize(width=450, height=300)
         self.resizable(1, 0)
         self.title("Settings")
 
@@ -821,6 +821,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.data_extract_frame = tk.Frame(self.tabs)
         self.tag_fixup_frame    = tk.Frame(self.tabs)
         self.deprotect_frame    = tk.Frame(self.tabs)
+        self.heuristics_frame   = tk.Frame(self.tabs)
         self.other_frame        = tk.Frame(self.tabs)
 
         self.tabs.add(self.dirs_frame, text="Directories")
@@ -828,6 +829,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.tabs.add(self.data_extract_frame, text="Data extraction")
         self.tabs.add(self.tag_fixup_frame, text="Tag fixup")
         self.tabs.add(self.deprotect_frame, text="Deprotection")
+        self.tabs.add(self.heuristics_frame, text="Heuristics")
         self.tabs.add(self.other_frame, text="Other")
 
         self.tags_dir_frame  = tk.LabelFrame(
@@ -841,6 +843,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "rename_duplicates_in_scnr", "decode_adpcm",
                      "bitmap_extract_format", "bitmap_extract_keep_alpha",
                      "generate_comp_verts", "generate_uncomp_verts",
+                     "force_lower_case_paths",
                      "fix_tag_classes", "autoload_resources", "extract_cheape",
                      "use_hashcaches", "use_heuristics", "rename_cached_tags",
                      "show_all_fields", "edit_all_fields", "allow_corrupt",
@@ -892,9 +895,6 @@ class RefinerySettingsWindow(tk.Toplevel):
             variable=self.generate_uncomp_verts)
 
 
-        self.extract_from_ce_resources_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Extract from Halo CE resource maps",
-            variable=self.extract_from_ce_resources)
         self.overwrite_cbtn = tk.Checkbutton(
             self.extract_frame, text="Overwrite files(not recommended)",
             variable=self.overwrite)
@@ -904,6 +904,12 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.show_output_cbtn = tk.Checkbutton(
             self.extract_frame, text="Print extracted file names",
             variable=self.show_output)
+        self.extract_from_ce_resources_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Extract from Halo CE resource maps",
+            variable=self.extract_from_ce_resources)
+        self.force_lower_case_paths_cbtn = tk.Checkbutton(
+            self.extract_frame, text="Force all tag paths to lowercase",
+            variable=self.force_lower_case_paths)
 
 
         self.decode_adpcm_cbtn = tk.Checkbutton(
@@ -937,15 +943,12 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.fix_tag_classes_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Fix tag classes",
             variable=self.fix_tag_classes)
+        self.use_heuristics_cbtn = tk.Checkbutton(
+            self.deprotect_frame, text="Use heuristic deprotection methods",
+            variable=self.use_heuristics)
         self.use_hashcaches_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Use hashcaches",
             variable=self.use_hashcaches)
-        self.use_heuristics_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use heuristics",
-            variable=self.use_heuristics)
-        self.valid_tag_paths_are_accurate_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Do not rename non-protected tag paths",
-            variable=self.valid_tag_paths_are_accurate)
         self.scrape_tag_paths_from_scripts_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Scrape tag paths from scenario scripts",
             variable=self.scrape_tag_paths_from_scripts)
@@ -956,15 +959,20 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.limit_tag_path_lengths_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Limit tag paths to 254 characters (tool.exe limitation)",
             variable=self.limit_tag_path_lengths)
-        self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use shallow ui_widget_definition nesting",
-            variable=self.shallow_ui_widget_nesting)
         self.fix_tag_index_offset_cbtn = tk.Checkbutton(
             self.deprotect_frame, text=("Fix tag index offset when saving\n"
                                         "WARNING: Can corrupt certain maps"),
             variable=self.fix_tag_index_offset, justify='left')
+
+
+        self.valid_tag_paths_are_accurate_cbtn = tk.Checkbutton(
+            self.heuristics_frame, text="Do not rename non-protected tag paths",
+            variable=self.valid_tag_paths_are_accurate)
+        self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
+            self.heuristics_frame, text="Use shallow ui_widget_definition nesting",
+            variable=self.shallow_ui_widget_nesting)
         self.print_heuristic_progress_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text=("Print heuristic tag path changes"),
+            self.heuristics_frame, text=("Print heuristic tag path changes"),
             variable=self.print_heuristic_name_changes, justify='left')
 
 
@@ -992,8 +1000,9 @@ class RefinerySettingsWindow(tk.Toplevel):
                   self.tags_list_frame):
             w.pack(padx=4, pady=2, fill="x")
 
-        for w in (self.extract_from_ce_resources_cbtn, self.overwrite_cbtn,
-                  self.recursive_cbtn, self.show_output_cbtn):
+        for w in (self.overwrite_cbtn, self.recursive_cbtn,
+                  self.show_output_cbtn, self.extract_from_ce_resources_cbtn,
+                  self.force_lower_case_paths_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.bitmap_extract_keep_alpha_cbtn,
@@ -1010,14 +1019,16 @@ class RefinerySettingsWindow(tk.Toplevel):
                   self.generate_comp_verts_cbtn):
             w.pack(padx=4, anchor='w')
 
-        for w in (self.fix_tag_classes_cbtn, self.fix_tag_index_offset_cbtn,
-                  self.use_heuristics_cbtn, #self.use_hashcaches_cbtn,
-                  self.valid_tag_paths_are_accurate_cbtn,
-                  self.rename_cached_tags_cbtn,
+        for w in (self.fix_tag_classes_cbtn, self.use_heuristics_cbtn,
+                  self.fix_tag_index_offset_cbtn, #self.use_hashcaches_cbtn,
+                  self.rename_cached_tags_cbtn, self.limit_tag_path_lengths_cbtn,
                   self.scrape_tag_paths_from_scripts_cbtn,
-                  self.limit_tag_path_lengths_cbtn,
+                  ):
+            w.pack(padx=4, anchor='w')
+
+        for w in (self.print_heuristic_progress_cbtn,
+                  self.valid_tag_paths_are_accurate_cbtn,
                   self.shallow_ui_widget_nesting_cbtn,
-                  self.print_heuristic_progress_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
 
