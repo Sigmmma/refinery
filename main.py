@@ -427,7 +427,7 @@ class Refinery(tk.Tk):
         # pack everything
         self.begin_button.pack(side='right', padx=4, pady=4)
         self.deprotect_button.pack(side='right', padx=4, pady=4)
-        self.deprotect_all_button.pack(side='right', padx=4, pady=4)
+        #self.deprotect_all_button.pack(side='right', padx=4, pady=4)
         self.engine_select_menu.pack(side='left', padx=4, pady=4, fill='x')
         self.map_select_menu.pack(side='left', padx=(4, 10), pady=4,
                                   fill='x', expand=True)
