@@ -218,14 +218,16 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
                               kw.get("override"), kw.get("print_new_name"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
+    
+    kw_no_priority = dict(kw)
+    kw_no_priority.pop("priority", None)
 
     # rename the open sauce stuff
     try:
-        temp_kw = dict(kw)
-        temp_kw.pop("priority", None)
         recursive_rename(
             get_tag_id(meta.project_yellow_definitions),
-            priority=INF, name=name, sub_dir=sub_dir + globals_dir, **temp_kw)
+            priority=INF, name=name, sub_dir=sub_dir + globals_dir,
+            **kw_no_priority)
     except AttributeError:
         pass
 
@@ -277,24 +279,24 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     for b in meta.detail_object_collection_palette.STEPTREE:
         recursive_rename(
             get_tag_id(b.name), sub_dir=sub_dir + "detail objects\\",
-            priority=MEDIUM_PRIORITY, **kw)
+            priority=MEDIUM_PRIORITY, **kw_no_priority)
 
     # rename decal palette references
     for swatch in meta.decals_palette.STEPTREE:
         recursive_rename(get_tag_id(swatch.name), priority=MEDIUM_PRIORITY,
-                         sub_dir=sub_dir + "decals\\", **kw)
+                         sub_dir=sub_dir + "decals\\", **kw_no_priority)
 
     # rename palette references
     for b_name, pal_sub_dir in palette_renames:
         for swatch in meta[b_name].STEPTREE:
             recursive_rename(get_tag_id(swatch.name), priority=MEDIUM_PRIORITY,
-                             sub_dir=pal_sub_dir, **kw)
+                             sub_dir=pal_sub_dir, **kw_no_priority)
 
     # netgame flags
     for b in meta.netgame_flags.STEPTREE:
         recursive_rename(
             get_tag_id(b.weapon_group), sub_dir=local_item_coll_dir,
-            name="ng flag", priority=MEDIUM_PRIORITY, **kw)
+            name="ng flag", priority=MEDIUM_PRIORITY, **kw_no_priority)
 
     # netgame equipment
     for b in meta.netgame_equipments.STEPTREE:
@@ -314,7 +316,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
         recursive_rename(
             get_tag_id(b.item_collection), sub_dir=local_item_coll_dir,
-            name=ng_name, priority=MEDIUM_PRIORITY, **kw)
+            name=ng_name, priority=MEDIUM_PRIORITY, **kw_no_priority)
 
     # starting equipment
     # do this AFTER netgame equipment
@@ -325,7 +327,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
             recursive_rename(
                 get_tag_id(b['item_collection_%s' % k]),
                 sub_dir=local_item_coll_dir + "start equipment\\",
-                priority=MEDIUM_PRIORITY, **kw)
+                priority=MEDIUM_PRIORITY, **kw_no_priority)
             j += 1
         i += 1
 
@@ -337,13 +339,13 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
         recursive_rename(get_tag_id(b.animation_graph), name=anim_name,
                          sub_dir=cinematics_dir + "animations\\",
-                         priority=LOW_PRIORITY, **kw)
+                         priority=LOW_PRIORITY, **kw_no_priority)
 
     # rename bsp references
     for b in meta.structure_bsps.STEPTREE:
         recursive_rename(get_tag_id(b.structure_bsp),
                          priority=SCNR_BSPS_PRIORITY,
-                         sub_dir=sub_dir, name=name, **kw)
+                         sub_dir=sub_dir, name=name, **kw_no_priority)
 
     # rename bsp modifiers
     bsp_modifiers = getattr(getattr(meta, "bsp_modifiers", ()), "STEPTREE", ())
@@ -359,16 +361,16 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         for b in modifier.lightmap_sets.STEPTREE:
             recursive_rename(
                 get_tag_id(b.std_lightmap), priority=VERY_HIGH_PRIORITY,
-                sub_dir=lightmap_sub_dir, name=b.name + " std", **kw)
+                sub_dir=lightmap_sub_dir, name=b.name + " std", **kw_no_priority)
             recursive_rename(
                 get_tag_id(b.dir_lightmap_1), priority=VERY_HIGH_PRIORITY,
-                sub_dir=lightmap_sub_dir, name=b.name + " dlm1", **kw)
+                sub_dir=lightmap_sub_dir, name=b.name + " dlm1", **kw_no_priority)
             recursive_rename(
                 get_tag_id(b.dir_lightmap_2), priority=VERY_HIGH_PRIORITY,
-                sub_dir=lightmap_sub_dir, name=b.name + " dlm2", **kw)
+                sub_dir=lightmap_sub_dir, name=b.name + " dlm2", **kw_no_priority)
             recursive_rename(
                 get_tag_id(b.dir_lightmap_3), priority=VERY_HIGH_PRIORITY,
-                sub_dir=lightmap_sub_dir, name=b.name + " dlm3", **kw)
+                sub_dir=lightmap_sub_dir, name=b.name + " dlm3", **kw_no_priority)
 
         sky_set_dir = sub_dir + (bsp_name + " sky sets\\").strip()
         for sky_set in modifier.sky_sets.STEPTREE:
@@ -391,7 +393,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
             for k in range(1, 7):
                 recursive_rename(
                     get_tag_id(b['variant_%s' % k]), sub_dir=conv_dir,
-                    priority=MEDIUM_PRIORITY, name=line.strip(), **kw)
+                    priority=MEDIUM_PRIORITY, name=line.strip(), **kw_no_priority)
             j += 1
         i += 1
 
