@@ -221,9 +221,11 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     # rename the open sauce stuff
     try:
+        temp_kw = dict(kw)
+        temp_kw.pop("priority", None)
         recursive_rename(
             get_tag_id(meta.project_yellow_definitions),
-            priority=INF, name=name, sub_dir=sub_dir + globals_dir, **kw)
+            priority=INF, name=name, sub_dir=sub_dir + globals_dir, **temp_kw)
     except AttributeError:
         pass
 
