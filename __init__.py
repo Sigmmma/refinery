@@ -3,8 +3,9 @@
 # ##############
 __author__ = "Devin Bobadilla"
 #           YYYY.MM.DD
-__date__ = "2019.03.31"
-__version__ = (2, 1, 2)
+__date__ = "2019.04.01"
+__version__ = (2, 1, 3)
 __all__ = (
-    'hashcacher', 'hashcacher_window', 'main', 'meta_window', 'widgets', 'crc_functions'
+    'core', 'crc_functions', 'hashcacher', 'main',
+    'hashcacher_window', 'meta_window', 'widgets',
     )
