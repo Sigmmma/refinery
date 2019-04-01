@@ -7,134 +7,35 @@ import shutil
 import sys
 import zlib
 
-from os.path import dirname, basename, exists, join, isfile, splitext
+from refinery.core import *
+
 from struct import unpack
 from time import time
+from traceback import format_exc
+
 from tkinter.font import Font
 from tkinter import messagebox
 from tkinter.filedialog import askopenfilename, askopenfilenames,\
      asksaveasfilename
-from traceback import format_exc
-
-from supyr_struct.buffer import BytearrayBuffer, PeekableMmap
-from supyr_struct.defs.constants import *
-from supyr_struct.field_types import FieldType
 
 
 from binilla.about_window import AboutWindow
 from binilla.widgets import ScrollMenu
 
-from refinery.util import *
-from refinery.widgets import QueueTree,\
-     RefinerySettingsWindow, RefineryRenameWindow,\
-     ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree
 from refinery.defs.config_def import config_def
-
-
-from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
-from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
-     h3_data_extractors
-from reclaimer.hsc import get_h1_scenario_script_object_type_strings,\
-     get_hsc_data_block
-from reclaimer.meta.wrappers.halo1_map import Halo1Map
-from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
-from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
-from reclaimer.meta.wrappers.halo2_map import Halo2Map
-from reclaimer.meta.wrappers.halo3_map import Halo3Map
-from reclaimer.meta.wrappers.halo3_beta_map import Halo3BetaMap
-from reclaimer.meta.wrappers.halo_reach_map import HaloReachMap
-from reclaimer.meta.wrappers.halo_reach_beta_map import HaloReachBetaMap
-from reclaimer.meta.wrappers.halo3_odst_map import Halo3OdstMap
-from reclaimer.meta.wrappers.halo4_map import Halo4Map
-from reclaimer.meta.wrappers.halo4_beta_map import Halo4BetaMap
-from reclaimer.meta.wrappers.halo5_map import Halo5Map
-from reclaimer.meta.wrappers.stubbs_map import StubbsMap
-from reclaimer.meta.wrappers.shadowrun_map import ShadowrunMap
-
-from reclaimer.meta.halo_map import get_map_header, get_map_version,\
-     get_tag_index
-from reclaimer.meta.class_repair import class_repair_functions,\
-     get_tagc_refs
-from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
-from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
-
-from refinery import crc_functions
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
      RefineryRenameWindow, RefineryChecksumEditorWindow,\
      ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree,\
      bitmap_file_formats
-from refinery.recursive_rename.tag_path_handler import TagPathHandler
-from refinery.recursive_rename.functions import recursive_rename
 
 
-platform = sys.platform.lower()
-curr_dir = get_cwd(__file__)
-default_config_path = join(curr_dir, 'refinery.cfg')
-
+default_config_path = os.path.join(curr_dir, 'refinery.cfg')
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
 VALID_EXTRACT_MODES = frozenset(("tags", "data"))
-INF = float("inf")
 
 
-def get_halo_map_section_ends(halo_map):
-    head  = halo_map.map_header
-    index = halo_map.tag_index
-    raw_data_end    = index.model_data_offset
-    vertex_data_end = index.vertex_data_size + raw_data_end
-    index_data_end  = index.model_data_size  + raw_data_end
-    meta_data_end   = head.tag_data_size +  head.tag_index_header_offset
-    return raw_data_end, vertex_data_end, index_data_end, meta_data_end
 
-
-def expand_halo_map(halo_map, raw_data_expansion=0, meta_data_expansion=0,
-                    vertex_data_expansion=0, triangle_data_expansion=0):
-    map_file   = halo_map.map_data
-    map_header = halo_map.map_header
-    tag_index  = halo_map.tag_index
-    tag_index_array = tag_index.tag_index
-    index_header_offset = map_header.tag_index_header_offset
-
-    raw_data_end, vertex_data_end, index_data_end, meta_data_end = \
-                  get_halo_map_section_ends(halo_map)
-
-
-    expansions = ((raw_data_end,    raw_data_expansion),
-                  (vertex_data_end, vertex_data_expansion),
-                  (index_data_end,  triangle_data_expansion),
-                  (meta_data_end,   meta_data_expansion))
-
-    # expand the map's sections
-    map_end = inject_file_padding(map_file, *expansions)
-    diffs_by_offsets, diff = dict(expansions), 0
-    for off in sorted(diffs_by_offsets):
-        diff += diffs_by_offsets[off]
-        diffs_by_offsets[off] = diff
-
-    meta_ptr_diff = diff - meta_data_expansion
-
-    # update the map_header and tag_index_header's offsets and sizes
-    tag_index.model_data_offset += raw_data_expansion
-    tag_index.vertex_data_size  += vertex_data_expansion
-    tag_index.model_data_size   += vertex_data_expansion + triangle_data_expansion
-    halo_map.map_magic                 -= meta_ptr_diff
-    map_header.tag_index_header_offset += meta_ptr_diff
-    map_header.decomp_len = map_end
-    map_header.tag_data_size += meta_data_expansion
-
-    # adjust rawdata pointers in various tags if the index header moved
-    if meta_ptr_diff:
-        for ref in tag_index_array:
-            func = rawdata_ref_move_functions.get(fourcc(ref.class_1.data))
-            if func is None or ref.indexed:
-                continue
-            func(ref.id & 0xFFff, tag_index_array, map_file,
-                 halo_map.map_magic, halo_map.engine, diffs_by_offsets)
-
-    map_file.flush()
-    return map_end
-
-
-class Refinery(tk.Tk):
+class Refinery(tk.Tk, RefineryCore):
     tk_active_engine = None
     tk_active_map_name = None
     tk_map_path = None
@@ -186,17 +87,17 @@ class Refinery(tk.Tk):
 
         tk.Tk.__init__(self, *args, **kwargs)
         try:
-            with open(os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
+            with open(os.path.os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
                 setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
         except Exception:
             pass
 
         try:
             try:
-                icon_filepath = join(curr_dir, 'refinery.ico')
+                icon_filepath = os.path.join(curr_dir, 'refinery.ico')
                 self.iconbitmap(icon_filepath)
             except Exception:
-                icon_filepath = join(join(curr_dir, 'icons', 'refinery.ico'))
+                icon_filepath = os.path.join(os.path.join(curr_dir, 'icons', 'refinery.ico'))
                 self.iconbitmap(icon_filepath)
         except Exception:
             icon_filepath = ""
@@ -213,11 +114,11 @@ class Refinery(tk.Tk):
         self.tk_active_map_name = tk.StringVar(self)
         self.tk_active_engine = tk.StringVar(self)
         self.tk_tags_dir = tk.StringVar(
-            self, join(curr_dir, "tags", ""))
+            self, os.path.join(curr_dir, "tags", ""))
         self.tk_data_dir = tk.StringVar(
-            self, join(curr_dir, "data", ""))
+            self, os.path.join(curr_dir, "data", ""))
         self.tags_list_path = tk.StringVar(
-            self, join(curr_dir, "tags", "tagslist.txt"))
+            self, os.path.join(curr_dir, "tags", "tagslist.txt"))
         self.extract_mode = tk.StringVar(self, "tags")
         self.fix_tag_classes = tk.IntVar(self, 1)
         self.fix_tag_index_offset = tk.IntVar(self)
@@ -285,7 +186,7 @@ class Refinery(tk.Tk):
 
         if self.config_file is not None:
             pass
-        elif exists(self.config_path):
+        elif os.path.exists(self.config_path):
             # load the config file
             try:
                 self.load_config()
@@ -494,7 +395,7 @@ class Refinery(tk.Tk):
     def load_config(self, filepath=None):
         if filepath is None:
             filepath = self.config_path
-        assert exists(filepath)
+        assert os.path.exists(filepath)
 
         # load the config file
         self.config_file = config_def.build(filepath=filepath)
@@ -959,8 +860,8 @@ class Refinery(tk.Tk):
                 if map_path is None:
                     continue
 
-                print("Loading %s..." % basename(map_path))
-                if not exists(map_path):
+                print("Loading %s..." % os.path.basename(map_path))
+                if not os.path.exists(map_path):
                     print("    Map does not exist")
                     continue
 
@@ -1370,7 +1271,7 @@ class Refinery(tk.Tk):
 
         if not save_path:
             save_path = asksaveasfilename(
-                initialdir=dirname(self.tk_map_path.get()), parent=self,
+                initialdir=os.path.dirname(self.tk_map_path.get()), parent=self,
                 title="Choose where to save the deprotected map",
                 filetypes=(("Halo mapfile", "*.map"),
                            ("Halo mapfile(extra sauce)", "*.yelo"),
@@ -1380,7 +1281,7 @@ class Refinery(tk.Tk):
             print("Deprotection cancelled.")
             return
 
-        save_path, ext = splitext(save_path)
+        save_path, ext = os.path.splitext(save_path)
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in self.active_map.engine else '.map')))
 
@@ -1620,7 +1521,7 @@ class Refinery(tk.Tk):
 
 
         # rename tag collections based on what order they're found
-        # first one will will always be the yelo explicit refs(if it exists)
+        # first one will will always be the yelo explicit refs(if it os.path.exists)
         # next will be ui_tags_loaded_all_scenario_types
         # last will be ui_tags_loaded_XXXX_scenario_type
         tagc_i = 0
@@ -1839,7 +1740,7 @@ class Refinery(tk.Tk):
             return
 
         save_path = asksaveasfilename(
-            initialdir=dirname(self.tk_map_path.get()), parent=self,
+            initialdir=os.path.dirname(self.tk_map_path.get()), parent=self,
             title="Choose where to save the map",
             filetypes=(("Halo mapfile", "*.map"),
                        ("Halo mapfile(extra sauce)", "*.yelo"),
@@ -1883,12 +1784,12 @@ class Refinery(tk.Tk):
         elif not save_path:
             save_path = halo_map.filepath
 
-        save_dir  = dirname(save_path)
-        save_path, ext = splitext(save_path)
-        new_map_name = basename(save_path)
+        save_dir  = os.path.dirname(save_path)
+        save_path, ext = os.path.splitext(save_path)
+        new_map_name = os.path.basename(save_path)
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in halo_map.engine else '.map')))
-        if not exists(save_dir):
+        if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
         if (prompt_internal_rename and len(new_map_name) < 32 and
@@ -1906,10 +1807,10 @@ class Refinery(tk.Tk):
         try:
             out_file = map_file = halo_map.map_data
             if save_path.lower() != sanitize_path(halo_map.filepath).lower():
-                # use r+ mode rather than w if the file exists
+                # use r+ mode rather than w if the file os.path.exists
                 # since it might be hidden. apparently on windows
                 # the w mode will fail to open hidden files.
-                if isfile(save_path):
+                if os.path.isfile(save_path):
                     out_file = open(save_path, 'r+b')
                     out_file.truncate(0)
                 else:
@@ -2078,11 +1979,11 @@ class Refinery(tk.Tk):
 
         if not output_path:
             output_path = sanitize_path(
-                join(self.tk_tags_dir.get(),
+                os.path.join(self.tk_tags_dir.get(),
                      halo_map.map_header.map_name + "_cheape.map"))
 
-        if not exists(dirname(output_path)):
-            os.makedirs(dirname(output_path))
+        if not os.path.exists(os.path.dirname(output_path)):
+            os.makedirs(os.path.dirname(output_path))
 
         cheape = halo_map.map_header.yelo_header.cheape_definitions
         size        = cheape.size
@@ -2090,7 +1991,7 @@ class Refinery(tk.Tk):
 
         halo_map.map_data.seek(cheape.offset)
         cheape_data = halo_map.map_data.read(size)
-        mode = 'r+b' if isfile(output_path) else 'w+b'
+        mode = 'r+b' if os.path.isfile(output_path) else 'w+b'
         with open(output_path, mode) as f:
             f.truncate(0)
             if decomp_size and decomp_size != size:
@@ -2237,7 +2138,7 @@ class Refinery(tk.Tk):
                         elif curr_map.is_indexed(tag_id) and not extract_rsrc:
                             continue
                         extracted.add((tag_id, extract_mode))
-                        abs_file_path = join(out_dir, file_path)
+                        abs_file_path = os.path.join(out_dir, file_path)
 
                         if tag_index_ref.class_1.enum_name in ("<INVALID>", "NONE"):
                             print(("Unknown tag class for '%s'\n" +
@@ -2247,7 +2148,7 @@ class Refinery(tk.Tk):
 
                         # determine if not overwriting and we are about to
                         dont_extract = not overwrite and (
-                            extract_mode == "tags" and isfile(abs_file_path))
+                            extract_mode == "tags" and os.path.isfile(abs_file_path))
 
                         if dont_extract and not recursive:
                             continue
@@ -2305,11 +2206,11 @@ class Refinery(tk.Tk):
 
                         if extract_mode == "tags":
                             try:
-                                if not exists(dirname(abs_file_path)):
-                                    os.makedirs(dirname(abs_file_path))
+                                if not os.path.exists(os.path.dirname(abs_file_path)):
+                                    os.makedirs(os.path.dirname(abs_file_path))
 
                                 if is_halo1_map: FieldType.force_big()
-                                mode = 'r+b' if isfile(abs_file_path) else 'w+b'
+                                mode = 'r+b' if os.path.isfile(abs_file_path) else 'w+b'
                                 with open(abs_file_path, mode) as f:
                                     try:
                                         f.truncate(0)
@@ -2321,7 +2222,7 @@ class Refinery(tk.Tk):
                                         continue
                             except FileNotFoundError:
                                 if platform == "win32" and len(abs_file_path) >= 256:
-                                    fp, ext = splitext(abs_file_path)
+                                    fp, ext = os.path.splitext(abs_file_path)
                                     print(("    Failed to extract. Absolute filepath is over 260 "
                                            "characters. Must be shortened by %s characters. "
                                            "Try extracting to a more shallow tags directory.") % (
@@ -2436,7 +2337,7 @@ class Refinery(tk.Tk):
             return
 
         fps = tuple(sanitize_path(fp) for fp in fps)
-        self.last_dir = dirname(fps[0])
+        self.last_dir = os.path.dirname(fps[0])
 
         self._running = True
         try:
