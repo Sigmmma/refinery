@@ -221,8 +221,10 @@ class RefineryCore:
     def load_map(self, map_path, will_be_active=True):
         self.load_maps((map_path, ), will_be_active=will_be_active)
 
-    def save_map(self, save_path=None, engine="<active>", map_name="<active>",
-                 *a, **kw):
+    def save_map(self, save_path=None, halo_map=None, **kw):
+        if halo_map is None:
+            halo_map = self.active_map
+
         meta_data_expansion = kw.pop("meta_data_expansion", 0)
         raw_data_expansion = kw.pop("raw_data_expansion", 0)
         vertex_data_expansion = kw.pop("vertex_data_expansion", 0)
@@ -232,22 +234,17 @@ class RefineryCore:
         assert vertex_data_expansion   >= 0
         assert triangle_data_expansion >= 0
 
-        maps = self.maps_by_engine.get(engine, {})
-        halo_map = maps.get(map_name)
         if halo_map is None:
-            return
+            raise KeyError("No map loaded and none provided.")
         elif halo_map.is_resource:
-            print("Cannot save resource maps.")
-            return
+            raise TypeError("Cannot save resource maps.")
         elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
-            print("Cannot save this kind of map.")
-            return
+            raise TypeError("Cannot save this kind of map.")
         elif not save_path:
             save_path = halo_map.filepath
 
         save_dir  = os.path.dirname(save_path)
         save_path, ext = os.path.splitext(save_path)
-        new_map_name = os.path.basename(save_path)
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in halo_map.engine else '.map')))
         if not os.path.exists(save_dir):
@@ -267,7 +264,12 @@ class RefineryCore:
 
             map_header = halo_map.map_header
             index_off_diff = (raw_data_expansion +
-                              vertex_data_expansion + triangle_data_expansion)
+                              vertex_data_expansion +
+                              triangle_data_expansion)
+
+            if index_off_diff:
+                map_header.tag_index_header_offset += index_off_diff
+                halo_map.map_magic = get_map_magic(map_header)
 
             orig_tag_paths = halo_map.orig_tag_paths
             map_magic      = halo_map.map_magic
@@ -277,16 +279,9 @@ class RefineryCore:
             index_array    = tag_index.tag_index
             index_header_offset = map_header.tag_index_header_offset
 
-            if index_off_diff:
-                index_header_offset += index_off_diff
-                map_magic = get_map_magic(map_header)
-
-            func = crc_functions.U
-            do_spoof  = halo_map.force_checksum and func is not None
+            do_spoof  = halo_map.force_checksum
 
             # copy the map to the new save location
-            map_file.seek(0, 2)
-            map_size = map_file.tell()
             map_file.seek(0) # need to seek to 0 as shutil.copyfileobj uses
             out_file.seek(0) # the current file offsets for copying to/from
             if map_file is not out_file:
@@ -309,13 +304,11 @@ class RefineryCore:
                 string_offs[i] = meta_data_end + map_magic + strings_size
                 strings_size += len(tag_path) + 1
 
-            # make sure the user wants to expand the map more if needed
-            if strings_size > meta_data_expansion:
-                # move the new tag_path offsets to the end of the metadata
-                for i in string_offs:
-                    string_offs[i] += meta_data_expansion
+            # move the new tag_path offsets to the end of the metadata
+            for i in string_offs:
+                string_offs[i] += meta_data_expansion
 
-                meta_data_expansion += strings_size
+            meta_data_expansion += strings_size
 
             # change each tag_path's pointer to its new value
             for i, off in string_offs.items():
@@ -367,7 +360,10 @@ class RefineryCore:
             out_file.write(map_header.serialize(calc_pointers=False))
             crc = crc_functions.calculate_ce_checksum(out_file, index_magic)
             if do_spoof:
-                func([crc^0xFFffFFff, out_file, index_header_offset + 8])
+                crc_functions.E.__defaults__[0][:] = [
+                    0, 0x800000000 - map_header.crc32, map_header.crc32]
+                crc_functions.U([crc^0xFFffFFff, out_file,
+                                 index_header_offset + 8])
             else:
                 map_header.crc32 = crc
 
@@ -380,7 +376,6 @@ class RefineryCore:
         except Exception:
             if map_file is not out_file:
                 out_file.close()
-
             raise
 
         return save_path
@@ -405,6 +400,20 @@ class RefineryCore:
                     self._deprotect(maps[map_name].filepath)
                 except Exception:
                     print(format_exc())
+
+    def deprotect(self, e=None):
+        if not self.map_loaded or self.active_map.is_resource:
+            return
+        elif self.active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+            return
+
+        save_path, ext = os.path.splitext(save_path)
+        save_path = sanitize_path(save_path + (ext if ext else (
+            '.yelo' if 'yelo' in self.active_map.engine else '.map')))
+
+        if not self.save_map(save_path, prompt_strings_expand=False,
+                             prompt_internal_rename=False):
+            return
 
     def _script_scrape_deprotect(self, path_handler):
         scnr_meta = self.active_map.scnr_meta
