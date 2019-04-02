@@ -1558,7 +1558,6 @@ class RefineryChecksumEditorWindow(tk.Toplevel):
             if len(ts.replace(" ", "")) == 8:
                 c = int(ts.replace(" ", ""), 16)
                 self.checksum_entry.config(bg="white")
-                crc_functions.E.__defaults__[0][:] = [0, 0x800000000 - c, c]
             else:
                 self.checksum_entry.config(bg="red")
 
@@ -1578,12 +1577,4 @@ class RefineryChecksumEditorWindow(tk.Toplevel):
         except Exception:
             return
         self.active_map.force_checksum = True
-        # NOTE:
-        # Will need to move tag index header by injecting padding between it and
-        # everything before it in the map so all maps have the index header at the
-        # same location. This will also move the metadata properly if the map was
-        # not protected. Afterwards, the smaller map needs to be padded to the size
-        # of the larger one, and the metadata length and filesize specified in the
-        # header needs to be set to the same larger value for both. Finally, both
-        # maps can have their checksums set to the new value.
         self.destroy()

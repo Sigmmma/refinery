@@ -957,17 +957,32 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._running = False
 
-    def deprotect(self, e=None):
-        if not self.map_loaded: return
-
-        if self.running or self.active_map.is_resource:
-            return
-        elif "halo1" not in self.active_map.engine:
-            return
-
+    '''def deprotect(self, e=None):
         self._running = True
         try:
-            self._deprotect()
+            if not save_path:
+                save_path = asksaveasfilename(
+                    initialdir=os.path.dirname(self.active_map_path), parent=self,
+                    title="Choose where to save the deprotected map",
+                    filetypes=(("Halo mapfile", "*.map"),
+                               ("Halo mapfile(extra sauce)", "*.yelo"),
+                               ("All", "*")))
+
+            if not save_path:
+                print("Deprotection cancelled.")
+                return
+
+            start = time()
+            RefineryCore.deprotect(self, save_path)
+        except Exception:
+            print(format_exc())
+
+        self._running = False'''
+
+    def deprotect(self, e=None):
+        self._running = True
+        try:
+            RefineryCore.deprotect(self)
         except Exception:
             print(format_exc())
 
@@ -1439,17 +1454,7 @@ class Refinery(tk.Tk, RefineryCore):
             print(format_exc())
         self._running = False
 
-    def save_map(self, save_path=None, engine="<active>", map_name="<active>",
-                 *a, **kw):
-        meta_data_expansion = kw.pop("meta_data_expansion", 0)
-        raw_data_expansion = kw.pop("raw_data_expansion", 0)
-        vertex_data_expansion = kw.pop("vertex_data_expansion", 0)
-        triangle_data_expansion = kw.pop("triangle_data_expansion", 0)
-        assert meta_data_expansion     >= 0
-        assert raw_data_expansion      >= 0
-        assert vertex_data_expansion   >= 0
-        assert triangle_data_expansion >= 0
-
+    def save_map(self, save_path=None, engine="<active>", map_name="<active>", **kw):
         reload_window = kw.pop("reload_window", True)
         prompt_strings_expand = kw.pop("prompt_strings_expand", True)
         prompt_internal_rename = kw.pop("prompt_internal_rename", True)
@@ -1457,24 +1462,17 @@ class Refinery(tk.Tk, RefineryCore):
         maps = self.maps_by_engine.get(engine, {})
         halo_map = maps.get(map_name)
         if halo_map is None:
-            return
+            return ""
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
-            return
+            return ""
         elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
             print("Cannot save this kind of map.")
-            return
+            return ""
         elif not save_path:
             save_path = halo_map.filepath
 
-        save_dir  = os.path.dirname(save_path)
-        save_path, ext = os.path.splitext(save_path)
         new_map_name = os.path.basename(save_path)
-        save_path = sanitize_path(save_path + (ext if ext else (
-            '.yelo' if 'yelo' in halo_map.engine else '.map')))
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
         if (prompt_internal_rename and len(new_map_name) < 32 and
             halo_map.map_header.map_name.lower() != new_map_name.lower()):
             if messagebox.askyesno(
@@ -1485,150 +1483,30 @@ class Refinery(tk.Tk, RefineryCore):
                     icon='question', parent=self):
                 halo_map.map_header.map_name = new_map_name
 
-        print("Saving map...")
-        print("    %s" % save_path)
+        orig_tag_paths = halo_map.orig_tag_paths
+        index_array    = halo_map.tag_index.STEPTREE
+        new_strings_size = 0
+        for i in range(len(index_array)):
+            if orig_tag_paths[i].lower() != index_array[i].path.lower():
+                new_strings_size += len(index_array[i].path) + 1
+
+        if ((new_strings_size and prompt_strings_expand) and
+            not messagebox.askyesno(
+                "Tagdata size expansion required",
+                ("Tag paths were edited. This maps tag data section "
+                 "must be expanded by %s bytes to fit the new strings."
+                 "\n\nContinue?") % new_strings_size,
+                icon='warning', parent=self)):
+            print("    Save cancelled")
+            return
+
+        print('Saving "%s"' % save_path)
         try:
-            out_file = map_file = halo_map.map_data
-            if save_path.lower() != sanitize_path(halo_map.filepath).lower():
-                # use r+ mode rather than w if the file os.path.exists
-                # since it might be hidden. apparently on windows
-                # the w mode will fail to open hidden files.
-                if os.path.isfile(save_path):
-                    out_file = open(save_path, 'r+b')
-                    out_file.truncate(0)
-                else:
-                    out_file = open(save_path, 'w+b')
-
-            map_header = halo_map.map_header
-            index_off_diff = (raw_data_expansion +
-                              vertex_data_expansion + triangle_data_expansion)
-
-            orig_tag_paths = halo_map.orig_tag_paths
-            map_magic      = halo_map.map_magic
-            index_magic    = halo_map.index_magic
-            tag_index      = halo_map.tag_index
-            index_offset   = tag_index.tag_index_offset
-            index_array    = tag_index.tag_index
-            index_header_offset = map_header.tag_index_header_offset
-
-            if index_off_diff:
-                index_header_offset += index_off_diff
-                map_magic = get_map_magic(map_header)
-
-            func = crc_functions.U
-            do_spoof  = halo_map.force_checksum and func is not None
-
-            # copy the map to the new save location
-            map_file.seek(0, 2)
-            map_size = map_file.tell()
-            map_file.seek(0) # need to seek to 0 as shutil.copyfileobj uses
-            out_file.seek(0) # the current file offsets for copying to/from
-            if map_file is not out_file:
-                shutil.copyfileobj(map_file, out_file)
-
-            # recalculate pointers for the strings if they were changed
-            # NOTE: Can't optimize this by writing changed paths back to
-            # any existing path pointers, as we cannot assume they point
-            # to areas reserved for tag paths(map might be damaged and
-            # the pointers are actually pointing into tag data.)
-            strings_size, string_offs = 0, {}
-            meta_data_end = map_header.tag_data_size + index_header_offset
-            for i in range(len(index_array)):
-                tag_path = index_array[i].path
-                if orig_tag_paths[i].lower() == tag_path.lower():
-                    # path wasnt changed
-                    continue
-
-                # put the new string at the end of the metadata
-                string_offs[i] = meta_data_end + map_magic + strings_size
-                strings_size += len(tag_path) + 1
-
-            # make sure the user wants to expand the map more if needed
-            if strings_size > meta_data_expansion:
-                if prompt_strings_expand and not messagebox.askyesno(
-                        "Tagdata size expansion required",
-                        ("Tag paths were edited. This maps tag data section "
-                         "must be expanded by %s bytes to fit the new strings."
-                         "\n\nContinue?") % strings_size,
-                        icon='warning', parent=self):
-                    print("    Save cancelled")
-                    if map_file is not out_file:
-                        out_file.close()
-                    return ""
-
-                # move the new tag_path offsets to the end of the metadata
-                for i in string_offs:
-                    string_offs[i] += meta_data_expansion
-
-                meta_data_expansion += strings_size
-
-            # change each tag_path's pointer to its new value
-            for i, off in string_offs.items():
-                index_array[i].path_offset = off
-
-            # move the tag_index array back to where it SHOULD be
-            if self.fix_tag_index_offset.get():
-                tag_index.tag_index_offset = index_magic + tag_index.get_size()
-
-            # update the map_data and expand the map's sections if necessary
-            halo_map.map_data = out_file
-            if map_file is not out_file and hasattr(map_file, "close"):
-                map_file.close()
-
-            expansions = (raw_data_expansion, meta_data_expansion,
-                          vertex_data_expansion, triangle_data_expansion)
-            section_ends = get_halo_map_section_ends(halo_map)
-
-            expand_halo_map(halo_map, *expansions)
-
-            # move the cheape.map pointer
-            if halo_map.engine == "halo1yelo":
-                cheape = map_header.yelo_header.cheape_definitions
-                move_amount = 0
-                for end, exp in zip(section_ends, expansions):
-                    if end <= cheape.offset:
-                        move_amount += exp
-                cheape.offset += move_amount
-
-            # get the tag_index_header_offset and map_magic if they changed
-            index_header_offset = map_header.tag_index_header_offset
-            map_magic = halo_map.map_magic
-
-            # serialize the tag_index_header, tag_index and all the tag_paths
-            tag_index.serialize(buffer=out_file, calc_pointers=False,
-                                magic=map_magic, offset=index_header_offset)
-            out_file.flush()
-            if hasattr(out_file, "fileno"):
-                os.fsync(out_file.fileno())
-
-            # set the size of the map in the header to 0 to fix a bug where
-            # halo will leak file handles for very large maps. Also removes
-            # the map size limitation so halo can load stupid big maps.
-            if halo_map.engine in ("halo1ce", "halo1yelo"):
-                map_header.decomp_len = 0
-
-            # write the map header so the calculate_ce_checksum can read it
-            out_file.seek(0)
-            out_file.write(map_header.serialize(calc_pointers=False))
-            crc = crc_functions.calculate_ce_checksum(out_file, index_magic)
-            if do_spoof:
-                func([crc^0xFFffFFff, out_file, index_header_offset + 8])
-            else:
-                map_header.crc32 = crc
-
-            # write the header to the beginning of the map
-            out_file.seek(0)
-            out_file.write(map_header.serialize(calc_pointers=False))
-            out_file.flush()
-            if hasattr(out_file, "fileno"):
-                os.fsync(out_file.fileno())
+            save_path = RefineryCore.save_map(self, halo_map=halo_map, **kw)
             print("    Finished")
         except Exception:
             print(format_exc())
-            print("Could not save map")
-            save_path = ""
-            if map_file is not out_file:
-                out_file.close()
+            print("    Could not save map")
 
         if reload_window and save_path:
             print("Reloading map to apply changes...")
