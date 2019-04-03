@@ -130,7 +130,6 @@ class Refinery(tk.Tk, RefineryCore):
         self.show_all_fields = tk.IntVar(self)
         self.edit_all_fields = tk.IntVar(self)
         self.allow_corrupt = tk.IntVar(self)
-        self.extract_from_ce_resources = tk.IntVar(self, 1)
         self.rename_duplicates_in_scnr = tk.IntVar(self)
         self.use_tag_index_for_script_names = tk.IntVar(self)
         self.use_scenario_names_for_script_names = tk.IntVar(self)
@@ -158,7 +157,6 @@ class Refinery(tk.Tk, RefineryCore):
             rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
             use_tag_index_for_script_names=self.use_tag_index_for_script_names,
             use_scenario_names_for_script_names=self.use_scenario_names_for_script_names,
-            extract_from_ce_resources=self.extract_from_ce_resources,
             overwrite=self.overwrite,
             force_lower_case_paths=self.force_lower_case_paths,
             extract_cheape=self.extract_cheape,
@@ -1606,8 +1604,6 @@ class Refinery(tk.Tk, RefineryCore):
                     print(format_exc())
                     print("Error ocurred while extracting cheape.map")
 
-            extract_rsrc = curr_map.engine in ("halo1ce", "halo1yelo") and \
-                           self.extract_from_ce_resources.get()
             force_lower_case_paths = self.force_lower_case_paths.get()
 
             map_magic = curr_map.map_magic
@@ -1668,8 +1664,6 @@ class Refinery(tk.Tk, RefineryCore):
 
                         # dont want to re-extract tags
                         if (tag_id, extract_mode) in extracted:
-                            continue
-                        elif curr_map.is_indexed(tag_id) and not extract_rsrc:
                             continue
                         extracted.add((tag_id, extract_mode))
                         abs_file_path = os.path.join(out_dir, file_path)
