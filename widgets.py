@@ -839,7 +839,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.tags_list_frame = tk.LabelFrame(
             self.dirs_frame, text="Tags list log (erase to disable logging)")
 
-        for attr in ("extract_from_ce_resources", "overwrite", "recursive",
+        for attr in ("overwrite", "recursive",
                      "rename_duplicates_in_scnr", "decode_adpcm",
                      "bitmap_extract_format", "bitmap_extract_keep_alpha",
                      "generate_comp_verts", "generate_uncomp_verts",
@@ -904,9 +904,6 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.show_output_cbtn = tk.Checkbutton(
             self.extract_frame, text="Print extracted file names",
             variable=self.show_output)
-        self.extract_from_ce_resources_cbtn = tk.Checkbutton(
-            self.extract_frame, text="Extract from Halo CE resource maps",
-            variable=self.extract_from_ce_resources)
         self.force_lower_case_paths_cbtn = tk.Checkbutton(
             self.extract_frame, text="Force all tag paths to lowercase",
             variable=self.force_lower_case_paths)
@@ -1001,8 +998,7 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, pady=2, fill="x")
 
         for w in (self.overwrite_cbtn, self.recursive_cbtn,
-                  self.show_output_cbtn, self.extract_from_ce_resources_cbtn,
-                  self.force_lower_case_paths_cbtn):
+                  self.show_output_cbtn, self.force_lower_case_paths_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.bitmap_extract_keep_alpha_cbtn,
