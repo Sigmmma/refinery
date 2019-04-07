@@ -683,7 +683,7 @@ class Refinery(tk.Tk, RefineryCore):
             if name_or_index in range(len(engine_names)):
                 engine_name = engine_names[name_or_index]
         elif name_or_index is None and engine_names:
-            engine_name = iter(engine_names).__next__()
+            engine_name = iter(sorted(engine_names)).__next__()
         elif name_or_index in engine_names:
             engine_name = name_or_index
 
@@ -798,119 +798,51 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._running = False
 
-    def load_map(self, map_path, will_be_active=True):
-        self.load_maps((map_path, ), will_be_active=will_be_active)
+    def load_map(self, map_path, make_active=True, ask_close_open=False):
+        new_map = None
+        try:
+            print("Loading %s..." % os.path.basename(map_path))
+            new_map = RefineryCore.load_map(
+                self, map_path, self.autoload_resources.get(),
+                not ask_close_open)
+        except MapAlreadyLoadedError:
+            if not(ask_close_open and messagebox.askyesno(
+                    "A map with that name is already loaded!",
+                    ('A map with the name "%s" is already loaded.\n'
+                     "Close that map and load this one instead?") %
+                    map_name, icon='warning', parent=self)):
+                print("    Skipped")
+                return
+            new_map = RefineryCore.load_map(
+                self, map_path, self.autoload_resources.get(), True)
+        except Exception:
+            try:
+                self.unload_maps(None)
+            except Exception:
+                print(format_exc())
+            raise
 
-    def load_maps(self, map_paths, will_be_active=True, ask_close_open=False):
+        if make_active:
+            self.set_active_engine(
+                new_map.engine, new_map.header.map_name, force_reload=True)
+
+        print("    Finished")
+        return new_map
+
+    def load_maps(self, map_paths, make_active=True, ask_close_open=False):
         if not map_paths:
             return
 
-        new_active_map_name = ''
+        make_active |= self.active_map is None
+        new_map = None
         for map_path in map_paths:
             try:
-                if map_path is None:
-                    continue
-
-                print("Loading %s..." % os.path.basename(map_path))
-                if not os.path.exists(map_path):
-                    print("    Map does not exist")
-                    continue
-
-                with open(map_path, 'r+b') as f:
-                    comp_data  = PeekableMmap(f.fileno(), 0)
-                    head_sig   = unpack("<I", comp_data.peek(4))[0]
-                    map_header = get_map_header(comp_data, True)
-                    engine     = get_map_version(map_header)
-                    comp_data.close()
-
-                    if engine is None and head_sig in (1, 2, 3):
-                        # gotta do some hacky shit to figure out this engine
-                        rsrc_map = Halo1RsrcMap({})
-                        rsrc_map.load_map(map_path)
-                        engine = rsrc_map.engine
-
-                if engine is None:
-                    print("    Skipped")
-                    continue
-
-                maps = self.maps_by_engine.setdefault(engine, {})
-
-                if map_header is None:
-                    map_name = {1:"bitmaps", 2:"sounds", 3:"loc"}.get(head_sig)
-                else:
-                    map_name = map_header.map_name
-
-                if maps.get(map_name) is not None and ask_close_open:
-                    if not messagebox.askyesno(
-                            "A map with that name is already loaded!",
-                            ('A map with the name "%s" is already loaded.\n'
-                             "Close that map and load this one instead?") %
-                            map_name, icon='warning', parent=self):
-                        print("    Skipped")
-                        continue
-
-                maps = self.maps_by_engine.get(engine, {})
-
-                if self.active_map is maps.get(map_name):
-                    will_be_active = True
-                    new_active_map_name = map_name
-
-                if maps.get(map_name) is not None:
-                    self.unload_maps(None, (engine, ), (map_name, ))
-
-                if head_sig in (1, 2, 3):
-                    new_map = Halo1RsrcMap(maps)
-                elif map_header is None:
-                    print("    Could not read map header.")
-                    continue
-                elif engine is None:
-                    print("    Could not determine map version.")
-                    continue
-                elif "stubbs" in engine:
-                    new_map = StubbsMap(maps)
-                elif "shadowrun" in engine:
-                    new_map = ShadowrunMap(maps)
-                elif "halo1anni" in engine:
-                    new_map = Halo1AnniMap(maps)
-                elif engine in GEN_1_HALO_ENGINES:
-                    new_map = Halo1Map(maps)
-                elif engine in GEN_2_ENGINES:
-                    new_map = Halo2Map(maps)
-                elif engine == "halo3":
-                    new_map = Halo3Map(maps)
-                elif engine == "halo3beta":
-                    new_map = Halo3BetaMap(maps)
-                elif engine == "haloreach":
-                    new_map = HaloReachMap(maps)
-                elif engine == "haloreachbeta":
-                    new_map = HaloReachBetaMap(maps)
-                elif engine == "halo3odst":
-                    new_map = Halo3OdstMap(maps)
-                elif engine == "halo4":
-                    new_map = Halo4Map(maps)
-                elif engine == "halo4beta":
-                    new_map = Halo4BetaMap(maps)
-                elif engine == "halo5":
-                    new_map = Halo5Map(maps)
-                else:
-                    print("    Cant let you do that.")
-                    map_header.pprint(printout=True)
-                    continue
-
-                new_map.app = self
-                new_map.load_map(map_path, will_be_active=will_be_active,
-                                 autoload_resources=self.autoload_resources.get())
-                self.maps_by_engine.setdefault(engine, maps)
-                if will_be_active and not new_active_map_name:
-                    new_active_map_name = map_name
-                print("    Finished")
+                new_map = self.load_map(map_path, False, ask_close_open)
+            except EngineDetectionError:
+                print(format_exc(0))
             except Exception:
-                try:
-                    self.display_map_info(
-                        "Could not load map.\nCheck console window for error.")
-                    self.unload_maps(None)
-                except Exception:
-                    print(format_exc())
+                self.display_map_info(
+                    "Could not load map.\nCheck console window for error.")
                 print(format_exc())
                 print("Error occurred while attempting to load map.\n"
                       "If this is a PermissionError and the map is located in\n"
@@ -920,9 +852,9 @@ class Refinery(tk.Tk, RefineryCore):
                       "made, and opening in this mode fails on read-only files.\n")
 
         self.reload_engine_select_options()
-        if will_be_active and new_active_map_name:
-            self.set_active_engine(engine, new_active_map_name,
-                                   force_reload=True)
+        if make_active and new_map is not None:
+            self.set_active_engine(
+                new_map.engine, new_map.map_header.map_name, force_reload=True)
 
     def display_map_info(self, string=None):
         try:
@@ -944,7 +876,7 @@ class Refinery(tk.Tk, RefineryCore):
         finally:
             self.map_info_text.config(state='disabled')
 
-    def deprotect_all(self, e=None):
+    def deprotect_all(self):
         if self.running: return
 
         self._running = True
@@ -955,7 +887,17 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._running = False
 
-    '''def deprotect(self, e=None):
+    def deprotect(self, save_path=None):
+        if self.active_map is None:
+            print("No map loaded.")
+            return
+        elif self.active_map.is_resource:
+            print("Cannot deprotect resource maps.")
+            return
+        elif self.active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+            print("Cannot deprotect this kind of map.")
+            return
+
         self._running = True
         try:
             if not save_path:
@@ -968,459 +910,58 @@ class Refinery(tk.Tk, RefineryCore):
 
             if not save_path:
                 print("Deprotection cancelled.")
-                return
+            else:
+                save_path, ext = os.path.splitext(save_path)
+                save_path = sanitize_path(save_path + (ext if ext else (
+                    '.yelo' if 'yelo' in self.active_map.engine else '.map')))
 
-            start = time()
-            RefineryCore.deprotect(self, save_path)
-        except Exception:
-            print(format_exc())
+                start = time()
 
-        self._running = False'''
-
-    def deprotect(self, e=None):
-        self._running = True
-        try:
-            RefineryCore.deprotect(self)
+                RefineryCore.deprotect(self, save_path)
+                print("Completed. Took %s seconds." % round(time() - start, 1))
         except Exception:
             print(format_exc())
 
         self._running = False
 
-    def _deprotect(self, save_path=None):
-        if self.active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
-            return
+    def repair_tag_classes(self):
+        print("Repairing tag classes...")
+        tag_index_array = self.active_map.tag_index.tag_index
+        repaired = RefineryCore.repair_tag_classes(self)
 
-        if not save_path:
-            save_path = asksaveasfilename(
-                initialdir=os.path.dirname(self.active_map_path), parent=self,
-                title="Choose where to save the deprotected map",
-                filetypes=(("Halo mapfile", "*.map"),
-                           ("Halo mapfile(extra sauce)", "*.yelo"),
-                           ("All", "*")))
+        print("    Finished")
+        print("    Deprotected classes of %s of the %s total tags(%s%%)." %
+              (len(repaired), len(tag_index_array),
+               1000*len(repaired)//len(tag_index_array)/10))
 
-        if not save_path:
-            print("Deprotection cancelled.")
-            return
 
-        save_path, ext = os.path.splitext(save_path)
-        save_path = sanitize_path(save_path + (ext if ext else (
-            '.yelo' if 'yelo' in self.active_map.engine else '.map')))
-
-        if not self.save_map(save_path, prompt_strings_expand=False,
-                             prompt_internal_rename=False):
-            return
-
-        start = time()
-
-        # get the active map AFTER saving because it WILL have changed
-        active_map      = self.active_map
-        map_data        = active_map.map_data
-        map_header      = active_map.map_header
-        tag_index       = active_map.tag_index
-        tag_index_array = tag_index.tag_index
-        engine      = active_map.engine
-        index_magic = active_map.index_magic
-        map_magic   = active_map.map_magic
-        bsp_magics  = active_map.bsp_magics
-        bsp_headers = active_map.bsp_headers
-        bsp_header_offsets = active_map.bsp_header_offsets
-
-        tag_path_handler = TagPathHandler(tag_index_array)
-
-        if self.valid_tag_paths_are_accurate.get():
-            for tag_id in range(len(tag_index_array)):
-                if not (tag_index_array[tag_id].path.lower().
-                        startswith("protected")):
-                    tag_path_handler.set_priority(tag_id, INF)
-
-        if self.fix_tag_classes.get() and not("stubbs" in active_map.engine or
-                                              "shadowrun" in active_map.engine):
-            print("Repairing tag classes...")
-
-            # locate the tags to start deprotecting with
-            repair = {}
-            for b in tag_index_array:
-                tag_id = b.id & 0xFFff
-                if tag_id == tag_index.scenario_tag_id & 0xFFff:
-                    tag_cls = "scnr"
-                elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
-                    tag_cls = fourcc(b.class_1.data)
-                else:
+        print()
+        if len(repaired) != len(tag_index_array):
+            print("The deprotector could not reach these tags:\n"
+                  "  (This does not mean they are protected however)\n"
+                  "  [ id,  offset,  type,  path ]\n")
+            for i in range(len(tag_index_array)):
+                if i in repaired:
                     continue
-
-                if tag_cls in ("scnr", "DeLa"):
-                    repair[tag_id] = tag_cls
-                elif tag_cls == "matg" and b.path == "globals\\globals":
-                    repair[tag_id] = tag_cls
-
-            # scan the tags that need repairing and repair them
-            repaired = {}
-            while repair:
-                # DEBUG
-                # print("Repairing %s tags." % len(repair))
-
-                next_repair = {}
-                for tag_id in repair:
-                    if tag_id in repaired:
-                        continue
-                    tag_cls = repair[tag_id]
-                    if tag_cls not in class_bytes_by_fcc:
-                        # unknown tag class
-                        continue
-                    repaired[tag_id] = tag_cls
-
-                    # DEBUG
-                    # print('    %s %s' % (tag_id, tag_cls))
-                    if (tag_cls not in class_repair_functions or
-                            tag_index_array[tag_id].indexed):
-                        continue
-
-                    if tag_cls == "sbsp":
-                        if tag_id not in bsp_headers:
-                            print("    Bsp header missing for tag %s" % tag_id)
-                            continue
-
-                        class_repair_functions[tag_cls](
-                            bsp_headers[tag_id].meta_pointer,
-                            tag_index_array, map_data,
-                            bsp_magics[tag_id] - bsp_header_offsets[tag_id],
-                            next_repair, engine, map_magic)
-                    else:
-                        class_repair_functions[tag_cls](
-                            tag_id, tag_index_array, map_data,
-                            map_magic, next_repair, engine)
-
-                    # replace meta with the deprotected one
-                    if tag_cls == "matg":
-                        active_map.matg_meta = active_map.get_meta(tag_id)
-                    elif tag_cls == "scnr":
-                        active_map.scnr_meta = active_map.get_meta(tag_id)
-
-                # start repairing the newly accumulated tags
-                repair = next_repair
-
-                # exhausted tags to repair. try to repair tag colletions now
-                if not repair:
-                    for b in tag_index_array:
-                        tag_id = b.id & 0xFFff
-                        tag_cls = None
-                        if tag_id in repaired:
-                            continue
-                        elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
-                            tag_cls = fourcc(b.class_1.data)
-                        else:
-                            _, reffed_tag_types = get_tagc_refs(
-                                b.meta_offset, map_data, map_magic, repaired
-                                )
-                            if reffed_tag_types:
-                                tag_cls = "tagc"
-
-                        if tag_cls is None:
-                            # couldn't determine tag class
-                            continue
-
-                        if tag_index_array[tag_id].indexed:
-                            repaired[tag_id] = tag_cls
-                        elif tag_cls in ("Soul", "tagc", "yelo", "gelo", "gelc"):
-                            repair[tag_id] = tag_cls
-
-
-            for b in tag_index_array:
-                tag_id = b.id & 0xFFff
-                if b.class_1.enum_name in ("tag_collection",
-                                           "ui_widget_collection"):
-                    reffed_tag_ids, reffed_tag_types = get_tagc_refs(
-                        b.meta_offset, map_data, map_magic, repaired)
-                    if set(reffed_tag_types) == set(["DeLa"]):
-                        repaired[tag_id] = "Soul"
-
-
-            # write the deprotected tag classes fourcc's to each
-            # tag's header in the tag index in the map buffer
-            index_array_offset = tag_index.tag_index_offset - map_magic
-            for tag_id, tag_cls in repaired.items():
-                tag_index_ref = tag_index_array[tag_id]
-                classes_int = int.from_bytes(class_bytes_by_fcc[tag_cls], 'little')
-                tag_index_ref.class_1.data = classes_int & 0xFFffFFff
-                tag_index_ref.class_2.data = (classes_int >> 32) & 0xFFffFFff
-                tag_index_ref.class_3.data = (classes_int >> 64) & 0xFFffFFff
-
-
-            print("    Finished")
-            print("    Deprotected classes of %s of the %s total tags(%s%%)." %
-                  (len(repaired), len(tag_index_array),
-                   1000*len(repaired)//len(tag_index_array)/10))
-
-
-            print()
-            if len(repaired) != len(tag_index_array):
-                print("The deprotector could not reach these tags:\n"
-                      "  (This does not mean they are protected however)\n"
-                      "  [ id,  offset,  type,  path ]\n")
-                for i in range(len(tag_index_array)):
-                    if i in repaired:
-                        continue
-                    b = tag_index_array[i]
-                    try:
-                        print("  [ %s, %s, %s, %s ]" % (
-                            i, b.meta_offset - map_magic,
-                            b.class_1.enum_name, b.path))
-                    except Exception:
-                        print("  [ %s, %s, %s ]" % (
-                            i, b.meta_offset - map_magic, "<UNPRINTABLE>"))
-                print()
-
-
-        tag_classes_by_id = {i: tag_index_array[i].class_1.data.
-                             to_bytes(4, "big").decode('latin-1')
-                             for i in range(len(tag_index_array))}
-
-
-        # try to locate the Soul tag out of all the tags thought to be tagc
-        # and(attempt to) determine the names of each tag collection
-        map_type = map_header.map_type.enum_name
-        tagc_ids_reffed_in_other_tagc = set()
-        for b in tag_index_array:
-            tag_id = b.id & 0xFFff
-            if b.class_1.enum_name not in ("tag_collection",
-                                           "ui_widget_collection"):
-                continue
-
-            reffed_tag_ids, reffed_tag_types = get_tagc_refs(
-                b.meta_offset, map_data, map_magic, tag_classes_by_id)
-            reffed_tag_types = set(reffed_tag_types)
-            if reffed_tag_types == set(["DeLa"]):
-                tag_path = dict(
-                    sp="ui\\shell\\solo",
-                    mp="ui\\shell\\multiplayer",
-                    ui="ui\\shell\\main_menu"
-                    ).get(map_type, b.path)
-                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
-            elif reffed_tag_types == set(["devc"]):
-                tag_path_handler.set_path(
-                    tag_id, "ui\\ui_input_device_defaults", INF, True, False)
-
-            if tag_id not in tagc_ids_reffed_in_other_tagc:
-                tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
-
-
-        # rename cached tags using tag paths found in resource maps
-        if self.rename_cached_tags.get():
-            for b in tag_index_array:
-                tag_id = b.id & 0xFFff
-                rsrc_tag_id = b.meta_offset
-                rsrc_map = None
-                if not b.indexed:
-                    continue
-                elif b.class_1.enum_name == "bitmap":
-                    rsrc_map = self.active_maps.get("bitmaps")
-                elif b.class_1.enum_name == "sound":
-                    rsrc_map = self.active_maps.get("sounds")
-                elif b.class_1.enum_name in ("font", "hud_message_text",
-                                             "unicode_string_list"):
-                    rsrc_map = self.active_maps.get("loc")
-
-                rsrc_tag_index = getattr(rsrc_map, "orig_tag_index", ())
-                if rsrc_tag_id not in range(len(rsrc_tag_index)):
-                    continue
-
-                tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
-                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
-
-
-        # find out if there are any explicit scenario refs in the yelo tag
-        ui_all_scnr_idx = 0
-        for tag_id, tag_cls in tag_classes_by_id.items():
-            if tag_cls != "yelo": continue
-
-            yelo_meta = active_map.get_meta(tag_id)
-            if not yelo_meta: continue
-
-            explicit_yelo_refs_id = yelo_meta.scenario_explicit_references.id & 0xFFff
-            if explicit_yelo_refs_id != 0xFFff:
-                ui_all_scnr_idx += 1
-
-
-        # rename tag collections based on what order they're found
-        # first one will will always be the yelo explicit refs(if it os.path.exists)
-        # next will be ui_tags_loaded_all_scenario_types
-        # last will be ui_tags_loaded_XXXX_scenario_type
-        tagc_i = 0
-        for b in tag_index_array:
-            tag_id = b.id & 0xFFff
-            if (tag_classes_by_id.get(tag_id) != "tagc" or
-                tag_id in tagc_ids_reffed_in_other_tagc):
-                continue
-
-            if tagc_i == ui_all_scnr_idx:
-                tag_path_handler.set_path(
-                    tag_id, "ui\\ui_tags_loaded_all_scenario_types",
-                    INF, True, False)
-            elif tagc_i == ui_all_scnr_idx + 1:
-                tag_path = dict(
-                    sp="ui\\ui_tags_loaded_solo_scenario_type",
-                    mp="ui\\ui_tags_loaded_multiplayer_scenario_type",
-                    ui="ui\\ui_tags_loaded_mainmenu_scenario_type"
-                    ).get(map_type, b.path)
-                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
-
-            tagc_i += 1
-
-        if self.scrape_tag_paths_from_scripts.get():
-            print("Renaming tags using script strings...")
-            try:
-                self._script_scrape_deprotect(tag_path_handler)
-            except Exception:
-                print(format_exc())
-            print("    Finished")
-
-        if self.use_hashcaches.get():
-            print("Hashcaches are not implemented.")
-            # print("Renaming tags using hashcaches...")
-            # print("    Finished\n")
-
-        if self.use_heuristics.get():
-            print("Renaming tags using heuristics...")
-            try:
-                self._heuristics_deprotect(tag_path_handler)
-            except Exception:
-                print(format_exc())
-            print("    Finished\n")
-
-        if self.limit_tag_path_lengths.get():
-            print("Limiting tag paths to 254 characters...")
-            try:
-                tag_path_handler.shorten_paths(254)
-            except Exception:
-                print(format_exc())
-            print("    Finished\n")
-
-        # calculate the maps new checksum
-        map_header.crc32 = crc_functions.calculate_ce_checksum(map_data, index_magic)
-
-        print("Saving deprotection changes to map...")
-        self.save_map(save_path, prompt_strings_expand=False,
-                      prompt_internal_rename=False)
-
-        # record the original tag_paths so we know if any were changed
-        active_map.orig_tag_paths = tuple(
-            b.path for b in active_map.tag_index.tag_index)
-
-        print("Completed. Took %s seconds." % round(time()-start, 1))
-
-    def _heuristics_deprotect(self, path_handler):
-        active_map = self.active_map
-        tag_index_array = active_map.tag_index.tag_index
-        matg_meta = active_map.matg_meta
-        hudg_id = 0xFFFF if not matg_meta else\
-                  matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id & 0xFFff
-        hudg_meta = active_map.get_meta(hudg_id, True)
-
-        print_heuristic_name_changes = self.print_heuristic_name_changes.get()
-
-        if hudg_meta:
-            block = hudg_meta.messaging_parameters
-            items_meta = active_map.get_meta(block.item_message_text.id & 0xFFff, True)
-            icons_meta = active_map.get_meta(block.alternate_icon_text.id & 0xFFff, True)
-
-            if items_meta: path_handler.set_item_strings(items_meta)
-            if icons_meta: path_handler.set_icon_strings(icons_meta)
-
-        # reset the name of each tag with a default priority and that
-        # currently resides in the tags directory root to "protected_XXXX"
-        for i in range(len(tag_index_array)):
-            if ((path_handler.get_priority(i) == path_handler.def_priority)
-                and not path_handler.get_sub_dir(i)):
-                path_handler.set_path(i, "protected_%s" % i, override=True,
-                                      print_new_name=False)
-
-        vehi_ids = []
-        actv_ids = []
-        bipd_ids = []
-        weap_ids = []
-        eqip_ids = []
-        tagc_ids = []
-        soul_ids = []
-        misc_ids = []
-        sbsp_ids = []
-        scen_ids = []
-        scnr_id = matg_id = yelo_id = None
-        for i in range(len(tag_index_array)):
-            tag_type = tag_index_array[i].class_1.enum_name
-
-            if tag_type == "scenery":
-                scen_ids.append(i)
-
-            if tag_type == "scenario":
-                scnr_id = i
-            elif tag_type == "globals":
-                matg_id = i
-            elif tag_type == "project_yellow":
-                yelo_id = i
-            elif tag_type == "vehicle":
-                vehi_ids.append(i)
-            elif tag_type == "actor_variant":
-                actv_ids.append(i)
-            elif tag_type == "biped":
-                bipd_ids.append(i)
-            elif tag_type == "weapon":
-                weap_ids.append(i)
-            elif tag_type == "equipment":
-                eqip_ids.append(i)
-            elif tag_type == "tag_collection":
-                tagc_ids.append(i)
-            elif tag_type == "ui_widget_collection":
-                soul_ids.append(i)
-            elif tag_type == "scenario_structure_bsp":
-                sbsp_ids.append(i)
-            else:
-                misc_ids.append(i)
-
-        shallow_nesting = self.shallow_ui_widget_nesting.get()
-        # NOTE: These are ordered in this way to allow the most logical sorting
-        for id_list, list_type in (
-                (sbsp_ids, "scenario_structure_bsp"), (vehi_ids, "vehicle"),
-                (weap_ids, "weapon"), (eqip_ids, "equipment"),
-                (actv_ids, "actor_variant"), (bipd_ids, "biped"),
-                (soul_ids, "ui_widget_collection"),
-                ((hudg_id, ), "hud_globals"), ((yelo_id, ), "project_yellow"),
-                ((matg_id, ), "globals"), ((scnr_id, ), "scenario"),
-                (tagc_ids, "tag_collection")):
-            print("\nRenaming %s tags" % list_type, end="")
-            if print_heuristic_name_changes:
-                print("\ntag_id\tweight\ttag_path\n")
-
-            for tag_id in id_list:
-                if tag_id is None:
-                    continue
-
+                b = tag_index_array[i]
                 try:
-                    recursive_rename(tag_id, active_map, path_handler,
-                                     shallow_ui_widget_nesting=shallow_nesting,
-                                     print_new_name=print_heuristic_name_changes)
+                    print("  [ %s, %s, %s, %s ]" % (
+                        i, b.meta_offset - self.active_map.map_magic,
+                        b.class_1.enum_name, b.path))
                 except Exception:
-                    print(format_exc())
+                    print("  [ %s, %s, %s ]" % (
+                        i, b.meta_offset - self.active_map.map_magic, "<UNPRINTABLE>"))
+            print()
 
-        print("\nFinal actor_variant rename pass", end="")
-        print("\ntag_id\tweight\ttag_path\n" if
-              print_heuristic_name_changes else "")
-    
-        for tag_id in actv_ids:
-            if tag_id is None: continue
-            try:
-                recursive_rename(tag_id, active_map, path_handler, depth=1)
-            except Exception:
-                print(format_exc())
+    def _script_scrape_deprotect(self, tag_path_handler):
+        print("Renaming tags using script strings...")
+        RefineryCore._script_scrape_deprotect(self, tag_path_handler)
+        print("    Finished")
 
-        print("\nFinal scenery rename pass", end="")
-        print("\ntag_id\tweight\ttag_path\n" if
-              print_heuristic_name_changes else "")
-        for tag_id in scen_ids:
-            if tag_id is None: continue
-            try:
-                recursive_rename(tag_id, active_map, path_handler, depth=0)
-            except Exception:
-                print(format_exc())
+    def _heuristics_deprotect(self, tag_path_handler):
+        print("Renaming tags using script strings...")
+        RefineryCore._heuristics_deprotect(self, tag_path_handler)
+        print("    Finished")
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return
@@ -1447,15 +988,16 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._running = True
         try:
-            self.save_map(save_path)
+            self.save_map(save_path, prompt_strings_expand=True,
+                          prompt_internal_rename=True)
         except Exception:
             print(format_exc())
         self._running = False
 
     def save_map(self, save_path=None, engine="<active>", map_name="<active>", **kw):
         reload_window = kw.pop("reload_window", True)
-        prompt_strings_expand = kw.pop("prompt_strings_expand", True)
-        prompt_internal_rename = kw.pop("prompt_internal_rename", True)
+        prompt_strings_expand = kw.pop("prompt_strings_expand", False)
+        prompt_internal_rename = kw.pop("prompt_internal_rename", False)
 
         maps = self.maps_by_engine.get(engine, {})
         halo_map = maps.get(map_name)
@@ -1508,7 +1050,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         if reload_window and save_path:
             print("Reloading map to apply changes...")
-            self.load_map(save_path, will_be_active=True)
+            self.load_map(save_path, make_active=True)
 
         return save_path
 
