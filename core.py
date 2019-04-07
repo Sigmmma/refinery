@@ -49,9 +49,39 @@ from refinery.recursive_rename.tag_path_handler import TagPathHandler
 from refinery.recursive_rename.functions import recursive_rename
 
 
+class RefineryError(Exception): pass
+class EngineDetectionError(RefineryError): pass
+class MapAlreadyLoadedError(RefineryError): pass
+
+
 platform = sys.platform.lower()
 curr_dir = get_cwd(__file__)
 INF = float("inf")
+        
+halo_map_wrappers_by_engine = {
+    "stubbs":          StubbsMap,
+    "stubbspc":        StubbsMap,
+    "shadowrun_proto": ShadowrunMap,
+    "halo1anni":       Halo1AnniMap,
+    "halo2":           Halo2Map,
+    "halo3beta":       Halo3BetaMap,
+    "halo3":           Halo3Map,
+    "halo3odst":       Halo3OdstMap,
+    "haloreachbeta":   HaloReachBetaMap,
+    "haloreach":       HaloReachMap,
+    "halo4beta":       Halo4BetaMap,
+    "halo4":           Halo4Map,
+    "halo5":           Halo5Map,
+    }
+halo_map_wrappers_by_engine.update({e: Halo1Map for e in GEN_1_HALO_ENGINES})
+halo_map_wrappers_by_engine.update({e: Halo2Map for e in GEN_2_ENGINES})
+
+
+class SharedVar:
+    __slots__ = ("_val", )
+    def __init__(self, val=None): self._val = val
+    def get(self): return self._val
+    def set(self, new_val): self._val = new_val
 
 
 def get_halo_map_section_ends(halo_map):
@@ -218,9 +248,6 @@ class RefineryCore:
         if halo_map:
             halo_map.load_all_resource_maps()
 
-    def load_map(self, map_path, will_be_active=True):
-        self.load_maps((map_path, ), will_be_active=will_be_active)
-
     def save_map(self, save_path=None, halo_map=None, **kw):
         if halo_map is None:
             halo_map = self.active_map
@@ -278,8 +305,6 @@ class RefineryCore:
             index_offset   = tag_index.tag_index_offset
             index_array    = tag_index.tag_index
             index_header_offset = map_header.tag_index_header_offset
-
-            do_spoof  = halo_map.force_checksum
 
             # copy the map to the new save location
             map_file.seek(0) # need to seek to 0 as shutil.copyfileobj uses
@@ -359,7 +384,7 @@ class RefineryCore:
             out_file.seek(0)
             out_file.write(map_header.serialize(calc_pointers=False))
             crc = crc_functions.calculate_ce_checksum(out_file, index_magic)
-            if do_spoof:
+            if halo_map.force_checksum:
                 crc_functions.E.__defaults__[0][:] = [
                     0, 0x800000000 - map_header.crc32, map_header.crc32]
                 crc_functions.U([crc^0xFFffFFff, out_file,
@@ -380,7 +405,46 @@ class RefineryCore:
 
         return save_path
 
-    def deprotect_all(self, e=None):
+    def load_map(self, map_path, load_resource_maps=True,
+                 replace_if_same_name=False):
+        with open(map_path, 'r+b') as f:
+            comp_data  = PeekableMmap(f.fileno(), 0)
+            head_sig   = unpack("<I", comp_data.peek(4))[0]
+            map_header = get_map_header(comp_data, True)
+            engine     = get_map_version(map_header)
+            comp_data.close()
+
+        if engine is None and head_sig in (1, 2, 3):
+            # gotta do some hacky shit to figure out this engine
+            rsrc_map = Halo1RsrcMap({})
+            rsrc_map.load_map(map_path)
+            engine = rsrc_map.engine
+
+            map_name = {1: "bitmaps", 2: "sounds", 3: "loc"}[head_sig]
+        elif engine in halo_map_wrappers_by_engine:
+            map_name = map_header.map_name
+        else:
+            raise EngineDetectionError(
+                'Could not determine map engine for "%s"' % map_path)
+
+        maps = self.maps_by_engine.setdefault(engine, {})
+        if not(maps.get(map_name) is None or replace_if_same_name):
+            raise MapAlreadyLoadedError(
+                ('A map with the name "%s" is already loaded '
+                 'under the "%s" engine.' ) % (map_name, engine))
+
+        if maps.get(map_name) is not None:
+            self.unload_maps(None, (engine, ), (map_name, ))
+
+        if engine in halo_map_wrappers_by_engine:
+            new_map = halo_map_wrappers_by_engine[engine](maps)
+        else:
+            new_map = Halo1RsrcMap(maps)
+
+        new_map.load_map(map_path, autoload_resources=load_resource_maps)
+        return new_map
+
+    def deprotect_all(self):
         for engine_name in self.maps_by_engine:
             if engine_name not in ("halo1ce", "halo1yelo", "halo1pc"):
                 continue
@@ -397,23 +461,298 @@ class RefineryCore:
                     else:
                         self.set_active_map(map_name)
 
-                    self._deprotect(maps[map_name].filepath)
+                    self.deprotect(maps[map_name].filepath)
                 except Exception:
                     print(format_exc())
 
-    def deprotect(self, e=None):
-        if not self.map_loaded or self.active_map.is_resource:
-            return
+    def deprotect(self, save_path):
+        if self.active_map is None:
+            raise KeyError("No map loaded.")
+        elif self.active_map.is_resource:
+            raise TypeError("Cannot deprotect resource maps.")
         elif self.active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
-            return
+            raise TypeError("Cannot deprotect this kind of map.")
 
-        save_path, ext = os.path.splitext(save_path)
-        save_path = sanitize_path(save_path + (ext if ext else (
-            '.yelo' if 'yelo' in self.active_map.engine else '.map')))
-
+        spoof_checksum = self.active_map.force_checksum
         if not self.save_map(save_path, prompt_strings_expand=False,
                              prompt_internal_rename=False):
             return
+
+        # get the active map AFTER saving because it WILL have changed
+        active_map      = self.active_map
+        map_type        = active_map.map_header.map_type.enum_name
+        tag_index_array = active_map.tag_index.tag_index
+
+        self.active_map.force_checksum = spoof_checksum
+
+        # rename cached tags using tag paths found in resource maps
+        try:
+            if self.rename_cached_tags:
+                self.sanitize_resource_tag_paths()
+        except Exception:
+            print(format_exc())
+
+        try:
+            if self.fix_tag_classes:
+                self.repair_tag_classes()
+        except Exception:
+            print(format_exc())
+        
+
+        tag_path_handler = TagPathHandler(tag_index_array)
+
+        if self.valid_tag_paths_are_accurate.get():
+            for tag_id in range(len(tag_index_array)):
+                if not (tag_index_array[tag_id].path.lower().
+                        startswith("protected")):
+                    tag_path_handler.set_priority(tag_id, INF)
+
+        try:
+            tagc_names = detect_tag_collection_names(self.active_map)
+        except Exception:
+            tagc_names = {}
+
+        for tag_id, tag_path in tagc_names.items():
+            tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
+
+        try:
+            if self.scrape_tag_paths_from_scripts:
+                self._script_scrape_deprotect(tag_path_handler)
+        except Exception:
+            print(format_exc())
+
+        try:
+            if self.use_heuristics:
+                self._heuristics_deprotect(tag_path_handler)
+        except Exception:
+            print(format_exc())
+
+        try:
+            if self.limit_tag_path_lengths:
+                tag_path_handler.shorten_paths(254)
+        except Exception:
+            print(format_exc())
+
+        # calculate the maps new checksum
+        if not self.active_map.force_checksum:
+            active_map.map_header.crc32 = crc_functions.calculate_ce_checksum(
+                active_map.map_data, active_map.index_magic)
+
+        self.save_map(save_path, prompt_strings_expand=False,
+                      prompt_internal_rename=False)
+
+        # record the original tag_paths so we know if any were changed
+        active_map.orig_tag_paths = tuple(
+            b.path for b in active_map.tag_index.tag_index)
+
+    def detect_tag_collection_names(self, halo_map):
+        tag_type_names = {}
+
+        map_type        = active_map.map_header.map_type.enum_name
+        tag_index_array = halo_map.tag_index.tag_index
+
+        tag_classes_by_id = {i: tag_index_array[i].class_1.data.
+                             to_bytes(4, "big").decode('latin-1')
+                             for i in range(len(tag_index_array))}
+
+
+        # try to locate the Soul tag out of all the tags thought to be tagc
+        # and(attempt to) determine the names of each tag collection
+        tagc_ids_reffed_in_other_tagc = set()
+        for b in tag_index_array:
+            if b.class_1.enum_name not in ("tag_collection", "ui_widget_collection"):
+                continue
+
+            reffed_tag_ids, reffed_tag_types = get_tagc_refs(
+                b.meta_offset, halo_map.map_data, halo_map.map_magic,
+                tag_classes_by_id)
+
+            reffed_tag_types = set(reffed_tag_types)
+            tag_path = None
+            if reffed_tag_types == set(["devc"]):
+                tag_path = "ui\\ui_input_device_defaults"
+            elif reffed_tag_types == set(["DeLa"]):
+                if   map_type == "sp": tag_path = "ui\\shell\\solo"
+                elif map_type == "mp": tag_path = "ui\\shell\\multiplayer"
+                elif map_type == "ui": tag_path = "ui\\shell\\main_menu"
+
+            tag_id = b.id & 0xFFff
+            if tag_name is not None:
+                tag_type_names[tag_id] = tag_path
+
+            if tag_id not in tagc_ids_reffed_in_other_tagc:
+                tagc_ids_reffed_in_other_tagc.update(reffed_tag_ids)
+
+
+        # find out if there are any explicit scenario refs in the yelo tag
+        ui_all_scnr_idx = 0
+        for tag_id, tag_cls in tag_classes_by_id.items():
+            if tag_cls != "yelo": continue
+
+            yelo_meta = halo_map.get_meta(tag_id)
+            if not yelo_meta: continue
+
+            if (yelo_meta.scenario_explicit_references.id & 0xFFff) != 0xFFff:
+                ui_all_scnr_idx += 1
+
+
+        # rename tag collections based on what order they're found
+        # first one will will always be the yelo explicit refs(if it exists)
+        # next will be ui_tags_loaded_all_scenario_types
+        # last will be ui_tags_loaded_XXXX_scenario_type
+        tagc_i = 0
+        for b in tag_index_array:
+            tag_id = b.id & 0xFFff
+            if (tag_classes_by_id.get(tag_id) != "tagc" or
+                tag_id in tagc_ids_reffed_in_other_tagc):
+                continue
+
+            tag_path = None
+            if tagc_i == ui_all_scnr_idx:
+                tag_name = "all_scenario_types"
+            elif tagc_i == ui_all_scnr_idx + 1:
+                if   map_type == "sp": tag_name = "solo_scenario_type"
+                elif map_type == "mp": tag_name = "multiplayer_scenario_type"
+                elif map_type == "ui": tag_name = "mainmenu_scenario_type"
+
+            if tag_name is not None:
+                tag_type_names[tag_id] = "ui\\ui_tags_loaded_" + tag_name
+
+            tagc_i += 1
+
+        return tag_type_names
+
+    def repair_tag_classes(self):
+        if active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+            raise TypeError('Cannot repair tag classes in "%s" maps' %
+                            active_map.engine)
+
+        active_map      = self.active_map
+        tag_index_array = active_map.tag_index.tag_index
+
+        # locate the tags to start deprotecting with
+        repair = {}
+        repaired = {}
+        for b in tag_index_array:
+            tag_id = b.id & 0xFFff
+            if tag_id == tag_index.scenario_tag_id & 0xFFff:
+                tag_cls = "scnr"
+            elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
+                tag_cls = fourcc(b.class_1.data)
+            else:
+                continue
+
+            if tag_cls in ("scnr", "DeLa"):
+                repair[tag_id] = tag_cls
+            elif tag_cls == "matg" and b.path == "globals\\globals":
+                repair[tag_id] = tag_cls
+
+        # scan the tags that need repairing and repair them
+        while repair:
+            next_repair = {}
+            for tag_id in repair:
+                if tag_id in repaired:
+                    continue
+                tag_cls = repair[tag_id]
+                if tag_cls not in class_bytes_by_fcc:
+                    # unknown tag class
+                    continue
+                repaired[tag_id] = tag_cls
+
+                if (tag_cls not in class_repair_functions or
+                        tag_index_array[tag_id].indexed):
+                    continue
+
+                if tag_cls != "sbsp":
+                    class_repair_functions[tag_cls](
+                        tag_id, tag_index_array, active_map.map_data,
+                        active_map.map_magic, next_repair, active_map.engine)
+
+                    # replace meta with the deprotected one
+                    if tag_cls == "matg":
+                        active_map.matg_meta = active_map.get_meta(tag_id)
+                    elif tag_cls == "scnr":
+                        active_map.scnr_meta = active_map.get_meta(tag_id)
+                elif tag_id not in active_map.bsp_headers:
+                    print("    Bsp header missing for tag %s" % tag_id)
+                    continue
+                else:
+                    class_repair_functions[tag_cls](
+                        active_map.bsp_headers[tag_id].meta_pointer,
+                        tag_index_array, active_map.map_data,
+                        active_map.bsp_magics[tag_id] - active_map.bsp_header_offsets[tag_id],
+                        next_repair, active_map.engine, active_map.map_magic)
+
+            # start repairing the newly accumulated tags
+            repair = next_repair
+
+            # exhausted tags to repair. try to repair tag colletions now
+            if not repair:
+                for b in tag_index_array:
+                    tag_id = b.id & 0xFFff
+                    tag_cls = None
+                    if tag_id in repaired:
+                        continue
+                    elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
+                        tag_cls = fourcc(b.class_1.data)
+                    else:
+                        _, reffed_tag_types = get_tagc_refs(
+                            b.meta_offset, active_map.map_data,
+                            active_map.map_magic, repaired
+                            )
+                        if reffed_tag_types:
+                            tag_cls = "tagc"
+
+                    if tag_cls is None:
+                        # couldn't determine tag class
+                        continue
+
+                    if tag_index_array[tag_id].indexed:
+                        repaired[tag_id] = tag_cls
+                    elif tag_cls in ("Soul", "tagc", "yelo", "gelo", "gelc"):
+                        repair[tag_id] = tag_cls
+
+        for b in tag_index_array:
+            tag_id = b.id & 0xFFff
+            if b.class_1.enum_name in ("tag_collection", "ui_widget_collection"):
+                reffed_tag_ids, reffed_tag_types = get_tagc_refs(
+                    b.meta_offset, active_map.map_data,
+                    active_map.map_magic, repaired)
+                if set(reffed_tag_types) == set(["DeLa"]):
+                    repaired[tag_id] = "Soul"
+
+        # write the deprotected tag classes fourcc's to each
+        # tag's header in the tag index in the map buffer
+        index_array_offset = tag_index.tag_index_offset - active_map.map_magic
+        for tag_id, tag_cls in repaired.items():
+            tag_index_ref = tag_index_array[tag_id]
+            classes_int = int.from_bytes(class_bytes_by_fcc[tag_cls], 'little')
+            tag_index_ref.class_1.data = classes_int & 0xFFffFFff
+            tag_index_ref.class_2.data = (classes_int >> 32) & 0xFFffFFff
+            tag_index_ref.class_3.data = (classes_int >> 64) & 0xFFffFFff
+
+        return repaired
+
+    def sanitize_resource_tag_paths(self):
+        for b in tag_index_array:
+            tag_id = b.id & 0xFFff
+            rsrc_tag_id = b.meta_offset
+            rsrc_map = None
+            if not b.indexed:
+                continue
+            elif b.class_1.enum_name == "bitmap":
+                rsrc_map = self.active_maps.get("bitmaps")
+            elif b.class_1.enum_name == "sound":
+                rsrc_map = self.active_maps.get("sounds")
+            elif b.class_1.enum_name in ("font", "hud_message_text",
+                                         "unicode_string_list"):
+                rsrc_map = self.active_maps.get("loc")
+
+            rsrc_tag_index = getattr(rsrc_map, "orig_tag_index", ())
+            if rsrc_tag_id not in range(len(rsrc_tag_index)):
+                continue
+
+            tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
 
     def _script_scrape_deprotect(self, path_handler):
         scnr_meta = self.active_map.scnr_meta
@@ -439,6 +778,93 @@ class RefineryCore:
             new_tag_path = string_data[node.string_offset: string_end]
             if new_tag_path:
                 path_handler.set_path(tag_id, new_tag_path, INF, True)
+
+    def _heuristics_deprotect(self, path_handler,
+                              do_printout=False, print_name_changes=False,
+                              shallow_ui_widget_nesting=True):
+        ids_to_deprotect_by_class = {class_name: [] for class_name in (
+            "scenario", "globals", "hud_globals", "project_yellow", "vehicle",
+            "actor_variant", "biped", "weapon", "equipment", "tag_collection",
+            "ui_widget_collection", "scenario_structure_bsp"
+            )}
+        active_map = self.active_map
+        tag_index_array = active_map.tag_index.tag_index
+        matg_meta = active_map.matg_meta
+        hudg_id = 0xFFFF if not matg_meta else\
+                  matg_meta.interface_bitmaps.STEPTREE[0].hud_globals.id & 0xFFff
+        hudg_meta = active_map.get_meta(hudg_id, True)
+
+        if hudg_meta:
+            block = hudg_meta.messaging_parameters
+            items_meta = active_map.get_meta(block.item_message_text.id & 0xFFff, True)
+            icons_meta = active_map.get_meta(block.alternate_icon_text.id & 0xFFff, True)
+
+            if items_meta: path_handler.set_item_strings(items_meta)
+            if icons_meta: path_handler.set_icon_strings(icons_meta)
+
+        # reset the name of each tag with a default priority and that
+        # currently resides in the tags directory root to "protected_XXXX"
+        for i in range(len(tag_index_array)):
+            if ((path_handler.get_priority(i) == path_handler.def_priority)
+                and not path_handler.get_sub_dir(i)):
+                path_handler.set_path(i, "protected_%s" % i, override=True,
+                                      print_new_name=False)
+
+        scen_ids = []
+        for i in range(len(tag_index_array)):
+            tag_type = tag_index_array[i].class_1.enum_name
+            if tag_type == "scenery":
+                scen_ids.append(i)
+
+            if tag_type in ids_to_deprotect_by_class:
+                ids_to_deprotect_by_class[tag_type].append(i)
+
+        # NOTE: These are ordered in this way to allow the most logical sorting
+        for tag_type in (
+                "scenario_structure_bsp", "vehicle", "weapon", "equipment",
+                "actor_variant", "biped", "ui_widget_collection", "hud_globals",
+                "project_yellow", "globals", "scenario", "tag_collection"):
+            if do_printout:
+                print("\nRenaming %s tags" % tag_type, end="")
+
+            if print_name_changes:
+                print("\ntag_id\tweight\ttag_path\n")
+
+            for tag_id in ids_to_deprotect_by_class[tag_type]:
+                if tag_id is None:
+                    continue
+
+                try:
+                    recursive_rename(
+                        tag_id, active_map, path_handler,
+                        shallow_ui_widget_nesting=shallow_ui_widget_nesting,
+                        print_new_name=print_name_changes)
+                except Exception:
+                    print(format_exc())
+
+        if do_printout:
+            print("\nFinal actor_variant rename pass", end="")
+            print("\ntag_id\tweight\ttag_path\n" if
+                  print_name_changes else "")
+    
+        for tag_id in ids_to_deprotect_by_class["actor_variant"]:
+            if tag_id is None: continue
+            try:
+                recursive_rename(tag_id, active_map, path_handler, depth=1)
+            except Exception:
+                print(format_exc())
+
+        if do_printout:
+            print("\nFinal scenery rename pass", end="")
+            print("\ntag_id\tweight\ttag_path\n" if
+                  print_name_changes else "")
+
+        for tag_id in scen_ids:
+            if tag_id is None: continue
+            try:
+                recursive_rename(tag_id, active_map, path_handler, depth=0)
+            except Exception:
+                print(format_exc())
 
     def extract_cheape_from_halo_map(self, halo_map, output_path=""):
         if halo_map.engine != "halo1yelo":
@@ -471,224 +897,4 @@ class RefineryCore:
         if not self.map_loaded:
             return ""
 
-        active_map = self.active_map
-        string = "%s\n" % self.active_map_path
-
-        header     = active_map.map_header
-        index      = active_map.tag_index
-        orig_index = active_map.orig_tag_index
-        if hasattr(active_map.map_data, '__len__'):
-            decomp_size = str(len(active_map.map_data))
-        elif (hasattr(active_map.map_data, 'seek') and
-              hasattr(active_map.map_data, 'tell')):
-            curr_pos = active_map.map_data.tell()
-            active_map.map_data.seek(0, 2)
-            decomp_size = str(active_map.map_data.tell())
-            active_map.map_data.seek(curr_pos)
-        else:
-            decomp_size = "unknown"
-
-        if not active_map.is_compressed:
-            decomp_size += "(is already uncompressed)"
-
-        map_type = header.map_type.enum_name
-        if map_type == "sp":       map_type = "singleplayer"
-        elif map_type == "mp":     map_type = "multiplayer"
-        elif map_type == "ui":     map_type = "mainmenu"
-        elif map_type == "shared":   map_type = "shared"
-        elif map_type == "sharedsp": map_type = "shared single player"
-        elif active_map.is_resource: map_type = "resource cache"
-        elif "INVALID" in map_type:  map_type = "unknown"
-
-        string += ((
-            "Header:\n" +
-            "    engine version      == %s\n" +
-            "    name                == %s\n" +
-            "    build date          == %s\n" +
-            "    type                == %s\n" +
-            "    decompressed size   == %s\n" +
-            "    index header offset == %s\n") %
-        (active_map.engine, header.map_name, header.build_date,
-         map_type, decomp_size, header.tag_index_header_offset))
-
-        string += ((
-            "\nCalculated information:\n" +
-            "    index magic    == %s\n" +
-            "    map magic      == %s\n") %
-        (active_map.index_magic, active_map.map_magic))
-
-        tag_index_offset = index.tag_index_offset
-        if active_map.engine == "halo2alpha":
-            string += ((
-                "\nTag index:\n" +
-                "    tag count           == %s\n" +
-                "    scenario tag id     == %s\n" +
-                "    index array pointer == %s\n") %
-            (orig_index.tag_count,
-             orig_index.scenario_tag_id & 0xFFff, tag_index_offset))
-        elif "halo2" in active_map.engine:
-            used_tag_count = 0
-            local_tag_count = 0
-            for index_ref in index.tag_index:
-                if is_reserved_tag(index_ref):
-                    continue
-                elif index_ref.meta_offset != 0:
-                    local_tag_count += 1
-                used_tag_count += 1
-
-            string += ((
-                "\nTag index:\n" +
-                "    tag count           == %s\n" +
-                "    used tag count      == %s\n" +
-                "    local tag count     == %s\n" +
-                "    tag types count     == %s\n" +
-                "    scenario tag id     == %s\n" +
-                "    globals  tag id     == %s\n" +
-                "    index array pointer == %s\n") %
-            (orig_index.tag_count, used_tag_count, local_tag_count,
-             orig_index.tag_types_count,
-             orig_index.scenario_tag_id,
-             orig_index.globals_tag_id, tag_index_offset))
-        elif active_map.engine == "halo3":
-            string += ((
-                "\nTag index:\n" +
-                "    tag count           == %s\n" +
-                "    tag types count     == %s\n" +
-                "    root tags count     == %s\n" +
-                "    index array pointer == %s\n") %
-            (orig_index.tag_count, orig_index.tag_types_count,
-             orig_index.root_tags_count,
-             tag_index_offset - active_map.map_magic))
-
-            for arr_name, arr in (("Partitions", header.partitions),
-                                  ("Sections", header.sections),):
-                string += "\n%s:\n" % arr_name
-                names = ("debug", "resource", "tag", "locale")\
-                        if arr.NAME_MAP else range(len(arr))
-                for name in names:
-                    section = arr[name]
-                    string += ((
-                        "    %s:\n" +
-                        "        address == %s\n" +
-                        "        size    == %s\n" +
-                        "        offset  == %s\n") %
-                    (name, section[0], section[1], section.file_offset)
-                    )
-        else:
-            string += ((
-                "\nTag index:\n" +
-                "    tag count           == %s\n" +
-                "    scenario tag id     == %s\n" +
-                "    index array pointer == %s   non-magic == %s\n" +
-                "    model data pointer  == %s\n" +
-                "    meta data length    == %s\n" +
-                "    vertex parts count  == %s\n" +
-                "    index  parts count  == %s\n") %
-            (index.tag_count, index.scenario_tag_id & 0xFFff,
-             tag_index_offset, tag_index_offset - active_map.map_magic,
-             index.model_data_offset, header.tag_data_size,
-             index.vertex_parts_count, index.index_parts_count))
-
-            if index.SIZE == 36:
-                string += (
-                    "    index parts pointer == %s   non-magic == %s\n"
-                    % (index.index_parts_offset,
-                       index.index_parts_offset - active_map.map_magic))
-            else:
-                string += ((
-                    "    vertex data size    == %s\n" +
-                    "    index  data size    == %s\n" +
-                    "    model  data size    == %s\n") %
-                (index.vertex_data_size,
-                 index.model_data_size - index.vertex_data_size,
-                 index.model_data_size))
-
-        if active_map.engine == "halo1yelo":
-            yelo    = header.yelo_header
-            flags   = yelo.flags
-            info    = yelo.build_info
-            version = yelo.tag_versioning
-            cheape  = yelo.cheape_definitions
-            rsrc    = yelo.resources
-            min_os  = info.minimum_os_build
-            string += ((
-                "\nYelo information:\n" +
-                "    Mod name              == %s\n" +
-                "    Memory upgrade amount == %sx\n" +
-                "\n    Flags:\n" +
-                "        uses memory upgrades       == %s\n" +
-                "        uses mod data files        == %s\n" +
-                "        is protected               == %s\n" +
-                "        uses game state upgrades   == %s\n" +
-                "        has compression parameters == %s\n" +
-                "\n    Build info:\n" +
-                "        build string  == %s\n" +
-                "        timestamp     == %s\n" +
-                "        stage         == %s\n" +
-                "        revision      == %s\n" +
-                "\n    Cheape:\n" +
-                "        build string      == %s\n" +
-                "        version           == %s.%s.%s\n" +
-                "        size              == %s\n" +
-                "        offset            == %s\n" +
-                "        decompressed size == %s\n" +
-                "\n    Versioning:\n" +
-                "        minimum open sauce     == %s.%s.%s\n" +
-                "        project yellow         == %s\n" +
-                "        project yellow globals == %s\n" +
-                "\n    Resources:\n" +
-                "        compression parameters header offset   == %s\n" +
-                "        tag symbol storage header offset       == %s\n" +
-                "        string id storage header offset        == %s\n" +
-                "        tag string to id storage header offset == %s\n"
-                ) %
-            (yelo.mod_name, yelo.memory_upgrade_multiplier,
-             bool(flags.uses_memory_upgrades),
-             bool(flags.uses_mod_data_files),
-             bool(flags.is_protected),
-             bool(flags.uses_game_state_upgrades),
-             bool(flags.has_compression_params),
-             info.build_string, info.timestamp, info.stage.enum_name,
-             info.revision, cheape.build_string,
-             info.cheape.maj, info.cheape.min, info.cheape.build,
-             cheape.size, cheape.offset, cheape.decompressed_size,
-             min_os.maj, min_os.min, min_os.build,
-             version.project_yellow, version.project_yellow_globals,
-             rsrc.compression_params_header_offset,
-             rsrc.tag_symbol_storage_header_offset,
-             rsrc.string_id_storage_header_offset,
-             rsrc.tag_string_to_id_storage_header_offset,
-            ))
-
-        if hasattr(active_map, "bsp_magics"):
-            string += "\nSbsp magic and headers:\n"
-
-            for tag_id in active_map.bsp_magics:
-                header = active_map.bsp_headers.get(tag_id)
-                if header is None: continue
-
-                magic  = active_map.bsp_magics[tag_id]
-                string += ((
-                    "    %s.structure_scenario_bsp\n" +
-                    "        bsp base pointer               == %s\n" +
-                    "        bsp magic                      == %s\n" +
-                    "        bsp size                       == %s\n" +
-                    "        bsp metadata pointer           == %s   non-magic == %s\n"
-                    #"        uncompressed lightmaps count   == %s\n" +
-                    #"        uncompressed lightmaps pointer == %s   non-magic == %s\n" +
-                    #"        compressed   lightmaps count   == %s\n" +
-                    #"        compressed   lightmaps pointer == %s   non-magic == %s\n"
-                    ) %
-                (index.tag_index[tag_id].path,
-                 active_map.bsp_header_offsets[tag_id],
-                 magic, active_map.bsp_sizes[tag_id],
-                 header.meta_pointer, header.meta_pointer - magic,
-                 #header.uncompressed_lightmap_materials_count,
-                 #header.uncompressed_lightmap_materials_pointer,
-                 #header.uncompressed_lightmap_materials_pointer - magic,
-                 #header.compressed_lightmap_materials_count,
-                 #header.compressed_lightmap_materials_pointer,
-                 #header.compressed_lightmap_materials_pointer - magic,
-                 ))
-
-        return string
+        return self.active_map.generate_map_info_string()
