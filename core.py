@@ -50,8 +50,14 @@ from refinery.recursive_rename.functions import recursive_rename
 
 
 class RefineryError(Exception): pass
+class MapNotLoadedError(RefineryError): pass
 class EngineDetectionError(RefineryError): pass
 class MapAlreadyLoadedError(RefineryError): pass
+class CouldNotGetMetaError(RefineryError): pass
+class InvalidTagIdError(RefineryError): pass
+class InvalidClassError(RefineryError): pass
+class MetaConversionError(RefineryError): pass
+class DataExtractionError(RefineryError): pass
 
 
 platform = sys.platform.lower()
@@ -223,10 +229,10 @@ class RefineryCore:
             active_map = self.active_map
             for map_name in map_names:
                 try:
-                    curr_map = maps[map_name]
-                    if map_type is None or map_type == curr_map.is_resource:
+                    halo_map = maps[map_name]
+                    if map_type is None or map_type == halo_map.is_resource:
                         maps[map_name].unload_map(False)
-                        if curr_map is active_map:
+                        if halo_map is active_map:
                             self.active_map_name = ""
                 except Exception:
                     pass
@@ -274,8 +280,7 @@ class RefineryCore:
         save_path, ext = os.path.splitext(save_path)
         save_path = sanitize_path(save_path + (ext if ext else (
             '.yelo' if 'yelo' in halo_map.engine else '.map')))
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
+        os.makedirs(save_dir, exist_ok=True)
 
         try:
             out_file = map_file = halo_map.map_data
@@ -875,8 +880,7 @@ class RefineryCore:
                 os.path.join(self.tk_tags_dir.get(),
                      halo_map.map_header.map_name + "_cheape.map"))
 
-        if not os.path.exists(os.path.dirname(output_path)):
-            os.makedirs(os.path.dirname(output_path))
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         cheape = halo_map.map_header.yelo_header.cheape_definitions
         size        = cheape.size
@@ -892,6 +896,146 @@ class RefineryCore:
             f.write(cheape_data)
 
         return output_path
+
+    def extract_tag(self, tag_id, engine="<active>", map_name="<active>",
+                    extract_mode="tags", dependency_ids=None, do_printout=False,
+                    output_path=""):
+        '''
+        Returns either True or False, indicating whether or not the
+        tag was extracted. True indicates extraction success, with False
+        indicating extraction was skipped to not overwrite existing files.
+        '''
+        assert extract_mode in ("tags", "data")
+        get_dependencies = isinstance(dependency_ids, set)
+
+        halo_map = self.maps_by_engine.get("engine", {}).get(map_name)
+        if halo_map is None:
+            raise MapNotLoadedError(
+                'No HaloMap "%s" loaded under engine "%s".' % (map_name, engine))
+
+        tag_index_array = halo_map.tag_index.tag_index
+        if tag_id not in range(len(tag_index_array)):
+            raise InvalidTagIdError('tag_id "%s" is not in the tag index.' % tag_id)
+
+        tag_index_ref = tag_index_array[tag_id]
+        filepath = sanitize_path(tag_index_ref.path)
+        if tag_index_ref.class_1.enum_name in ("<INVALID>", "NONE"):
+            raise InvalidClassError(
+                'Unknown class for "%s". Run deprotection to fix.' % filepath)
+
+        full_tag_class = tag_index_ref.class_1.enum_name
+        filepath += "." + full_tag_class
+        if force_lower_case_paths:
+            filepath = filepath.lower()
+
+        if not output_path:
+            output_path = os.path.join(out_dir, filepath)
+
+        tag_cls = fourcc(tag_index_ref.class_1.data)
+        if extract_mode == "tags":
+            do_extract = ((overwrite or not os.path.isfile(output_path))
+                          and tag_cls not in halo_map.tag_headers)
+
+            if not(do_extract or get_dependencies):
+                return False
+        else:
+            do_extract = True
+
+        meta = halo_map.get_meta(tag_id, True)
+        if not meta:
+            raise CouldNotGetMetaError('Could not get meta for "%s"' % filepath)
+
+        is_halo1 = ("halo1" in halo_map.engine or "stubbs" in halo_map.engine or
+                    "shadowrun" in halo_map.engine)
+
+        if is_halo1 and full_tag_class == "scenario":
+            node_strings = extract_kw["hsc_node_strings_by_type"] = {}
+            if self.use_scenario_names_for_script_names:
+                node_strings.update(get_h1_scenario_script_object_type_strings(meta))
+
+            if self.use_tag_index_for_script_names:
+                bipeds = meta.bipeds_palette.STEPTREE
+                actors = {i: bipeds[i].name.filepath.split("/")[-1].split("\\")[-1]
+                          for i in range(len(bipeds))}
+                strings = {i: tag_index_array[i].path.lower()
+                           for i in range(len(tag_index_array))}
+
+                if force_lower_case_paths:
+                    actors  = {k: v.lower() for k, v in actors.items()}
+                    strings = {k: v.lower() for k, v in strings.items()}
+
+                # actor type strings
+                node_strings[35] = actors
+
+                # tag reference path strings
+                for i in range(24, 32):
+                    node_strings[i] = strings
+
+        tag_refs = () if (not get_dependencies or force_lower_case_paths) else\
+                   halo_map.get_dependencies(meta, tag_id, tag_cls)
+
+        if force_lower_case_paths:
+            # force all tag references to lowercase
+            for ref in tag_refs:
+                ref.filepath = ref.filepath.lower()
+
+        if get_dependencies:
+            # add dependencies to list to be extracted
+            index_len = len(tag_index_array)
+            dependency_ids.update(ref.id & 0xFFff for ref in tag_refs if
+                                  ref.id & 0xFFff in range(index_len))
+
+            if not do_extract:
+                return False
+
+        meta = halo_map.meta_to_tag_data(meta, tag_cls, tag_index_ref, **convert_kw)
+        if not meta:
+            raise MetaConversionError("Failed to convert meta to tag")
+
+        if extract_mode == "data":
+            error_str = halo_map.extract_tag_data(meta, tag_index_ref, **extract_kw)
+            if error_str:
+                raise DataExtractionError(error_str)
+            return True
+
+        try:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            mode = 'r+b' if os.path.isfile(output_path) else 'w+b'
+            with open(output_path, mode) as f:
+                f.truncate(0)
+                f.write(halo_map.tag_headers[tag_cls])
+                if is_halo1:
+                    with FieldType.force_big():
+                        f.write(meta.serialize(calc_pointers=False))
+                else:
+                    with FieldType.force_normal():
+                        f.write(meta.serialize(calc_pointers=False))
+        except FileNotFoundError:
+            if platform != "win32" or len(output_path) < 256:
+                raise
+            raise RefineryError("Filepath is over the Windows 260 character limit.")
+
+        return True
+
+    def write_tagslist(self, tagslist, tagslist_path):
+        try:
+            f = open(tags_list_path, 'a')
+        except Exception:
+            try:
+                f = open(tags_list_path, 'w')
+            except Exception:
+                try:
+                    f = open(tags_list_path, 'r+')
+                except Exception:
+                    f = None
+
+        if f is None:
+            return True
+
+        f.write(tagslist)
+        f.write('\n\n')
+        f.close()
+        return False
 
     def generate_map_info_string(self):
         if not self.map_loaded:
