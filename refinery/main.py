@@ -112,7 +112,7 @@ class Refinery(tk.Tk, RefineryCore):
             self, os.path.join(curr_dir, "tags", ""))
         self.tk_data_dir = tk.StringVar(
             self, os.path.join(curr_dir, "data", ""))
-        self.tags_list_path = tk.StringVar(
+        self.tagslist_path = tk.StringVar(
             self, os.path.join(curr_dir, "tags", "tagslist.txt"))
         self.extract_mode = tk.StringVar(self, "tags")
         self.fix_tag_classes = tk.IntVar(self, 1)
@@ -168,7 +168,7 @@ class Refinery(tk.Tk, RefineryCore):
             show_output=self.show_output,
             tags_dir=self.tk_tags_dir,
             data_dir=self.tk_data_dir,
-            tags_list_path=self.tags_list_path,
+            tagslist_path=self.tagslist_path,
             extract_mode=self.extract_mode,
             decode_adpcm=self.decode_adpcm,
             bitmap_extract_format=self.bitmap_extract_format,
@@ -413,7 +413,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         self.geometry("%sx%s+%s+%s" % tuple(app_window[:4]))
 
-        self.tags_list_path.set(paths.tags_list.path)
+        self.tagslist_path.set(paths.tags_list.path)
         self.tk_tags_dir.set(paths.tags_dir.path)
         self.tk_data_dir.set(paths.data_dir.path)
         self.last_dir = paths.last_dir.path
@@ -454,7 +454,7 @@ class Refinery(tk.Tk, RefineryCore):
         if len(paths.NAME_MAP) > len(paths):
             paths.extend(len(paths.NAME_MAP) - len(paths))
 
-        paths.tags_list.path = self.tags_list_path.get()
+        paths.tags_list.path = self.tagslist_path.get()
         paths.tags_dir.path  = self.tk_tags_dir.get()
         paths.data_dir.path  = self.tk_data_dir.get()
         paths.last_dir.path  = self.last_dir
@@ -967,14 +967,14 @@ class Refinery(tk.Tk, RefineryCore):
         if not self.map_loaded: return
 
         active_map = self.active_map
-        if self.running:
-            return
-        elif active_map.is_resource:
+        if self.running or halo_map is None:
+            return ""
+        elif halo_map.is_resource:
             print("Cannot save resource maps.")
-            return
-        elif "halo1" not in active_map.engine:
+            return ""
+        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
             print("Cannot save this kind of map.")
-            return
+            return ""
 
         save_path = asksaveasfilename(
             initialdir=os.path.dirname(self.active_map_path), parent=self,
@@ -984,7 +984,7 @@ class Refinery(tk.Tk, RefineryCore):
                        ("All", "*")))
 
         if not save_path:
-            return
+            return ""
 
         self._running = True
         try:
@@ -993,6 +993,7 @@ class Refinery(tk.Tk, RefineryCore):
         except Exception:
             print(format_exc())
         self._running = False
+        return save_path
 
     def save_map(self, save_path=None, engine="<active>", map_name="<active>", **kw):
         reload_window = kw.pop("reload_window", True)
@@ -1038,7 +1039,7 @@ class Refinery(tk.Tk, RefineryCore):
                  "\n\nContinue?") % new_strings_size,
                 icon='warning', parent=self)):
             print("    Save cancelled")
-            return
+            return ""
 
         print('Saving "%s"' % save_path)
         try:
@@ -1101,7 +1102,7 @@ class Refinery(tk.Tk, RefineryCore):
                 overwrite      = info['overwrite'].get()
                 show_output    = info['show_output'].get()
                 extract_mode   = info['extract_mode'].get()
-                tags_list_path = info['tags_list_path'].get()
+                tagslist_path = info['tagslist_path'].get()
                 map_name = curr_map.map_header.map_name
                 is_halo1_map = ("halo1"  in curr_map.engine or
                                 "stubbs" in curr_map.engine or
@@ -1236,7 +1237,7 @@ class Refinery(tk.Tk, RefineryCore):
                             print("    Could not get meta")
                             continue
 
-                        if tags_list_path:
+                        if tagslist_path:
                             tagslist += "%s: %s\n" % (extract_mode, file_path)
 
                         tag_refs = ()
@@ -1338,36 +1339,16 @@ class Refinery(tk.Tk, RefineryCore):
             try: queue_tree.delete(iid)
             except Exception: pass
 
-            if tagslist:
-                try:
-                    try:
-                        f = open(tags_list_path, 'a')
-                    except Exception:
-                        try:
-                            f = open(tags_list_path, 'w')
-                        except Exception:
-                            try:
-                                f = open(tags_list_path, 'r+')
-                            except Exception:
-                                f = None
-
-                    if f is not None:
-                        f.write("%s tags in: %s\n" % (local_total, out_dir))
-                        f.write(tagslist)
-                        f.write('\n\n')
-                        f.close()
-                    else:
-                        print("Could not create\open tagslist. Either run "
-                              "Refinery as admin, or choose a a directory "
-                              "you have permission to edit/make files in.")
-                except Exception:
-                    print(format_exc())
-                    print("Could not save tagslist.")
+            tagslist = "%s tags in: %s\n%s" % (local_total, out_dir, tagslist)
+            if tagslist_path:
+                if self.write_tagslist(tagslist, tagslist_path):
+                    print("Could not create\open tagslist. Either run "
+                          "Refinery as admin, or choose a directory "
+                          "you have permission to edit/make files in.")
 
             total += local_total
             local_total = 0
             last_map_name = map_name
-
 
         if total == 0:
             print(
