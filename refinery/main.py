@@ -202,7 +202,7 @@ class Refinery(tk.Tk, RefineryCore):
         self.file_menu.add_command(
             label="Load maps", command=self.browse_for_maps)
         self.file_menu.add_command(
-            label="Load all resource maps", command=self.load_resource_maps)
+            label="Load all resource maps", command=self.load_resource_maps_clicked)
         self.file_menu.add_separator()
         self.file_menu.add_command(
             label="Unload active map",
@@ -772,45 +772,24 @@ class Refinery(tk.Tk, RefineryCore):
         else:
             self.set_active_map(force_reload=True)
 
-    def load_resource_maps(self, halo_map=None):
-        if halo_map is None:
-            halo_map = self.active_map
-
-        if halo_map is None:
-            return
-        elif self.running:
-            return
-
-        self._running = True
-        try:
-            print("Loading resource maps for: %s" %
-                  halo_map.map_header.map_name)
-            self.update()
-            RefineryCore.load_resource_maps(halo_map)
-            self.reload_engine_select_options()
-            print("    Finished")
-        except Exception:
-            print(format_exc())
-
-        self._running = False
-
-    def load_map(self, map_path, make_active=True, ask_close_open=False):
+    def load_map(self, map_path, make_active=True, ask_close_open=False, **kw):
+        autoload_resources = kw.pop("autoload_resources", self.autoload_resources)
         new_map = None
         try:
             print("Loading %s..." % os.path.basename(map_path))
             new_map = RefineryCore.load_map(
-                self, map_path, self.autoload_resources,
-                not ask_close_open)
+                self, map_path, not ask_close_open,
+                autoload_resources=False, decompress_overwrite=True)
         except MapAlreadyLoadedError:
             if not(ask_close_open and messagebox.askyesno(
                     "A map with that name is already loaded!",
-                    ('A map with the name "%s" is already loaded.\n'
+                    ('A map with the same name as "%s" is already loaded. '
                      "Close that map and load this one instead?") %
-                    map_name, icon='warning', parent=self)):
+                    os.path.basename(map_path), icon='warning', parent=self)):
                 print("    Skipped")
                 return
-            new_map = RefineryCore.load_map(
-                self, map_path, self.autoload_resources, True)
+            new_map = RefineryCore.load_map(self, map_path, True,
+                                            autoload_resources=False)
         except Exception:
             try:
                 self.unload_maps(None)
@@ -818,14 +797,21 @@ class Refinery(tk.Tk, RefineryCore):
                 print(format_exc())
             raise
 
+        # TODO: Fix bug where reload_explorers is getting called WAY too often
+        # when loading maps outside of the load button, and where the active
+        # map is being changed incorrectly after reloading the same map.
+        # Fix wonkyness in general with set_active_engine and set_active_map
         if make_active:
             self.set_active_engine(
-                new_map.engine, new_map.map_header.map_name, force_reload=True)
+                new_map.engine, new_map.map_name, force_reload=True)
 
-        print("    Finished")
+        if autoload_resources:
+            self.load_resource_maps(new_map)
+
+        print("    Finished loading %s..." % os.path.basename(map_path))
         return new_map
 
-    def load_maps(self, map_paths, make_active=True, ask_close_open=False):
+    def load_maps(self, map_paths, make_active=True, ask_close_open=False, **kw):
         if not map_paths:
             return
 
@@ -833,7 +819,7 @@ class Refinery(tk.Tk, RefineryCore):
         new_map = None
         for map_path in map_paths:
             try:
-                new_map = self.load_map(map_path, False, ask_close_open)
+                new_map = self.load_map(map_path, False, ask_close_open, **kw)
             except EngineDetectionError:
                 print(format_exc(0))
             except Exception:
@@ -851,6 +837,66 @@ class Refinery(tk.Tk, RefineryCore):
         if make_active and new_map is not None:
             self.set_active_engine(
                 new_map.engine, new_map.map_header.map_name, force_reload=True)
+
+    def load_resource_maps_clicked(self):
+        if self.active_map is None:
+            return
+        elif self.running:
+            return
+
+        self._running = True
+        try:
+            self.update()
+            self.load_resource_maps()
+        except Exception:
+            print(format_exc())
+            self.reload_engine_select_options()
+
+        self._running = False
+
+    def load_resource_maps(self, halo_map=None, maps_dir="", map_paths=(), **kw):
+        if halo_map is None:
+            halo_map = self.active_map
+
+        if not halo_map:
+            return
+
+        nothing_to_load = True
+        for name in halo_map.get_resource_map_paths():
+            if name not in halo_map.maps:
+                nothing_to_load = False
+        if nothing_to_load:
+            return
+
+        print("Loading resource maps for: %s" % halo_map.map_name)
+        kw.setdefault("do_printout", True)
+        if not maps_dir:
+            maps_dir = dirname(halo_map.filepath)
+
+        not_loaded = RefineryCore.load_resource_maps(
+            self, halo_map, maps_dir, (), **kw)
+
+        asked = set()
+        for map_name in sorted(not_loaded):
+            if map_name in asked or halo_map.maps.get(map_name) is not None:
+                continue
+
+            asked.add(map_name)
+            map_path = askopenfilename(
+                initialdir=maps_dir, title="Select the %s.map" % map_name,
+                filetypes=((map_name, "*.map"), (map_name, "*.yelo"),
+                           (map_name, "*.map.dtz"), ("All", "*.*")))
+
+            if not map_path:
+                print("You wont be able to extract from %s.map" % map_name)
+                continue
+
+            maps_dir = dirname(map_path)
+            RefineryCore.load_resource_maps(self, halo_map, maps_dir,
+                                            {map_name: map_path}, **kw)
+
+        print("    Finished loading resource maps")
+        self.reload_engine_select_options()
 
     def display_map_info(self, string=None):
         try:
@@ -925,7 +971,6 @@ class Refinery(tk.Tk, RefineryCore):
         tag_index_array = self.active_map.tag_index.tag_index
         repaired = RefineryCore.repair_tag_classes(self)
 
-        print("    Finished")
         print("    Deprotected classes of %s of the %s total tags(%s%%)." %
               (len(repaired), len(tag_index_array),
                1000*len(repaired)//len(tag_index_array)/10))
@@ -953,12 +998,10 @@ class Refinery(tk.Tk, RefineryCore):
     def sanitize_resource_tag_paths(self):
         print("Renaming tags using resource map tag paths...")
         RefineryCore.sanitize_resource_tag_paths(self)
-        print("    Finished")
 
     def _script_scrape_deprotect(self, tag_path_handler, **kw):
         print("Renaming tags using script strings...")
         RefineryCore._script_scrape_deprotect(self, tag_path_handler, **kw)
-        print("    Finished")
 
     def _heuristics_deprotect(self, tag_path_handler, **kw):
         print("Renaming tags using script strings...")
@@ -968,7 +1011,6 @@ class Refinery(tk.Tk, RefineryCore):
     def _shorten_tag_handler_paths(self, tag_path_handler, **kw):
         print("Renaming tags using script strings...")
         RefineryCore._shorten_tag_handler_paths(self, tag_path_handler, **kw)
-        print("    Finished")
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return
@@ -1058,7 +1100,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         if reload_window and save_path:
             print("Reloading map to apply changes...")
-            self.load_map(save_path, make_active=True)
+            self.load_map(save_path, make_active=True, autoload_resources=False)
 
         return save_path
 

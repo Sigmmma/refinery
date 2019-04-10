@@ -286,13 +286,6 @@ class RefineryCore:
         else:
             self.set_active_map()
 
-    def load_resource_maps(self, halo_map=None):
-        if halo_map is None:
-            halo_map = self.active_map
-
-        if halo_map:
-            halo_map.load_all_resource_maps()
-
     def save_map(self, save_path=None, halo_map=None, **kw):
         if halo_map is None:
             halo_map = self.active_map
@@ -449,8 +442,9 @@ class RefineryCore:
 
         return save_path
 
-    def load_map(self, map_path, load_resource_maps=True,
-                 replace_if_same_name=False):
+    def load_map(self, map_path, replace_if_same_name=False, **kw):
+        do_printout        = kw.get("do_printout", self.do_printout)
+        autoload_resources = kw.pop("autoload_resources", self.autoload_resources)
         with open(map_path, 'r+b') as f:
             comp_data  = PeekableMmap(f.fileno(), 0)
             head_sig   = unpack("<I", comp_data.peek(4))[0]
@@ -485,8 +479,20 @@ class RefineryCore:
         else:
             new_map = Halo1RsrcMap(maps)
 
-        new_map.load_map(map_path, autoload_resources=load_resource_maps)
+        if self.autoload_resources:
+            self.load_resource_maps(new_map)
+
+        new_map.load_map(map_path, **kw)
         return new_map
+
+    def load_resource_maps(self, halo_map=None, maps_dir="", map_paths=(), **kw):
+        if halo_map is None:
+            halo_map = self.active_map
+
+        if not halo_map:
+            return set()
+
+        return halo_map.load_resource_maps(maps_dir, map_paths, **kw)
 
     def deprotect_all(self):
         for engine_name in self.maps_by_engine:
@@ -587,7 +593,7 @@ class RefineryCore:
 
         if self.limit_tag_path_lengths:
             try:
-                self._shorten_tag_handler_paths.shorten_paths(
+                self._shorten_tag_handler_paths(
                     tag_path_handler, do_printout=do_printout,
                     print_errors=print_errors)
             except Exception:
@@ -639,7 +645,7 @@ class RefineryCore:
                 elif map_type == "ui": tag_path = "ui\\shell\\main_menu"
 
             tag_id = b.id & 0xFFff
-            if tag_name is not None:
+            if tag_path is not None:
                 tag_type_names[tag_id] = tag_path
 
             if tag_id not in tagc_ids_reffed_in_other_tagc:
@@ -685,11 +691,11 @@ class RefineryCore:
         return tag_type_names
 
     def repair_tag_classes(self):
-        if active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+        halo_map  = self.active_map
+        if halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
             raise TypeError('Cannot repair tag classes in "%s" maps' %
-                            active_map.engine)
+                            halo_map.engine)
 
-        halo_map        = self.active_map
         tag_index_array = halo_map.tag_index.tag_index
 
         # locate the tags to start deprotecting with
@@ -697,7 +703,7 @@ class RefineryCore:
         repaired = {}
         for b in tag_index_array:
             tag_id = b.id & 0xFFff
-            if tag_id == tag_index.scenario_tag_id & 0xFFff:
+            if tag_id == halo_map.tag_index.scenario_tag_id & 0xFFff:
                 tag_cls = "scnr"
             elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
                 tag_cls = fourcc(b.class_1.data)
@@ -782,7 +788,7 @@ class RefineryCore:
 
         # write the deprotected tag classes fourcc's to each
         # tag's header in the tag index in the map buffer
-        index_array_offset = tag_index.tag_index_offset - halo_map.map_magic
+        index_array_offset = halo_map.tag_index.tag_index_offset - halo_map.map_magic
         for tag_id, tag_cls in repaired.items():
             tag_index_ref = tag_index_array[tag_id]
             classes_int = int.from_bytes(class_bytes_by_fcc[tag_cls], 'little')
@@ -793,7 +799,11 @@ class RefineryCore:
         return repaired
 
     def sanitize_resource_tag_paths(self):
-        for b in tag_index_array:
+        halo_map = self.active_map
+        if not halo_map:
+            return
+
+        for b in halo_map.tag_index.tag_index:
             tag_id = b.id & 0xFFff
             rsrc_tag_id = b.meta_offset
             rsrc_map = None
@@ -814,7 +824,11 @@ class RefineryCore:
             tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
 
     def _script_scrape_deprotect(self, path_handler, **kw):
-        scnr_meta = self.active_map.scnr_meta
+        halo_map = self.active_map
+        if not halo_map:
+            return
+
+        scnr_meta = halo_map.scnr_meta
         do_printout = kw.pop("do_printout", self.do_printout)
 
         string_data = scnr_meta.script_string_data.data.decode("latin-1")
@@ -851,6 +865,9 @@ class RefineryCore:
         print_name_changes = do_printout and self.print_heuristic_name_changes
 
         halo_map = self.active_map
+        if not halo_map:
+            return
+
         tag_index_array = halo_map.tag_index.tag_index
         matg_meta = halo_map.matg_meta
         hudg_id = 0xFFFF if not matg_meta else\
@@ -888,8 +905,9 @@ class RefineryCore:
                 "actor_variant", "biped", "ui_widget_collection", "hud_globals",
                 "project_yellow", "globals", "scenario", "tag_collection"):
             if do_printout:
-                print("\nRenaming %s tags" % tag_type, end="")
-                print("\ntag_id\tweight\ttag_path\n" if print_name_changes else "")
+                print("Renaming %s tags" % tag_type)
+                if print_name_changes:
+                    print("tag_id\tweight\ttag_path\n")
 
             for tag_id in ids_to_deprotect_by_class[tag_type]:
                 if tag_id is None:
@@ -906,8 +924,9 @@ class RefineryCore:
                     print(format_exc())
 
         if do_printout:
-            print("\nFinal actor_variant rename pass", end="")
-            print("\ntag_id\tweight\ttag_path\n" if print_name_changes else "")
+            print("Final actor_variant rename pass")
+            if print_name_changes:
+                print("tag_id\tweight\ttag_path\n")
 
         for tag_id in ids_to_deprotect_by_class["actor_variant"]:
             if tag_id is None: continue
@@ -919,8 +938,9 @@ class RefineryCore:
                 print(format_exc())
 
         if do_printout:
-            print("\nFinal scenery rename pass", end="")
-            print("\ntag_id\tweight\ttag_path\n" if print_name_changes else "")
+            print("Final scenery rename pass")
+            if print_name_changes:
+                print("tag_id\tweight\ttag_path\n")
 
         for tag_id in scen_ids:
             if tag_id is None: continue
@@ -931,7 +951,7 @@ class RefineryCore:
                     raise
                 print(format_exc())
 
-    def _shorten_tag_handler_paths(self, tag_handler, **kw):
+    def _shorten_tag_handler_paths(self, tag_path_handler, **kw):
         tag_path_handler.shorten_paths(254, **kw)
 
     def extract_cheape_from_halo_map(self, halo_map, output_path=""):
