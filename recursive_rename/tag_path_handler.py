@@ -132,7 +132,7 @@ class TagPathHandler():
         return True
 
     def set_path(self, index, new_path_no_ext, priority=None,
-                 override=False, print_new_name=True):
+                 override=False, do_printout=True):
         if index is None:
             return ""
         elif priority is None:
@@ -178,7 +178,7 @@ class TagPathHandler():
         self._path_map.pop(old_path, None)
         self._path_map[new_path] = index
         tag_ref.path = new_path_no_ext
-        if print_new_name:
+        if do_printout:
             print(index, priority, new_path, sep="\t")
 
         return new_path
@@ -186,9 +186,11 @@ class TagPathHandler():
     def set_priority(self, index, priority):
         self._priorities[index] = float(priority)
 
-    def shorten_paths(self, max_len):
+    def shorten_paths(self, max_len, **kw):
         paths = {}
         new_paths = {}
+        do_printout = kw.pop("do_printout", False)
+        print_errors = kw.pop("print_errors", False)
 
         for tag_path, index in self._path_map.items():
             if len(splitext(tag_path)[0]) < max_len:
@@ -199,8 +201,10 @@ class TagPathHandler():
             # 1 char for \, 1 for potential ~, 1 for potential number,
             # and 1 for at least one name character
             if (len(tag_path_pieces) - 1)*4 > max_len:
-                raise ValueError("Tag paths too nested to shorten to %s chars."
-                                 % max_len)
+                err_str = "Tag paths too nested to shorten to %s chars." % max_len
+                if not print_errors:
+                    raise ValueError(err_str)
+                print(err_str)
                 return
 
             for dirname in tag_path_pieces[: -1]:
@@ -305,9 +309,9 @@ class TagPathHandler():
 
                 tag_path = val.path
                 new_tag_path = "\\".join(path_pieces + splitext(name)[: 1])
-                print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
-                      (len(tag_path), len(new_tag_path),
-                       tag_path, new_tag_path))
+                if do_printout:
+                    print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
+                          (len(tag_path), len(new_tag_path), tag_path, new_tag_path))
                 self._path_map.pop(tag_path, None)
                 val.path = new_tag_path
 
@@ -324,7 +328,7 @@ class TagPathHandler():
         for i in range(len(self._index_map)):
             ref = self._index_map[i]
             tag_path = ref.path
-            if len(tag_path) > max_len:
+            if do_printout and len(tag_path) > max_len:
                 print('WARNING: "%s" is over the length limit.' % tag_path)
 
             self._path_map[(tag_path + "." + ref.class_1.enum_name).lower()] = i
