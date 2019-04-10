@@ -8,7 +8,8 @@ from tkinter import messagebox
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
-from refinery.hashcacher_window import sanitize_filename, HashcacherWindow
+from refinery.defs.config_def import bitmap_file_formats
+from refinery.hashcacher_window import sanitize_filename
 from refinery.meta_window import MetaWindow
 from refinery import crc_functions
 
@@ -18,8 +19,6 @@ from refinery.util import get_cwd, sanitize_path, is_protected_tag, fourcc,\
      is_reserved_tag
 from supyr_struct.defs.tag_def import TagDef
 from mozzarilla.tools.shared_widgets import HierarchyFrame
-
-bitmap_file_formats = ("dds", "tga", "png")
 
 
 curr_dir = get_cwd(__file__)
@@ -74,9 +73,9 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
 
     settings_vars = dict(
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
-        show_output=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
+        do_printout=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
         autoload_resources=tk.IntVar(parent), decode_adpcm=tk.IntVar(parent),
-        bitmap_extract_format=tk.IntVar(parent),
+        bitmap_extract_format=tk.StringVar(parent),
         bitmap_extract_keep_alpha=tk.IntVar(parent),
         generate_comp_verts=tk.IntVar(parent), generate_uncomp_verts=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
@@ -841,20 +840,21 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         for attr in ("overwrite", "recursive",
                      "rename_duplicates_in_scnr", "decode_adpcm",
-                     "bitmap_extract_format", "bitmap_extract_keep_alpha",
+                     "bitmap_extract_keep_alpha",
                      "generate_comp_verts", "generate_uncomp_verts",
                      "force_lower_case_paths",
                      "fix_tag_classes", "autoload_resources", "extract_cheape",
-                     "use_hashcaches", "use_heuristics", "rename_cached_tags",
+                     "use_heuristics", "rename_cached_tags",
                      "show_all_fields", "edit_all_fields", "allow_corrupt",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
                      "fix_tag_index_offset", "use_tag_index_for_script_names",
-                     "show_output", "print_heuristic_name_changes",
+                     "do_printout", "print_heuristic_name_changes",
                      "use_scenario_names_for_script_names",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
-        for attr in ("tags_dir", "data_dir", "tags_list_path"):
+        for attr in ("bitmap_extract_format",
+                     "tags_dir", "data_dir", "tags_list_path"):
             object.__setattr__(self, attr, settings.get(attr, tk.StringVar(self)))
 
 
@@ -901,9 +901,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.recursive_cbtn = tk.Checkbutton(
             self.extract_frame, text="Recursive extraction",
             variable=self.recursive)
-        self.show_output_cbtn = tk.Checkbutton(
+        self.do_printout_cbtn = tk.Checkbutton(
             self.extract_frame, text="Print extracted file names",
-            variable=self.show_output)
+            variable=self.do_printout)
         self.force_lower_case_paths_cbtn = tk.Checkbutton(
             self.extract_frame, text="Force all tag paths to lowercase",
             variable=self.force_lower_case_paths)
@@ -932,9 +932,15 @@ class RefinerySettingsWindow(tk.Toplevel):
                   "object names, device groups, and player starting profiles\n"
                   "from the scenarios reflexives, rather than script strings."),
             justify="left")
+
+        try:
+            sel_index = bitmap_file_formats.index(self.bitmap_extract_format.get())
+        except Exception:
+            sel_index = 0
+
         self.bitmap_extract_format_menu = ScrollMenu(
-            self.bitmap_extract_frame, menu_width=10,
-            options=bitmap_file_formats, variable=self.bitmap_extract_format)
+            self.bitmap_extract_frame, str_variable=self.bitmap_extract_format,
+            menu_width=10, options=bitmap_file_formats, sel_index=sel_index)
 
 
         self.fix_tag_classes_cbtn = tk.Checkbutton(
@@ -943,9 +949,6 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.use_heuristics_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Use heuristic deprotection methods",
             variable=self.use_heuristics)
-        self.use_hashcaches_cbtn = tk.Checkbutton(
-            self.deprotect_frame, text="Use hashcaches",
-            variable=self.use_hashcaches)
         self.scrape_tag_paths_from_scripts_cbtn = tk.Checkbutton(
             self.deprotect_frame, text="Scrape tag paths from scenario scripts",
             variable=self.scrape_tag_paths_from_scripts)
@@ -998,7 +1001,7 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, pady=2, fill="x")
 
         for w in (self.overwrite_cbtn, self.recursive_cbtn,
-                  self.show_output_cbtn, self.force_lower_case_paths_cbtn):
+                  self.do_printout_cbtn, self.force_lower_case_paths_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.bitmap_extract_keep_alpha_cbtn,
@@ -1016,8 +1019,8 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.use_heuristics_cbtn,
-                  self.fix_tag_index_offset_cbtn, #self.use_hashcaches_cbtn,
-                  self.rename_cached_tags_cbtn, self.limit_tag_path_lengths_cbtn,
+                  self.fix_tag_index_offset_cbtn, self.rename_cached_tags_cbtn,
+                  self.limit_tag_path_lengths_cbtn,
                   self.scrape_tag_paths_from_scripts_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
@@ -1201,9 +1204,9 @@ class RefineryActionsWindow(tk.Toplevel):
         self.overwrite_cbtn = tk.Checkbutton(
             self.settings_frame, text="Overwrite tags(not recommended)",
             variable=settings.get("overwrite", tk.IntVar(self)))
-        self.show_output_cbtn = tk.Checkbutton(
+        self.do_printout_cbtn = tk.Checkbutton(
             self.settings_frame, text="Print extracted tag names",
-            variable=settings.get("show_output", tk.IntVar(self)))
+            variable=settings.get("do_printout", tk.IntVar(self)))
 
         # accept/cancel
         self.accept_button = tk.Button(
@@ -1247,7 +1250,7 @@ class RefineryActionsWindow(tk.Toplevel):
         # settings
         self.recursive_cbtn.pack(padx=4, anchor='w')
         self.overwrite_cbtn.pack(padx=4, anchor='w')
-        self.show_output_cbtn.pack(padx=4, anchor='w')
+        self.do_printout_cbtn.pack(padx=4, anchor='w')
 
         # accept/cancel
         self.accept_button.pack(side='right')
@@ -1455,8 +1458,13 @@ class RefineryRenameWindow(tk.Toplevel):
                 "Invalid name",
                 "The entered string cannot be empty.", parent=self)
         else:
+            old_name = self.active_map.map_header.map_name
+            self.active_map.maps.pop(old_name, None)
             self.active_map.map_header.map_name = new_name
+            self.active_map.maps[new_name] = self.active_map
+
             self.master.display_map_info()
+            self.master.reload_map_select_options()
             self.destroy()
 
 

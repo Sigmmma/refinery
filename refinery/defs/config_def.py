@@ -3,6 +3,8 @@ from supyr_struct.defs.common_descs import remaining_data_length
 from supyr_struct.defs.constants import *
 from supyr_struct.field_types import *
 
+bitmap_file_formats = ("dds", "tga", "png")
+
 def get():
     return config_def
 
@@ -17,7 +19,7 @@ config_header = Struct("header",
             SIZE=2
             ),
         Bit("debug_mode"),
-        Bit("show_output"),
+        Bit("do_printout"),
         Bit("autoload_resources"),
         SIZE=4
         ),
@@ -31,16 +33,15 @@ config_header = Struct("header",
         "decode_adpcm",
         "generate_uncomp_verts",
         "generate_comp_verts",
-        "show_all_fields",
-        "edit_all_fields",
-        "allow_corrupt",
+        Pad(3),
         "use_tag_index_for_script_names",
         "use_scenario_names_for_script_names",
+        "bitmap_extract_keep_alpha",
         ),
     Bool32("deprotection_flags",
         "fix_tag_classes",
         "fix_tag_index_offset",
-        "use_hashcaches",
+        Pad(1),
         "use_heuristics",
         "valid_tag_paths_are_accurate",
         "scrape_tag_paths_from_scripts",
@@ -49,18 +50,16 @@ config_header = Struct("header",
         "rename_cached_tags",
         "print_heuristic_name_changes",
         ),
-    Pad(48 - 4*5),
-
-    Bool16("bitmap_extract_flags",
-        "keep_alpha",
+    Bool32("preview_flags",
+        "show_all_fields",
+        "edit_all_fields",
+        "allow_corrupt",
         ),
-    UEnum16("bitmap_extract_format",
-        "dds",
-        "tga",
-        "png",
-        ),
+    Pad(48 - 4*6),
 
-    Pad(128 - 48 - 2*2 - 4*2),
+    UEnum8("bitmap_extract_format", *bitmap_file_formats),
+
+    Pad(128 - 48 - 2*1 - 4*2),
     Timestamp32("date_created", EDITABLE=False),
     Timestamp32("date_modified", EDITABLE=False),
 
@@ -87,7 +86,7 @@ app_window = Struct("app_window",
 
 paths = Array("paths",
     SUB_STRUCT=path, SIZE=".array_sizes.paths_count",
-    NAME_MAP=("last_dir", "tags_list", "tags_dir", "data_dir"),
+    NAME_MAP=("last_dir", "tagslist", "tags_dir", "data_dir"),
     VISIBLE=False
     )
 

@@ -36,11 +36,6 @@ VALID_EXTRACT_MODES = frozenset(("tags", "data"))
 
 
 class Refinery(tk.Tk, RefineryCore):
-    tk_active_engine = None
-    tk_active_map_name = None
-    tk_map_path = None
-    tk_tags_dir = None
-    tk_data_dir = None
     last_dir = curr_dir
 
     config_path = default_config_path
@@ -78,9 +73,16 @@ class Refinery(tk.Tk, RefineryCore):
         )
 
     about_messages = ()
+    tk_vars = ()
 
     def __init__(self, *args, **kwargs):
         self.app_name = str(kwargs.pop('app_name', self.app_name))
+
+        # we are running a gui based program, so we want errors printed
+        # rather than propogated upward(RefineryCore is designed to keep
+        # working when an error that would be affected by this would occur)
+        self.print_errors = self.do_printout = True
+
         RefineryCore.__init__(self, *args, **kwargs)
         tk.Tk.__init__(self, *args, **kwargs)
         try:
@@ -105,76 +107,80 @@ class Refinery(tk.Tk, RefineryCore):
         self.minsize(width=500, height=300)
 
         # make the tkinter variables
-        self.tk_map_path = tk.StringVar(self)
-        self.tk_active_map_name = tk.StringVar(self)
-        self.tk_active_engine = tk.StringVar(self)
-        self.tk_tags_dir = tk.StringVar(
-            self, os.path.join(curr_dir, "tags", ""))
-        self.tk_data_dir = tk.StringVar(
-            self, os.path.join(curr_dir, "data", ""))
-        self.tagslist_path = tk.StringVar(
-            self, os.path.join(curr_dir, "tags", "tagslist.txt"))
         self.extract_mode = tk.StringVar(self, "tags")
-        self.fix_tag_classes = tk.IntVar(self, 1)
-        self.fix_tag_index_offset = tk.IntVar(self)
-        self.use_hashcaches = tk.IntVar(self)
-        self.use_heuristics = tk.IntVar(self, 1)
-        self.valid_tag_paths_are_accurate = tk.IntVar(self, 1)
-        self.scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
-        self.limit_tag_path_lengths = tk.IntVar(self, 1)
-        self.shallow_ui_widget_nesting = tk.IntVar(self, 1)
-        self.rename_cached_tags = tk.IntVar(self, 1)
-        self.print_heuristic_name_changes = tk.IntVar(self)
-        self.force_lower_case_paths = tk.IntVar(self, 1)
-        self.extract_cheape = tk.IntVar(self)
         self.show_all_fields = tk.IntVar(self)
         self.edit_all_fields = tk.IntVar(self)
         self.allow_corrupt = tk.IntVar(self)
-        self.rename_duplicates_in_scnr = tk.IntVar(self)
-        self.use_tag_index_for_script_names = tk.IntVar(self)
-        self.use_scenario_names_for_script_names = tk.IntVar(self)
-        self.overwrite = tk.IntVar(self)
-        self.recursive = tk.IntVar(self)
-        self.autoload_resources = tk.IntVar(self, 1)
-        self.show_output  = tk.IntVar(self, 1)
-        self.decode_adpcm = tk.IntVar(self, 1)
-        self.bitmap_extract_format = tk.IntVar(self)
-        self.bitmap_extract_keep_alpha = tk.IntVar(self, 1)
-        self.generate_comp_verts = tk.IntVar(self)
-        self.generate_uncomp_verts = tk.IntVar(self, 1)
+
+        self._active_map_path = tk.StringVar(self)
+        self._active_map_name = tk.StringVar(self)
+        self._active_engine = tk.StringVar(self)
+
+        self._tags_dir = tk.StringVar(self, self.tags_dir)
+        self._data_dir = tk.StringVar(self, self.data_dir)
+        self._tagslist_path = tk.StringVar(self, self.tagslist_path)
+
+        self._autoload_resources = tk.IntVar(self, 1)
+        self._do_printout  = tk.IntVar(self, 1)
+
+        self._force_lower_case_paths = tk.IntVar(self, 1)
+        self._extract_cheape = tk.IntVar(self)
+        self._rename_duplicates_in_scnr = tk.IntVar(self)
+        self._overwrite = tk.IntVar(self)
+        self._recursive = tk.IntVar(self)
+        self._decode_adpcm = tk.IntVar(self, 1)
+        self._generate_uncomp_verts = tk.IntVar(self, 1)
+        self._generate_comp_verts = tk.IntVar(self)
+        self._use_tag_index_for_script_names = tk.IntVar(self)
+        self._use_scenario_names_for_script_names = tk.IntVar(self)
+        self._bitmap_extract_keep_alpha = tk.IntVar(self, 1)
+        self._bitmap_extract_format = tk.StringVar(self)
+
+        self._fix_tag_classes = tk.IntVar(self, 1)
+        self._fix_tag_index_offset = tk.IntVar(self)
+        self._use_heuristics = tk.IntVar(self, 1)
+        self._valid_tag_paths_are_accurate = tk.IntVar(self, 1)
+        self._scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
+        self._limit_tag_path_lengths = tk.IntVar(self, 1)
+        self._shallow_ui_widget_nesting = tk.IntVar(self, 1)
+        self._rename_cached_tags = tk.IntVar(self, 1)
+        self._print_heuristic_name_changes = tk.IntVar(self)
 
         self.tk_vars = dict(
-            fix_tag_classes=self.fix_tag_classes,
-            fix_tag_index_offset=self.fix_tag_index_offset,
-            use_hashcaches=self.use_hashcaches,
-            use_heuristics=self.use_heuristics,
-            valid_tag_paths_are_accurate=self.valid_tag_paths_are_accurate,
-            scrape_tag_paths_from_scripts=self.scrape_tag_paths_from_scripts,
-            limit_tag_path_lengths=self.limit_tag_path_lengths,
-            shallow_ui_widget_nesting=self.shallow_ui_widget_nesting,
-            rename_cached_tags=self.rename_cached_tags,
-            print_heuristic_name_changes=self.print_heuristic_name_changes,
-            rename_duplicates_in_scnr=self.rename_duplicates_in_scnr,
-            use_tag_index_for_script_names=self.use_tag_index_for_script_names,
-            use_scenario_names_for_script_names=self.use_scenario_names_for_script_names,
-            overwrite=self.overwrite,
-            force_lower_case_paths=self.force_lower_case_paths,
-            extract_cheape=self.extract_cheape,
+            extract_mode=self.extract_mode,
             show_all_fields=self.show_all_fields,
             edit_all_fields=self.edit_all_fields,
             allow_corrupt=self.allow_corrupt,
-            recursive=self.recursive,
-            autoload_resources=self.autoload_resources,
-            show_output=self.show_output,
-            tags_dir=self.tk_tags_dir,
-            data_dir=self.tk_data_dir,
-            tagslist_path=self.tagslist_path,
-            extract_mode=self.extract_mode,
-            decode_adpcm=self.decode_adpcm,
-            bitmap_extract_format=self.bitmap_extract_format,
-            bitmap_extract_keep_alpha=self.bitmap_extract_keep_alpha,
-            generate_comp_verts=self.generate_comp_verts,
-            generate_uncomp_verts=self.generate_uncomp_verts,
+
+            tags_dir=self._tags_dir,
+            data_dir=self._data_dir,
+            tagslist_path=self._tagslist_path,
+
+            do_printout=self._do_printout,
+            autoload_resources=self._autoload_resources,
+
+            force_lower_case_paths=self._force_lower_case_paths,
+            extract_cheape=self._extract_cheape,
+            rename_duplicates_in_scnr=self._rename_duplicates_in_scnr,
+            overwrite=self._overwrite,
+            recursive=self._recursive,
+            decode_adpcm=self._decode_adpcm,
+            generate_uncomp_verts=self._generate_uncomp_verts,
+            generate_comp_verts=self._generate_comp_verts,
+            use_tag_index_for_script_names=self._use_tag_index_for_script_names,
+            use_scenario_names_for_script_names=self._use_scenario_names_for_script_names,
+            bitmap_extract_keep_alpha=self._bitmap_extract_keep_alpha,
+            bitmap_extract_format=self._bitmap_extract_format,
+
+            fix_tag_classes=self._fix_tag_classes,
+            fix_tag_index_offset=self._fix_tag_index_offset,
+            use_heuristics=self._use_heuristics,
+            valid_tag_paths_are_accurate=self._valid_tag_paths_are_accurate,
+            scrape_tag_paths_from_scripts=self._scrape_tag_paths_from_scripts,
+            limit_tag_path_lengths=self._limit_tag_path_lengths,
+            shallow_ui_widget_nesting=self._shallow_ui_widget_nesting,
+            rename_cached_tags=self._rename_cached_tags,
+            print_heuristic_name_changes=self._print_heuristic_name_changes,
             )
 
         if self.config_file is not None:
@@ -310,10 +316,10 @@ class Refinery(tk.Tk, RefineryCore):
             command=self.queue_del_all)
 
         self.engine_select_menu = ScrollMenu(
-            self.map_action_frame, str_variable=self.tk_active_engine,
+            self.map_action_frame, str_variable=self._active_engine,
             callback=self.set_active_engine, menu_width=15)
         self.map_select_menu = ScrollMenu(
-            self.map_action_frame, str_variable=self.tk_active_map_name,
+            self.map_action_frame, str_variable=self._active_map_name,
             callback=self.set_active_map, menu_width=15)
         self.reload_engine_select_options()
         self.reload_map_select_options()
@@ -351,34 +357,29 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._initialized = True
 
-    @property
-    def tags_dir(self):
-        return self.tk_tags_dir.get()
+    def __getattribute__(self, attr_name):
+        # it would have been a LOT of boilerplate for abstracting the
+        # tkinter settings variables if I didn't overload __getattribute__
+        try:
+            if attr_name in object.__getattribute__(self, "tk_vars",):
+                return object.__getattribute__(self, "_" + attr_name).get()
+        except AttributeError:
+            pass
+        return object.__getattribute__(self, attr_name)
+
+    def __setattr__(self, attr_name, new_val):
+        # it would have been a LOT of boilerplate for abstracting the
+        # tkinter settings variables if I didn't overload __setattr__
+        try:
+            if attr_name in object.__getattribute__(self, "tk_vars"):
+                object.__getattribute__(self, "_" + attr_name).set(new_val)
+        except AttributeError:
+            pass
+        object.__setattr__(self, attr_name, new_val)
 
     @property
     def running(self):
         return self._running
-
-    @property
-    def active_map_path(self):
-        return self.tk_map_path.get()
-    @active_map_path.setter
-    def active_map_path(self, new_val):
-        self.tk_map_path.set(new_val)
-
-    @property
-    def active_engine_name(self):
-        return self.tk_active_engine.get()
-    @active_engine_name.setter
-    def active_engine_name(self, new_val):
-        return self.tk_active_engine.set(new_val)
-
-    @property
-    def active_map_name(self):
-        return self.tk_active_map_name.get()
-    @active_map_name.setter
-    def active_map_name(self, new_val):
-        return self.tk_active_map_name.set(new_val)
 
     def load_config(self, filepath=None):
         if filepath is None:
@@ -408,39 +409,36 @@ class Refinery(tk.Tk, RefineryCore):
             return
 
         header     = self.config_file.data.header
-        app_window = self.config_file.data.app_window
         paths      = self.config_file.data.paths
+        app_window = self.config_file.data.app_window
 
         self.geometry("%sx%s+%s+%s" % tuple(app_window[:4]))
 
-        self.tagslist_path.set(paths.tags_list.path)
-        self.tk_tags_dir.set(paths.tags_dir.path)
-        self.tk_data_dir.set(paths.data_dir.path)
+        self.tagslist_path = paths.tagslist.path
+        self.tags_dir = paths.tags_dir.path
+        self.data_dir = paths.data_dir.path
         self.last_dir = paths.last_dir.path
 
-        flags = header.flags
-        self._display_mode = flags.display_mode.enum_name
-        for attr_name in ("show_output", "autoload_resources"):
-            getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
+        self._display_mode = header.flags.display_mode.enum_name
+        for name in ("do_printout", "autoload_resources"):
+            setattr(self, name, bool(getattr(header.flags, name)))
 
-        flags = header.extraction_flags
-        for attr_name in flags.NAME_MAP:
-            getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
+        for flags in (header.extraction_flags, header.deprotection_flags):
+            for attr_name in flags.NAME_MAP:
+                setattr(self, attr_name, bool(getattr(flags, attr_name)))
 
-        self.bitmap_extract_format.set(header.bitmap_extract_format.data)
-        self.bitmap_extract_keep_alpha.set(bool(header.bitmap_extract_flags.keep_alpha))
-        flags = header.deprotection_flags
-        for attr_name in flags.NAME_MAP:
-            getattr(self, attr_name).set(bool(getattr(flags, attr_name)))
+        if header.bitmap_extract_format.enum_name in bitmap_file_formats:
+            self.bitmap_extract_format = header.bitmap_extract_format.enum_name
+        else:
+            self.bitmap_extract_format = bitmap_file_formats[0]
 
     def update_config(self, config_file=None):
         if config_file is None:
             config_file = self.config_file
-        config_data = config_file.data
 
-        header     = config_data.header
-        paths      = config_data.paths
-        app_window = config_data.app_window
+        header      = config_file.data.header
+        paths       = config_file.data.paths
+        app_window  = config_file.data.app_window
 
         header.version = self.config_version
 
@@ -454,25 +452,23 @@ class Refinery(tk.Tk, RefineryCore):
         if len(paths.NAME_MAP) > len(paths):
             paths.extend(len(paths.NAME_MAP) - len(paths))
 
-        paths.tags_list.path = self.tagslist_path.get()
-        paths.tags_dir.path  = self.tk_tags_dir.get()
-        paths.data_dir.path  = self.tk_data_dir.get()
-        paths.last_dir.path  = self.last_dir
+        paths.tagslist.path = self.tagslist_path
+        paths.tags_dir.path = self.tags_dir
+        paths.data_dir.path = self.data_dir
+        paths.last_dir.path = self.last_dir
 
-        flags = header.flags
-        flags.display_mode.set_to(self._display_mode)
-        for attr_name in ("show_output", "autoload_resources"):
-            setattr(flags, attr_name, getattr(self, attr_name).get())
+        header.flags.display_mode.set_to(self._display_mode)
+        for attr_name in ("do_printout", "autoload_resources"):
+            setattr(header.flags, attr_name, getattr(self, attr_name))
 
-        flags = header.extraction_flags
-        for attr_name in flags.NAME_MAP:
-            setattr(flags, attr_name, getattr(self, attr_name).get())
+        for flags in (header.extraction_flags, header.deprotection_flags):
+            for attr_name in flags.NAME_MAP:
+                setattr(flags, attr_name, getattr(self, attr_name))
 
-        header.bitmap_extract_format.data = self.bitmap_extract_format.get()
-        header.bitmap_extract_flags.keep_alpha = self.bitmap_extract_keep_alpha.get()
-        flags = header.deprotection_flags
-        for attr_name in flags.NAME_MAP:
-            setattr(flags, attr_name, getattr(self, attr_name).get())
+        if self.bitmap_extract_format in bitmap_file_formats:
+            header.bitmap_extract_format.set_to(self.bitmap_extract_format)
+        else:
+            header.bitmap_extract_format.set_to(bitmap_file_formats[0])
 
     def save_config(self, e=None):
         try:
@@ -803,7 +799,7 @@ class Refinery(tk.Tk, RefineryCore):
         try:
             print("Loading %s..." % os.path.basename(map_path))
             new_map = RefineryCore.load_map(
-                self, map_path, self.autoload_resources.get(),
+                self, map_path, self.autoload_resources,
                 not ask_close_open)
         except MapAlreadyLoadedError:
             if not(ask_close_open and messagebox.askyesno(
@@ -814,7 +810,7 @@ class Refinery(tk.Tk, RefineryCore):
                 print("    Skipped")
                 return
             new_map = RefineryCore.load_map(
-                self, map_path, self.autoload_resources.get(), True)
+                self, map_path, self.autoload_resources, True)
         except Exception:
             try:
                 self.unload_maps(None)
@@ -824,7 +820,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         if make_active:
             self.set_active_engine(
-                new_map.engine, new_map.header.map_name, force_reload=True)
+                new_map.engine, new_map.map_header.map_name, force_reload=True)
 
         print("    Finished")
         return new_map
@@ -934,7 +930,6 @@ class Refinery(tk.Tk, RefineryCore):
               (len(repaired), len(tag_index_array),
                1000*len(repaired)//len(tag_index_array)/10))
 
-
         print()
         if len(repaired) != len(tag_index_array):
             print("The deprotector could not reach these tags:\n"
@@ -953,20 +948,32 @@ class Refinery(tk.Tk, RefineryCore):
                         i, b.meta_offset - self.active_map.map_magic, "<UNPRINTABLE>"))
             print()
 
-    def _script_scrape_deprotect(self, tag_path_handler):
-        print("Renaming tags using script strings...")
-        RefineryCore._script_scrape_deprotect(self, tag_path_handler)
+        return repaired
+
+    def sanitize_resource_tag_paths(self):
+        print("Renaming tags using resource map tag paths...")
+        RefineryCore.sanitize_resource_tag_paths(self)
         print("    Finished")
 
-    def _heuristics_deprotect(self, tag_path_handler):
+    def _script_scrape_deprotect(self, tag_path_handler, **kw):
         print("Renaming tags using script strings...")
-        RefineryCore._heuristics_deprotect(self, tag_path_handler)
+        RefineryCore._script_scrape_deprotect(self, tag_path_handler, **kw)
+        print("    Finished")
+
+    def _heuristics_deprotect(self, tag_path_handler, **kw):
+        print("Renaming tags using script strings...")
+        RefineryCore._heuristics_deprotect(self, tag_path_handler, **kw)
+        print("    Finished")
+
+    def _shorten_tag_handler_paths(self, tag_path_handler, **kw):
+        print("Renaming tags using script strings...")
+        RefineryCore._shorten_tag_handler_paths(self, tag_path_handler, **kw)
         print("    Finished")
 
     def save_map_as(self, e=None):
         if not self.map_loaded: return
 
-        active_map = self.active_map
+        halo_map = self.active_map
         if self.running or halo_map is None:
             return ""
         elif halo_map.is_resource:
@@ -1100,9 +1107,9 @@ class Refinery(tk.Tk, RefineryCore):
                 out_dir        = info['out_dir'].get()
                 recursive      = info['recursive'].get()
                 overwrite      = info['overwrite'].get()
-                show_output    = info['show_output'].get()
+                do_printout    = info['do_printout'].get()
                 extract_mode   = info['extract_mode'].get()
-                tagslist_path = info['tagslist_path'].get()
+                tagslist_path  = info['tagslist_path'].get()
                 map_name = curr_map.map_header.map_name
                 is_halo1_map = ("halo1"  in curr_map.engine or
                                 "stubbs" in curr_map.engine or
@@ -1138,8 +1145,8 @@ class Refinery(tk.Tk, RefineryCore):
             if last_map_name != map_name:
                 print("\nExtracting from %s" % map_name)
 
-            if self.extract_cheape.get() and (curr_map.engine == "halo1yelo" and
-                                              map_name not in cheapes_extracted):
+            if self.extract_cheape and (curr_map.engine == "halo1yelo" and
+                                        map_name not in cheapes_extracted):
                 try:
                     cheapes_extracted.add(map_name)
                     print(self.extract_cheape_from_halo_map(curr_map))
@@ -1147,7 +1154,7 @@ class Refinery(tk.Tk, RefineryCore):
                     print(format_exc())
                     print("Error ocurred while extracting cheape.map")
 
-            force_lower_case_paths = self.force_lower_case_paths.get()
+            force_lower_case_paths = self.force_lower_case_paths
 
             map_magic = curr_map.map_magic
             tag_index = curr_map.tag_index
@@ -1156,20 +1163,20 @@ class Refinery(tk.Tk, RefineryCore):
             extracted = set()
             local_total = 0
             convert_kwargs = dict(
-                rename_scnr_dups=self.rename_duplicates_in_scnr.get(),
-                generate_uncomp_verts=self.generate_uncomp_verts.get(),
-                generate_comp_verts=self.generate_comp_verts.get(),
+                rename_scnr_dups=self.rename_duplicates_in_scnr,
+                generate_uncomp_verts=self.generate_uncomp_verts,
+                generate_comp_verts=self.generate_comp_verts,
                 force_lower_case_paths=force_lower_case_paths
                 )
 
             extract_kw["hsc_node_strings_by_type"] = hsc_strings_by_type = {}
             if is_halo1_map and curr_map.scnr_meta:
-                if self.use_scenario_names_for_script_names.get():
+                if self.use_scenario_names_for_script_names:
                     hsc_strings_by_type.update(
                         get_h1_scenario_script_object_type_strings(
                             curr_map.scnr_meta))
 
-                if self.use_tag_index_for_script_names.get():
+                if self.use_tag_index_for_script_names:
                     bipeds = curr_map.scnr_meta.bipeds_palette.STEPTREE
                     strings = {i: tag_index_array[i].path.lower() for
                                i in range(len(tag_index_array))}
@@ -1228,7 +1235,7 @@ class Refinery(tk.Tk, RefineryCore):
                         if extract_mode == "tags" and tag_cls not in curr_map.tag_headers:
                             continue
 
-                        if show_output and not dont_extract:
+                        if do_printout and not dont_extract:
                             print("%s: %s" % (extract_mode, file_path))
 
                         meta = curr_map.get_meta(tag_id, True)
