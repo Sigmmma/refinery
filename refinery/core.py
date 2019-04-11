@@ -44,6 +44,7 @@ from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 
 from refinery import crc_functions
+from refinery.tag_index_crawler import TagIndexCrawler
 from refinery.util import *
 from refinery.recursive_rename.tag_path_handler import TagPathHandler
 from refinery.recursive_rename.functions import recursive_rename
@@ -58,6 +59,9 @@ class InvalidTagIdError(RefineryError): pass
 class InvalidClassError(RefineryError): pass
 class MetaConversionError(RefineryError): pass
 class DataExtractionError(RefineryError): pass
+
+
+
 
 
 platform = sys.platform.lower()
@@ -83,36 +87,28 @@ halo_map_wrappers_by_engine.update({e: Halo1Map for e in GEN_1_HALO_ENGINES})
 halo_map_wrappers_by_engine.update({e: Halo2Map for e in GEN_2_ENGINES})
 
 
-class ExtractionQueueItem:
+class ExtractionQueueItem(TagIndexCrawler):
     recursive = False
     overwrite = False
     tagslist_path = ""
     out_dir = ""
 
-    extract_mode = "tags"
     engine_name = ""
     map_name = ""
 
-    tag_ids = ()
+    extract_mode = "tags"
     def __init__(self, tag_ids, **kwargs):
-        self.tag_ids = tuple(tag_ids)
-        for attr_name, val in kwargs.items():
-            if attr_name in ExtractionQueueItem.__dict__:
-                setattr(self, attr_name, val)
-            else:
-                raise AttributeError('"%s" has no attribute "%s"' % (type(self),
-                                                                     attr_name))
+        TagIndexCrawler.__init__(self, tag_ids, kwargs.pop("id_type", "index_id"))
 
-    def __getitem__(self, attr_name):
-        return getattr(self, attr_name)
-
-    def __setitem__(self, attr_name, new_val):
-        return setattr(self, attr_name, new_val)
+        for attr_name in ("tagslist_path", "recursive", "overwrite", "out_dir",
+                          "extract_mode", "engine_name", "map_name"):
+            if attr_name in kwargs:
+                setattr(self, attr_name, kwargs[attr_name])
 
     def __setattr__(self, attr_name, new_val):
         if attr_name == "extract_mode":
             assert new_val in ("tags", "data")
-        object.__setattr__(self, attr_name, new_val)
+        TagIndexCrawler.__setattr__(self, attr_name, new_val)
 
 
 def get_halo_map_section_ends(halo_map):
@@ -230,19 +226,22 @@ class RefineryCore:
     @property
     def extract_queue(self): return self._extract_queue
 
-    def enqueue(self, tag_ids, **kwargs):
-        kwargs.setdefault("overwrite", self.overwrite)
-        kwargs.setdefault("recursive", self.recursive)
-        kwargs.setdefault("tagslist_path", self.tagslist_path)
-        if kwargs.setdefault("extract_mode", "tags") == "tags":
-            kwargs.setdefault("out_dir", self.tags_dir)
-        else:
-            kwargs.setdefault("out_dir", self.data_dir)
+    def enqueue(self, tag_ids_or_queue_item, **kwargs):
+        if not isinstance(tag_ids_or_queue_item, ExtractionQueueItem):
+            kwargs.setdefault("overwrite", self.overwrite)
+            kwargs.setdefault("recursive", self.recursive)
+            kwargs.setdefault("tagslist_path", self.tagslist_path)
+            if kwargs.setdefault("extract_mode", "tags") == "tags":
+                kwargs.setdefault("out_dir", self.tags_dir)
+            else:
+                kwargs.setdefault("out_dir", self.data_dir)
 
-        kwargs.setdefault("engine_name", self.active_engine_name)
-        kwargs.setdefault("map_name", self.active_map_name)
+            kwargs.setdefault("engine_name", self.active_engine_name)
+            kwargs.setdefault("map_name", self.active_map_name)
+            tag_ids_or_queue_item = ExtractionQueueItem(
+                tag_ids_or_queue_item, **kwargs)
 
-        self.extract_queue.append(ExtractionQueueItem(tag_ids, **kwargs))
+        self.extract_queue.append(tag_ids_or_queue_item)
 
     @property
     def map_loaded(self):  return self.active_map is not None
@@ -1050,15 +1049,17 @@ class RefineryCore:
                     ignore = data_extracted_by_map.setdefault(
                         (info.engine_name, info.map_name), set())
 
+                tag_ids = info.get_filtered_tag_ids(halo_map)
+
                 extracted = self.extract_tags(
-                    info.tag_ids, info.map_name, info.engine_name,
+                    tag_ids, info.map_name, info.engine_name,
                     extract_mode=info.extract_mode, out_dir=info.out_dir,
                     recursive=info.recursive, overwrite=info.overwrite,
                     tagslist_path=info.tagslist_path, tags_to_ignore=ignore)
 
                 ignore.update(extracted)
 
-                last_map_name = map_name
+                last_map_name = info.map_name
                 if self.extract_cheape and info.map_name not in cheapes_extracted:
                     if do_printout:
                         print("Extracting cheape.map...")
@@ -1077,12 +1078,12 @@ class RefineryCore:
             for tag_ids in data_extracted_by_map.values():
                 data_extracted += len(data_extracted)
 
+            print("Extracted %s tags and %s data. Took %s seconds.\n" %
+                  (tags_extracted, data_extracted, round(time()-start, 1)))
+
             if not tags_extracted and not data_extracted:
                 print("Nothing was extracted. This might be a permissions issue.\n"
                       "Close Refinery and run it as admin to potentially fix this.")
-
-            print("Extracted %s tags and %s data. Took %s seconds\n" %
-                  (tags_extracted, data_extracted, round(time()-start, 1)))
         
         return tags_extracted_by_map, data_extracted_by_map
 
