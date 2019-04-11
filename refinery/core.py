@@ -83,11 +83,36 @@ halo_map_wrappers_by_engine.update({e: Halo1Map for e in GEN_1_HALO_ENGINES})
 halo_map_wrappers_by_engine.update({e: Halo2Map for e in GEN_2_ENGINES})
 
 
-class SharedVar:
-    __slots__ = ("_val", )
-    def __init__(self, val=None): self._val = val
-    def get(self): return self._val
-    def set(self, new_val): self._val = new_val
+class ExtractionQueueItem:
+    recursive = False
+    overwrite = False
+    tagslist_path = ""
+    out_dir = ""
+
+    extract_mode = "tags"
+    engine_name = ""
+    map_name = ""
+
+    tag_ids = ()
+    def __init__(self, tag_ids, **kwargs):
+        self.tag_ids = tuple(tag_ids)
+        for attr_name, val in kwargs.items():
+            if attr_name in ExtractionQueueItem.__dict__:
+                setattr(self, attr_name, val)
+            else:
+                raise AttributeError('"%s" has no attribute "%s"' % (type(self),
+                                                                     attr_name))
+
+    def __getitem__(self, attr_name):
+        return getattr(self, attr_name)
+
+    def __setitem__(self, attr_name, new_val):
+        return setattr(self, attr_name, new_val)
+
+    def __setattr__(self, attr_name, new_val):
+        if attr_name == "extract_mode":
+            assert new_val in ("tags", "data")
+        object.__setattr__(self, attr_name, new_val)
 
 
 def get_halo_map_section_ends(halo_map):
@@ -191,13 +216,33 @@ class RefineryCore:
     print_heuristic_name_changes = True
 
     # dictionary of all loaded map collections by their engine id strings
-    maps_by_engine = None
+    maps_by_engine = ()
+
+    _extract_queue = ()
 
     def __init__(self, *args, **kwargs):
         self.maps_by_engine = {}
         self.tags_dir = os.path.join(curr_dir, "tags", "")
         self.data_dir = os.path.join(curr_dir, "data", "")
         self.tagslist_path = os.path.join(self.tags_dir, "tagslist.txt")
+        self._extract_queue = []
+
+    @property
+    def extract_queue(self): return self._extract_queue
+
+    def enqueue(self, tag_ids, **kwargs):
+        kwargs.setdefault("overwrite", self.overwrite)
+        kwargs.setdefault("recursive", self.recursive)
+        kwargs.setdefault("tagslist_path", self.tagslist_path)
+        if kwargs.setdefault("extract_mode", "tags") == "tags":
+            kwargs.setdefault("out_dir", self.tags_dir)
+        else:
+            kwargs.setdefault("out_dir", self.data_dir)
+
+        kwargs.setdefault("engine_name", self.active_engine_name)
+        kwargs.setdefault("map_name", self.active_map_name)
+
+        self.extract_queue.append(ExtractionQueueItem(tag_ids, **kwargs))
 
     @property
     def map_loaded(self):  return self.active_map is not None
@@ -222,7 +267,7 @@ class RefineryCore:
         elif map_name in next_maps:
             next_map_name = map_name
         elif next_maps.get("<active>"):
-            next_map_name = next_maps.get("<active>").map_header.map_name
+            next_map_name = next_maps.get("<active>").map_name
         else:
             next_map_name = iter(sorted(next_maps)).__next__()
 
@@ -283,7 +328,7 @@ class RefineryCore:
 
         if not self.active_maps:
             self.set_active_engine()
-        else:
+        elif not self.active_map:
             self.set_active_map()
 
     def save_map(self, save_path=None, halo_map=None, **kw):
@@ -516,7 +561,7 @@ class RefineryCore:
                     print(format_exc())
 
     def deprotect(self, save_path, **kw):
-        if self.active_map is None:
+        if not self.map_loaded:
             raise KeyError("No map loaded.")
         elif self.active_map.is_resource:
             raise TypeError("Cannot deprotect resource maps.")
@@ -981,7 +1026,65 @@ class RefineryCore:
         return output_path
 
     def process_queue(self, **kw):
-        pass
+        do_printout = kw.get("do_printout", self.do_printout)
+        tags_extracted_by_map = {}
+        data_extracted_by_map = {}
+        cheapes_extracted = set()
+        last_map_name = None
+
+        start = time()
+        while self.extract_queue:
+            info = self.extract_queue.pop(0)
+            halo_map = self.maps_by_engine.get(info.engine_name, {}).get(info.map_name)
+            if not halo_map:
+                continue
+
+            if do_printout and last_map_name != info.map_name:
+                print("\nExtracting from %s..." % info.map_name)
+
+            try:
+                if info.extract_mode == "tags":
+                    ignore = tags_extracted_by_map.setdefault(
+                        (info.engine_name, info.map_name), set())
+                else:
+                    ignore = data_extracted_by_map.setdefault(
+                        (info.engine_name, info.map_name), set())
+
+                extracted = self.extract_tags(
+                    info.tag_ids, info.map_name, info.engine_name,
+                    extract_mode=info.extract_mode, out_dir=info.out_dir,
+                    recursive=info.recursive, overwrite=info.overwrite,
+                    tagslist_path=info.tagslist_path, tags_to_ignore=ignore)
+
+                ignore.update(extracted)
+
+                last_map_name = map_name
+                if self.extract_cheape and info.map_name not in cheapes_extracted:
+                    if do_printout:
+                        print("Extracting cheape.map...")
+                    cheapes_extracted.add(info.map_name)
+                    output_path = sanitize_path(
+                        os.path.join(info.out_dir, info.map_name + "_cheape.map"))
+                    self.extract_cheape_from_halo_map(halo_map, output_path)
+            except Exception:
+                print(format_exc())
+
+        if do_printout:
+            tags_extracted = data_extracted = 0
+            for tag_ids in tags_extracted_by_map.values():
+                tags_extracted += len(tags_extracted)
+
+            for tag_ids in data_extracted_by_map.values():
+                data_extracted += len(data_extracted)
+
+            if not tags_extracted and not data_extracted:
+                print("Nothing was extracted. This might be a permissions issue.\n"
+                      "Close Refinery and run it as admin to potentially fix this.")
+
+            print("Extracted %s tags and %s data. Took %s seconds\n" %
+                  (tags_extracted, data_extracted, round(time()-start, 1)))
+        
+        return tags_extracted_by_map, data_extracted_by_map
 
     def extract_tags(self, tag_ids, map_name="<active>", engine="<active>", **kw):
         '''
@@ -996,6 +1099,9 @@ class RefineryCore:
         print_errors = kw.pop("print_errors", self.print_errors)
         overwrite    = kw.pop("overwrite", self.overwrite)
         recursive    = kw.pop("recursive", False)
+
+        if isinstance(tag_ids, int):
+            tag_ids = (tag_ids, )
 
         if extract_mode == "tags":
             out_dir = kw.setdefault("out_dir", self.tags_dir)

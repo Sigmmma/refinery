@@ -11,7 +11,7 @@ from refinery.core import *
 
 from struct import unpack
 from time import time
-from traceback import format_exc
+from traceback import format_exc, format_stack
 
 from tkinter.font import Font
 from tkinter import messagebox
@@ -695,7 +695,7 @@ class Refinery(tk.Tk, RefineryCore):
         elif map_name in next_maps:
             next_map_name = map_name
         elif next_maps.get("<active>"):
-            next_map_name = next_maps.get("<active>").map_header.map_name
+            next_map_name = next_maps.get("<active>").map_name
         else:
             next_map_name = iter(sorted(next_maps)).__next__()
 
@@ -769,7 +769,7 @@ class Refinery(tk.Tk, RefineryCore):
                                  maps_to_unload)
         if not self.active_maps:
             self.set_active_engine(force_reload=True)
-        else:
+        elif not self.active_map:
             self.set_active_map(force_reload=True)
 
     def load_map(self, map_path, make_active=True, ask_close_open=False, **kw):
@@ -836,7 +836,7 @@ class Refinery(tk.Tk, RefineryCore):
         self.reload_engine_select_options()
         if make_active and new_map is not None:
             self.set_active_engine(
-                new_map.engine, new_map.map_header.map_name, force_reload=True)
+                new_map.engine, new_map.map_name, force_reload=True)
 
     def load_resource_maps_clicked(self):
         if self.active_map is None:
@@ -1064,7 +1064,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         new_map_name = os.path.basename(save_path)
         if (prompt_internal_rename and len(new_map_name) < 32 and
-            halo_map.map_header.map_name.lower() != new_map_name.lower()):
+            halo_map.map_name.lower() != new_map_name.lower()):
             if messagebox.askyesno(
                     "Internal name mismatch",
                     ("A maps internal and file names must match for Halo "
@@ -1152,7 +1152,7 @@ class Refinery(tk.Tk, RefineryCore):
                 do_printout    = info['do_printout'].get()
                 extract_mode   = info['extract_mode'].get()
                 tagslist_path  = info['tagslist_path'].get()
-                map_name = curr_map.map_header.map_name
+                map_name = curr_map.map_name
                 is_halo1_map = ("halo1"  in curr_map.engine or
                                 "stubbs" in curr_map.engine or
                                 "shadowrun" in curr_map.engine)
@@ -1408,8 +1408,8 @@ class Refinery(tk.Tk, RefineryCore):
               (total, round(time()-start, 1)))
 
     def reload_explorers(self):
-        if self.map_loaded:
-            print("Reloading map explorer...")
+        #for line in format_stack():
+        #    print(line.strip())
 
         for name, tree in self.tree_frames.items():
             if name.startswith(self._display_mode):
