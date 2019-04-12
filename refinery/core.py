@@ -203,6 +203,7 @@ class RefineryCore:
     # deprotection settings
     fix_tag_classes = True
     fix_tag_index_offset = False
+    use_minimum_priorities = True
     use_heuristics = True
     valid_tag_paths_are_accurate = True
     scrape_tag_paths_from_scripts = True
@@ -608,7 +609,7 @@ class RefineryCore:
         try:
             tagc_names = self.detect_tag_collection_names(self.active_map)
             for tag_id, tag_path in tagc_names.items():
-                tag_path_handler.set_path(tag_id, tag_path, INF, True, False)
+                tag_path_handler.set_path_by_priority(tag_id, tag_path, INF, True, False)
 
         except Exception:
             if not print_errors:
@@ -894,8 +895,8 @@ class RefineryCore:
             string_end = string_data.find("\x00", node.string_offset)
             new_tag_path = string_data[node.string_offset: string_end]
             if new_tag_path:
-                path_handler.set_path(tag_id, new_tag_path, INF,
-                                      True, do_printout)
+                path_handler.set_path_by_priority(
+                    tag_id, new_tag_path, INF, True, do_printout)
 
     def _heuristics_deprotect(self, path_handler, **kw):
         ids_to_deprotect_by_class = {class_name: [] for class_name in (
@@ -931,8 +932,9 @@ class RefineryCore:
         for i in range(len(tag_index_array)):
             if ((path_handler.get_priority(i) == path_handler.def_priority)
                 and not path_handler.get_sub_dir(i)):
-                path_handler.set_path(i, "protected_%s" % i,
-                                      override=True, do_printout=False)
+                path_handler.set_path_by_priority(
+                    i, "protected_%s" % i, override=True, do_printout=False,
+                    use_minimum_priorities=use_minimum_priorities)
 
         scen_ids = []
         for i in range(len(tag_index_array)):
@@ -959,9 +961,9 @@ class RefineryCore:
 
                 try:
                     recursive_rename(
-                        tag_id, halo_map, path_handler,
+                        tag_id, halo_map, path_handler, do_printout=True,
                         shallow_ui_widget_nesting=self.shallow_ui_widget_nesting,
-                        do_printout=print_name_changes)
+                        use_minimum_priorities=self.use_minimum_priorities)
                 except Exception:
                     if not print_errors:
                         raise

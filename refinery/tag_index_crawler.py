@@ -21,13 +21,13 @@ def get_filtered_tag_index_ids(tag_index_array, tag_path=None,
 
 class TagIndexCrawler(list):
     id_type = "index_id"
-    _valid_id_types = (
+    _valid_id_types = frozenset((
         "directory",
         "tag_path",
         "tag_class",
         "index_id",
         "token"
-        )
+        ))
 
     def __init__(self, tag_ids=(), id_type="index_id"):
         list.__init__(self, tag_ids)

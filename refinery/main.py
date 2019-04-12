@@ -138,6 +138,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._fix_tag_classes = tk.IntVar(self, 1)
         self._fix_tag_index_offset = tk.IntVar(self)
+        self._use_minimum_priorities = tk.IntVar(self, 1)
         self._use_heuristics = tk.IntVar(self, 1)
         self._valid_tag_paths_are_accurate = tk.IntVar(self, 1)
         self._scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
@@ -174,6 +175,7 @@ class Refinery(tk.Tk, RefineryCore):
 
             fix_tag_classes=self._fix_tag_classes,
             fix_tag_index_offset=self._fix_tag_index_offset,
+            use_minimum_priorities=self.use_minimum_priorities,
             use_heuristics=self._use_heuristics,
             valid_tag_paths_are_accurate=self._valid_tag_paths_are_accurate,
             scrape_tag_paths_from_scripts=self._scrape_tag_paths_from_scripts,

@@ -844,8 +844,9 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "generate_comp_verts", "generate_uncomp_verts",
                      "force_lower_case_paths",
                      "fix_tag_classes", "autoload_resources", "extract_cheape",
-                     "use_heuristics", "rename_cached_tags",
-                     "show_all_fields", "edit_all_fields", "allow_corrupt",
+                     "use_minimum_priorities", "use_heuristics",
+                     "rename_cached_tags", "show_all_fields",
+                     "edit_all_fields", "allow_corrupt",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
                      "fix_tag_index_offset", "use_tag_index_for_script_names",
@@ -971,6 +972,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
             self.heuristics_frame, text="Use shallow ui_widget_definition nesting",
             variable=self.shallow_ui_widget_nesting)
+        self.use_fast_heuristics_cbtn = tk.Checkbutton(
+            self.heuristics_frame, text="Use fast heuristics",
+            variable=self.use_minimum_priorities)
         self.print_heuristic_progress_cbtn = tk.Checkbutton(
             self.heuristics_frame, text=("Print heuristic tag path changes"),
             variable=self.print_heuristic_name_changes, justify='left')
@@ -1028,6 +1032,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         for w in (self.print_heuristic_progress_cbtn,
                   self.valid_tag_paths_are_accurate_cbtn,
                   self.shallow_ui_widget_nesting_cbtn,
+                  self.use_fast_heuristics_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
 

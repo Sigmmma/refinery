@@ -18,6 +18,21 @@ INVALID_MODEL_NAMES = frozenset(
      "def", "default", "damaged"))
 
 
+class MinPriority:
+    _tag_path_handler = None
+    _index = None
+    def __init__(self, tag_path_handler=None, index=0):
+        self._tag_path_handler = tag_path_handler
+        self._index = int(index)
+    @property
+    def val(self):
+        if self.tag_path_handler:
+            return self._tag_path_handler.get_priority_min(self._index)
+    @val.setter
+    def val(self, new_val):
+        if self.tag_path_handler:
+            self._tag_path_handler.set_priority_min(self._index, new_val)
+
 
 def sanitize_path(name):
     for c in ':*?"<>|':
@@ -175,12 +190,21 @@ def recursive_rename(tag_id, halo_map, tag_path_handler,
     # infinite recursion, but NOT prevent revisiting the
     seen = kw.setdefault("seen", set())
     kw.setdefault("depth", INF)
+    priority = kw.get("priority")
     if tag_id is None or tag_id not in range(len(halo_map.tag_index.tag_index)):
-        return
-    elif tag_id in seen or kw["depth"] < 0:
-        return
+        return -INF
 
-    kw["depth"] = kw.setdefault("depth", INF) - 1
+    min_prio = MinPriority(tag_path_handler, tag_id & 0xFFff)
+    if tag_id in seen or kw["depth"] < 0:
+        # do nothing if tag already seen or already at max depth
+        return min_prio.val
+    elif kw.get("use_minimum_priorities"):
+        if priority is not None and min_prio.val > priority:
+            # do nothing if priority is lower than the lowest priority
+            # of any tag referenced by this tag or its dependencies
+            return min_prio.val
+
+    kw.update(depth=kw.setdefault("depth", INF) - 1, min_priority=min_prio)
     seen.add(tag_id)
 
     rename_func = recursive_rename_functions.get(
@@ -192,15 +216,18 @@ def recursive_rename(tag_id, halo_map, tag_path_handler,
         except Exception:
             print(format_exc())
     else:
-        tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                                  kw.get("priority"), kw.get("override"),
-                                  kw.get("print_new_name"))
+        min_prio.val = tag_path_handler.set_path_by_priority(
+            tag_id, root_dir + sub_dir + name, priority,
+            kw.get("override"), kw.get("do_printout"))
+
     # remove the tag_id so this tag can be revisited by higher up references
     seen.remove(tag_id)
+    return min_prio.val
 
 
 def rename_scnr(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = levels_dir
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
@@ -214,8 +241,9 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     level_dir = sub_dir + '%s\\' % name
 
-    tag_path_handler.set_path(tag_id, root_dir + level_dir + name, INF,
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + level_dir + name, INF,
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
     
@@ -224,7 +252,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     # rename the open sauce stuff
     try:
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(meta.project_yellow_definitions),
             priority=INF, name=name, sub_dir=sub_dir + globals_dir,
             **kw_no_priority)
@@ -232,21 +260,21 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         pass
 
     # rename the references at the bottom of the scenario tag
-    tag_path_handler.set_path(get_tag_id(meta.custom_object_names),
-                              sub_dir + "object_names", INF,
-                              kw.get("override"), kw.get("print_new_name"))
+    tag_path_handler.set_path_by_priority(
+        get_tag_id(meta.custom_object_names), sub_dir + "object_names", INF,
+        kw.get("override"), kw.get("do_printout"))
 
-    tag_path_handler.set_path(get_tag_id(meta.ingame_help_text),
-                              sub_dir + "help_text", INF,
-                              kw.get("override"), kw.get("print_new_name"))
+    tag_path_handler.set_path_by_priority(
+        get_tag_id(meta.ingame_help_text), sub_dir + "help_text", INF,
+        kw.get("override"), kw.get("do_printout"))
 
-    tag_path_handler.set_path(get_tag_id(meta.hud_messages),
-                              sub_dir + "hud_messages", INF,
-                              kw.get("override"), kw.get("print_new_name"))
+    tag_path_handler.set_path_by_priority(
+        get_tag_id(meta.hud_messages), sub_dir + "hud_messages", INF,
+        kw.get("override"), kw.get("do_printout"))
 
     # rename sky references
     for b in meta.skies.STEPTREE:
-        recursive_rename(get_tag_id(b.sky), sub_dir=sky_dir + name + "\\",
+        min_prio.val = recursive_rename(get_tag_id(b.sky), sub_dir=sky_dir + name + "\\",
                          name=name + " sky", **kw)
 
     palette_renames = (
@@ -268,33 +296,33 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         if not start_name:
             start_name = "start weapon"
 
-        recursive_rename(get_tag_id(profile.primary_weapon),
+        min_prio.val = recursive_rename(get_tag_id(profile.primary_weapon),
                          sub_dir=weapons_dir, name=start_name + " pri", **kw)
-        recursive_rename(get_tag_id(profile.secondary_weapon),
+        min_prio.val = recursive_rename(get_tag_id(profile.secondary_weapon),
                          sub_dir=weapons_dir, name=start_name + " sec", **kw)
 
     local_item_coll_dir = sub_dir + item_coll_dir
 
     # rename detail objects palette
     for b in meta.detail_object_collection_palette.STEPTREE:
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(b.name), sub_dir=sub_dir + "detail objects\\",
             priority=MEDIUM_PRIORITY, **kw_no_priority)
 
     # rename decal palette references
     for swatch in meta.decals_palette.STEPTREE:
-        recursive_rename(get_tag_id(swatch.name), priority=MEDIUM_PRIORITY,
+        min_prio.val = recursive_rename(get_tag_id(swatch.name), priority=MEDIUM_PRIORITY,
                          sub_dir=sub_dir + "decals\\", **kw_no_priority)
 
     # rename palette references
     for b_name, pal_sub_dir in palette_renames:
         for swatch in meta[b_name].STEPTREE:
-            recursive_rename(get_tag_id(swatch.name), priority=MEDIUM_PRIORITY,
+            min_prio.val = recursive_rename(get_tag_id(swatch.name), priority=MEDIUM_PRIORITY,
                              sub_dir=pal_sub_dir, **kw_no_priority)
 
     # netgame flags
     for b in meta.netgame_flags.STEPTREE:
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(b.weapon_group), sub_dir=local_item_coll_dir,
             name="ng flag", priority=MEDIUM_PRIORITY, **kw_no_priority)
 
@@ -314,7 +342,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         if not ng_name:
             ng_name = "ng equipment"
 
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(b.item_collection), sub_dir=local_item_coll_dir,
             name=ng_name, priority=MEDIUM_PRIORITY, **kw_no_priority)
 
@@ -324,7 +352,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     for b in meta.starting_equipments.STEPTREE:
         j = 0
         for k in range(1, 7):
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b['item_collection_%s' % k]),
                 sub_dir=local_item_coll_dir + "start equipment\\",
                 priority=MEDIUM_PRIORITY, **kw_no_priority)
@@ -337,13 +365,13 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         if not anim_name:
             anim_name = "ai anim"
 
-        recursive_rename(get_tag_id(b.animation_graph), name=anim_name,
+        min_prio.val = recursive_rename(get_tag_id(b.animation_graph), name=anim_name,
                          sub_dir=cinematics_dir + "animations\\",
                          priority=LOW_PRIORITY, **kw_no_priority)
 
     # rename bsp references
     for b in meta.structure_bsps.STEPTREE:
-        recursive_rename(get_tag_id(b.structure_bsp),
+        min_prio.val = recursive_rename(get_tag_id(b.structure_bsp),
                          priority=SCNR_BSPS_PRIORITY,
                          sub_dir=sub_dir, name=name, **kw_no_priority)
 
@@ -359,23 +387,23 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
         lightmap_sub_dir = sub_dir + (bsp_name + " lightmaps\\").strip()
         for b in modifier.lightmap_sets.STEPTREE:
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.std_lightmap), priority=VERY_HIGH_PRIORITY,
                 sub_dir=lightmap_sub_dir, name=b.name + " std", **kw_no_priority)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.dir_lightmap_1), priority=VERY_HIGH_PRIORITY,
                 sub_dir=lightmap_sub_dir, name=b.name + " dlm1", **kw_no_priority)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.dir_lightmap_2), priority=VERY_HIGH_PRIORITY,
                 sub_dir=lightmap_sub_dir, name=b.name + " dlm2", **kw_no_priority)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.dir_lightmap_3), priority=VERY_HIGH_PRIORITY,
                 sub_dir=lightmap_sub_dir, name=b.name + " dlm3", **kw_no_priority)
 
         sky_set_dir = sub_dir + (bsp_name + " sky sets\\").strip()
         for sky_set in modifier.sky_sets.STEPTREE:
             for b in sky_set.skies.STEPTREE:
-                recursive_rename(
+                min_prio.val = recursive_rename(
                     get_tag_id(b.sky), sub_dir=sky_set_dir,
                     name=sky_set.name, **kw)
 
@@ -391,7 +419,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         for b in b.lines.STEPTREE:
             line = conv_name + " line %s " % j
             for k in range(1, 7):
-                recursive_rename(
+                min_prio.val = recursive_rename(
                     get_tag_id(b['variant_%s' % k]), sub_dir=conv_dir,
                     priority=MEDIUM_PRIORITY, name=line.strip(), **kw_no_priority)
             j += 1
@@ -443,11 +471,12 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         else:
             ref_sub_dir = sub_dir + "referenced tags\\"
 
-        recursive_rename(sub_id, sub_dir=ref_sub_dir, **kw)
+        min_prio.val = recursive_rename(sub_id, sub_dir=ref_sub_dir, **kw)
 
 
 def rename_matg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = globals_dir
 
     kw.setdefault("priority", MEDIUM_PRIORITY)
@@ -463,21 +492,21 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
         name = 'globals'
 
     # rename this globals tag
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     for i in range(len(meta.sounds.STEPTREE)):
         water_name = {0:"enter_water", 1:"exit_water"}.get(i, "unknown")
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(meta.sounds.STEPTREE[i].sound),
             name=water_name, priority=INF,
             sub_dir="sound\\sfx\\impulse\\coolant\\", **kwargs_no_priority)
 
     for b in meta.cameras.STEPTREE:
-        recursive_rename(get_tag_id(b.camera), sub_dir=sub_dir, priority=INF,
+        min_prio.val = recursive_rename(get_tag_id(b.camera), sub_dir=sub_dir, priority=INF,
                          name="default unit camera track", **kwargs_no_priority)
 
     i = 0
@@ -487,20 +516,20 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
 
         eqip_tag_id = get_tag_id(b.equipment)
         g_priority = 1.5
-        recursive_rename(eqip_tag_id, sub_dir=g_dir, name=g_name,
+        min_prio.val = recursive_rename(eqip_tag_id, sub_dir=g_dir, name=g_name,
                          priority=g_priority, **kwargs_no_priority)
         if eqip_tag_id is not None:
             g_dir = tag_path_handler.get_sub_dir(eqip_tag_id, root_dir)
             g_name = tag_path_handler.get_basename(eqip_tag_id)
             g_priority = tag_path_handler.get_priority(eqip_tag_id)
 
-        recursive_rename(get_tag_id(b.throwing_effect), sub_dir=g_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.throwing_effect), sub_dir=g_dir,
                          name=g_name + " throw", priority=g_priority,
                          **kwargs_no_priority)
-        recursive_rename(get_tag_id(b.hud_interface), sub_dir=g_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.hud_interface), sub_dir=g_dir,
                          name=g_name + " hud", priority=g_priority,
                          **kwargs_no_priority)
-        recursive_rename(get_tag_id(b.projectile), sub_dir=g_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.projectile), sub_dir=g_dir,
                          name=g_name + " projectile", priority=g_priority,
                          **kwargs_no_priority)
         i += 1
@@ -515,35 +544,35 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
         exp_tex = b.experimental_textures
         vid_eff_tex = b.video_effect_textures
 
-        recursive_rename(get_tag_id(func_tex.distance_attenuation),
+        min_prio.val = recursive_rename(get_tag_id(func_tex.distance_attenuation),
                          name="distance attenuation", **rast_kwargs)
-        recursive_rename(get_tag_id(func_tex.vector_normalization),
+        min_prio.val = recursive_rename(get_tag_id(func_tex.vector_normalization),
                          name="vector normalization", **rast_kwargs)
-        recursive_rename(get_tag_id(func_tex.atmospheric_fog_density),
+        min_prio.val = recursive_rename(get_tag_id(func_tex.atmospheric_fog_density),
                          name="atmospheric fog density", **rast_kwargs)
-        recursive_rename(get_tag_id(func_tex.planar_fog_density),
+        min_prio.val = recursive_rename(get_tag_id(func_tex.planar_fog_density),
                          name="planar fog density", **rast_kwargs)
-        recursive_rename(get_tag_id(func_tex.linear_corner_fade),
+        min_prio.val = recursive_rename(get_tag_id(func_tex.linear_corner_fade),
                          name="linear corner fade", **rast_kwargs)
-        recursive_rename(get_tag_id(func_tex.active_camouflage_distortion),
+        min_prio.val = recursive_rename(get_tag_id(func_tex.active_camouflage_distortion),
                          name="active camouflage distortion", **rast_kwargs)
-        recursive_rename(get_tag_id(func_tex.glow), name="glow", **rast_kwargs)
+        min_prio.val = recursive_rename(get_tag_id(func_tex.glow), name="glow", **rast_kwargs)
 
-        recursive_rename(get_tag_id(def_tex.default_2d),
+        min_prio.val = recursive_rename(get_tag_id(def_tex.default_2d),
                          name="default 2d", **rast_kwargs)
-        recursive_rename(get_tag_id(def_tex.default_3d),
+        min_prio.val = recursive_rename(get_tag_id(def_tex.default_3d),
                          name="default 3d", **rast_kwargs)
-        recursive_rename(get_tag_id(def_tex.default_cubemap),
+        min_prio.val = recursive_rename(get_tag_id(def_tex.default_cubemap),
                          name="default cube map", **rast_kwargs)
 
-        recursive_rename(get_tag_id(exp_tex.test0),
+        min_prio.val = recursive_rename(get_tag_id(exp_tex.test0),
                          name="water_ff", **rast_kwargs)
-        recursive_rename(get_tag_id(exp_tex.test1),
+        min_prio.val = recursive_rename(get_tag_id(exp_tex.test1),
                          name="cryo glass", **exp_tex_kwargs)
 
-        recursive_rename(get_tag_id(vid_eff_tex.video_scanline_map),
+        min_prio.val = recursive_rename(get_tag_id(vid_eff_tex.video_scanline_map),
                          name="video mask", **rast_kwargs)
-        recursive_rename(get_tag_id(vid_eff_tex.video_noise_map),
+        min_prio.val = recursive_rename(get_tag_id(vid_eff_tex.video_noise_map),
                          name="video noise", **rast_kwargs)
 
     old_tags_kwargs = dict(kw)
@@ -553,103 +582,103 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
     ui_bitm_kwargs.update(priority=VERY_HIGH_PRIORITY,
                           sub_dir=ui_hud_dir + "bitmaps\\")
     for b in meta.interface_bitmaps.STEPTREE:
-        recursive_rename(get_tag_id(b.font_system), sub_dir=ui_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.font_system), sub_dir=ui_dir,
                          name="system font", **kw)
-        recursive_rename(get_tag_id(b.font_terminal), sub_dir=ui_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.font_terminal), sub_dir=ui_dir,
                          name="terminal font", **kw)
 
-        recursive_rename(get_tag_id(b.hud_globals),
+        min_prio.val = recursive_rename(get_tag_id(b.hud_globals),
                          sub_dir=ui_hud_dir, name="default", **kw)
-        recursive_rename(get_tag_id(b.hud_digits_definition),
+        min_prio.val = recursive_rename(get_tag_id(b.hud_digits_definition),
                          sub_dir=ui_hud_dir, name="counter", **kw)
 
-        recursive_rename(get_tag_id(b.screen_color_table),
+        min_prio.val = recursive_rename(get_tag_id(b.screen_color_table),
                          name="internal screen", **old_tags_kwargs)
-        recursive_rename(get_tag_id(b.hud_color_table),
+        min_prio.val = recursive_rename(get_tag_id(b.hud_color_table),
                          name="internal hud", **old_tags_kwargs)
-        recursive_rename(get_tag_id(b.editor_color_table),
+        min_prio.val = recursive_rename(get_tag_id(b.editor_color_table),
                          name="internal editor", **old_tags_kwargs)
-        recursive_rename(get_tag_id(b.dialog_color_table),
+        min_prio.val = recursive_rename(get_tag_id(b.dialog_color_table),
                          name="internal dialog", **old_tags_kwargs)
-        recursive_rename(get_tag_id(b.localization),
+        min_prio.val = recursive_rename(get_tag_id(b.localization),
                          name="internal string localization", **old_tags_kwargs)
 
-        recursive_rename(get_tag_id(b.motion_sensor_sweep_bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.motion_sensor_sweep_bitmap),
                          name="hud_sweeper", **ui_bitm_kwargs)
-        recursive_rename(get_tag_id(b.motion_sensor_sweep_bitmap_mask),
+        min_prio.val = recursive_rename(get_tag_id(b.motion_sensor_sweep_bitmap_mask),
                          name="hud_sweeper_mask", **ui_bitm_kwargs)
-        recursive_rename(get_tag_id(b.multiplayer_hud_bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.multiplayer_hud_bitmap),
                          name="hud_multiplayer", **ui_bitm_kwargs)
-        recursive_rename(get_tag_id(b.motion_sensor_blip),
+        min_prio.val = recursive_rename(get_tag_id(b.motion_sensor_blip),
                          name="hud_sensor_blip", **ui_bitm_kwargs)
-        recursive_rename(get_tag_id(b.interface_goo_map1),
+        min_prio.val = recursive_rename(get_tag_id(b.interface_goo_map1),
                          name="hud_sensor_blip_custom", **ui_bitm_kwargs)
-        recursive_rename(get_tag_id(b.interface_goo_map2),
+        min_prio.val = recursive_rename(get_tag_id(b.interface_goo_map2),
                          name="hud_msg_icons_sm", **ui_bitm_kwargs)
-        recursive_rename(get_tag_id(b.interface_goo_map3),
+        min_prio.val = recursive_rename(get_tag_id(b.interface_goo_map3),
                          sub_dir="characters\\jackal\\bitmaps\\",
                          name="shield noise", **kw)
 
     for b in meta.multiplayer_informations.STEPTREE:
-        recursive_rename(get_tag_id(b.flag), name="flag",
+        min_prio.val = recursive_rename(get_tag_id(b.flag), name="flag",
                          sub_dir="weapons\\flag\\", **kw)
-        recursive_rename(get_tag_id(b.ball), name="ball",
+        min_prio.val = recursive_rename(get_tag_id(b.ball), name="ball",
                          sub_dir="weapons\\ball\\", **kw)
 
-        recursive_rename(get_tag_id(b.hill_shader), name="hilltop",
+        min_prio.val = recursive_rename(get_tag_id(b.hill_shader), name="hilltop",
                          sub_dir="scenery\\hilltop\\shaders\\", **kw)
-        recursive_rename(get_tag_id(b.flag_shader), name="flag_blue",
+        min_prio.val = recursive_rename(get_tag_id(b.flag_shader), name="flag_blue",
                          sub_dir="weapons\\flag\\shaders\\", **kw)
 
-        recursive_rename(get_tag_id(b.unit), name="player_mp",
+        min_prio.val = recursive_rename(get_tag_id(b.unit), name="player_mp",
                          priority=VERY_HIGH_PRIORITY,
                          sub_dir="characters\\player_mp\\", **kwargs_no_priority)
 
         for multiplayer_sound in b.sounds.STEPTREE:
-            recursive_rename(get_tag_id(multiplayer_sound.sound),
+            min_prio.val = recursive_rename(get_tag_id(multiplayer_sound.sound),
                              sub_dir="sound\\dialog\\announcer\\", **kw)
 
     for b in meta.player_informations.STEPTREE:
-        recursive_rename(get_tag_id(b.unit), name="player_sp",
+        min_prio.val = recursive_rename(get_tag_id(b.unit), name="player_sp",
                          priority=VERY_HIGH_PRIORITY,
                          sub_dir="characters\\player_sp\\", **kwargs_no_priority)
-        recursive_rename(get_tag_id(b.coop_respawn_effect),
+        min_prio.val = recursive_rename(get_tag_id(b.coop_respawn_effect),
                          priority=VERY_HIGH_PRIORITY, sub_dir=effects_dir,
                          name="coop teleport", **kwargs_no_priority)
 
     for b in meta.first_person_interfaces.STEPTREE:
-        recursive_rename(get_tag_id(b.first_person_hands),
+        min_prio.val = recursive_rename(get_tag_id(b.first_person_hands),
                          sub_dir="characters\\player_sp\\fp\\", name="fp",
                          priority=VERY_HIGH_PRIORITY, **kwargs_no_priority)
-        recursive_rename(get_tag_id(b.base_bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.base_bitmap),
                          name="hud_health_base", **ui_bitm_kwargs)
 
-        recursive_rename(get_tag_id(b.shield_meter), sub_dir=ui_hud_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.shield_meter), sub_dir=ui_hud_dir,
                          name="cyborg shield", **kw)
-        recursive_rename(get_tag_id(b.body_meter), sub_dir=ui_hud_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.body_meter), sub_dir=ui_hud_dir,
                          name="cyborg body", **kw)
 
-        recursive_rename(get_tag_id(b.night_vision_toggle_on_effect),
+        min_prio.val = recursive_rename(get_tag_id(b.night_vision_toggle_on_effect),
                          sub_dir=sfx_weapons_dir, name="night_vision_on",
                          **kw)
-        recursive_rename(get_tag_id(b.night_vision_toggle_off_effect),
+        min_prio.val = recursive_rename(get_tag_id(b.night_vision_toggle_off_effect),
                          sub_dir=sfx_weapons_dir, name="night_vision_off",
                          **kw)
 
     fall_kwargs = dict(kw)
     fall_kwargs.update(priority=VERY_HIGH_PRIORITY, sub_dir=sub_dir)
     for b in meta.falling_damages.STEPTREE:
-        recursive_rename(get_tag_id(b.falling_damage),
+        min_prio.val = recursive_rename(get_tag_id(b.falling_damage),
                          name="falling", **fall_kwargs)
-        recursive_rename(get_tag_id(b.distance_damage),
+        min_prio.val = recursive_rename(get_tag_id(b.distance_damage),
                          name="distance", **fall_kwargs)
-        recursive_rename(get_tag_id(b.vehicle_environment_collision_damage),
+        min_prio.val = recursive_rename(get_tag_id(b.vehicle_environment_collision_damage),
                          name="vehicle_hit_environment", **fall_kwargs)
-        recursive_rename(get_tag_id(b.vehicle_killed_unit_damage),
+        min_prio.val = recursive_rename(get_tag_id(b.vehicle_killed_unit_damage),
                          name="vehicle_killed_unit", **fall_kwargs)
-        recursive_rename(get_tag_id(b.vehicle_collision_damage),
+        min_prio.val = recursive_rename(get_tag_id(b.vehicle_collision_damage),
                          name="vehicle_collision", **fall_kwargs)
-        recursive_rename(get_tag_id(b.flaming_death_damage),
+        min_prio.val = recursive_rename(get_tag_id(b.flaming_death_damage),
                          name="flaming_death", **fall_kwargs)
 
     i = 0
@@ -657,13 +686,13 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
     mats_kwargs["priority"] = VERY_HIGH_PRIORITY
     for b in meta.materials.STEPTREE:
         mat_name = "unknown" if i not in range(len(materials_list)) else materials_list[i]
-        recursive_rename(get_tag_id(b.sound), name=mat_name,
+        min_prio.val = recursive_rename(get_tag_id(b.sound), name=mat_name,
                          sub_dir="sound\\sfx\\impulse\\", **mats_kwargs)
-        recursive_rename(get_tag_id(b.melee_hit_sound), name=mat_name,
+        min_prio.val = recursive_rename(get_tag_id(b.melee_hit_sound), name=mat_name,
                          sub_dir="sound\\sfx\\impulse\\melee\\", **mats_kwargs)
 
         for particle_effect in b.particle_effects.STEPTREE:
-            recursive_rename(get_tag_id(particle_effect.particle_type),
+            min_prio.val = recursive_rename(get_tag_id(particle_effect.particle_type),
                              sub_dir="effects\\particles\\solid\\",
                              name="%s breakable" % mat_name, **mats_kwargs)
         i += 1
@@ -671,6 +700,7 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
 
 def rename_hudg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir=ui_hud_dir, name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir:
         sub_dir = ui_hud_dir
     if not name:
@@ -678,60 +708,61 @@ def rename_hudg(tag_id, halo_map, tag_path_handler,
 
     kw.setdefault('priority', MEDIUM_HIGH_PRIORITY)
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler)
 
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     msg_param = meta.messaging_parameters
-    recursive_rename(get_tag_id(msg_param.single_player_font),
+    min_prio.val = recursive_rename(get_tag_id(msg_param.single_player_font),
                      sub_dir=ui_dir, name="font sp", **kw)
-    recursive_rename(get_tag_id(msg_param.multi_player_font),
+    min_prio.val = recursive_rename(get_tag_id(msg_param.multi_player_font),
                      sub_dir=ui_dir, name="font mp", **kw)
-    recursive_rename(get_tag_id(msg_param.item_message_text),
+    min_prio.val = recursive_rename(get_tag_id(msg_param.item_message_text),
                      sub_dir=ui_hud_dir, name="hud item messages", **kw)
-    recursive_rename(get_tag_id(msg_param.alternate_icon_text),
+    min_prio.val = recursive_rename(get_tag_id(msg_param.alternate_icon_text),
                      sub_dir=ui_hud_dir, name="hud icon messages", **kw)
-    recursive_rename(get_tag_id(msg_param.icon_bitmap),
+    min_prio.val = recursive_rename(get_tag_id(msg_param.icon_bitmap),
                      sub_dir=ui_hud_dir + bitmaps_dir,
                      name="hud msg icons", **kw)
 
-    tag_path_handler.set_path(get_tag_id(meta.hud_messages),
-                              sub_dir + "hud_messages", INF,
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+         get_tag_id(meta.hud_messages), sub_dir + "hud_messages", INF,
+         kw.get("override"), kw.get("do_printout"))
 
-    recursive_rename(get_tag_id(meta.waypoint_parameters.arrow_bitmaps),
+    min_prio.val = recursive_rename(get_tag_id(meta.waypoint_parameters.arrow_bitmaps),
                      sub_dir=ui_hud_dir + bitmaps_dir + "combined\\",
                      name="hud waypoints", **kw)
 
-    recursive_rename(get_tag_id(meta.hud_globals.default_weapon_hud),
+    min_prio.val = recursive_rename(get_tag_id(meta.hud_globals.default_weapon_hud),
                      sub_dir=ui_hud_dir, name="empty", **kw)
 
-    recursive_rename(get_tag_id(meta.hud_damage_indicators.indicator_bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.hud_damage_indicators.indicator_bitmap),
                      sub_dir=ui_hud_dir + bitmaps_dir + "combined\\",
                      name="hud damage arrows", **kw)
 
-    recursive_rename(get_tag_id(meta.carnage_report_bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.carnage_report_bitmap),
                      sub_dir=ui_shell_dir + bitmaps_dir,
                      name="postgame carnage report", **kw)
 
 
 def rename_sbsp(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority', DEFAULT_PRIORITY),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -740,7 +771,7 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
     kw.setdefault("priority", MEDIUM_PRIORITY if
                   sub_dir else DEFAULT_PRIORITY)
 
-    recursive_rename(get_tag_id(meta.lightmap_bitmaps),
+    min_prio.val = recursive_rename(get_tag_id(meta.lightmap_bitmaps),
                      sub_dir=sub_dir, name=name, **kw)
 
     coll_shdr_dir     = sub_dir + "shaders collidable\\"
@@ -748,7 +779,7 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
     override = kw.pop("override", None)
     # collision materials
     for b in meta.collision_materials.STEPTREE:
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(b.shader), sub_dir=coll_shdr_dir,
             name="protected %s" % get_tag_id(b.shader),
             override=True, **kw)
@@ -757,37 +788,37 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
     kw["override"] = override
     for lightmap in meta.lightmaps.STEPTREE:
         for mat in lightmap.materials.STEPTREE:
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(mat.shader), sub_dir=non_coll_shdr_dir,
                 name="protected %s" % get_tag_id(mat.shader), **kw)
 
     # lens flares
     for b in meta.lens_flares.STEPTREE:
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(b.shader), sub_dir=sub_dir + "lens flares\\",
             name="protected %s" % get_tag_id(b.shader), **kw)
 
     # fog palettes
     for b in meta.fog_palettes.STEPTREE:
-        recursive_rename(get_tag_id(b.fog), sub_dir=sub_dir + weather_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.fog), sub_dir=sub_dir + weather_dir,
                          name=sanitize_name_piece(b.name, "protected %s" %
                                                   get_tag_id(b.fog)), **kw)
 
     # weather palettes
     for b in meta.weather_palettes.STEPTREE:
-        recursive_rename(get_tag_id(b.particle_system),
+        min_prio.val = recursive_rename(get_tag_id(b.particle_system),
                          sub_dir=sub_dir + weather_dir,
                          name=sanitize_name_piece(
                              b.name, "protected weather %s" %
                              get_tag_id(b.particle_system)), **kw)
-        recursive_rename(get_tag_id(b.wind), sub_dir=sub_dir + weather_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.wind), sub_dir=sub_dir + weather_dir,
                          name=sanitize_name_piece(
                              b.name, "protected wind %s" %
                              get_tag_id(b.wind)), **kw)
 
     # background sounds
     for b in meta.background_sounds_palette.STEPTREE:
-        recursive_rename(get_tag_id(b.background_sound),
+        min_prio.val = recursive_rename(get_tag_id(b.background_sound),
                          sub_dir=sub_dir + sounds_dir,
                          name=sanitize_name_piece(
                              b.name, "protected bg sound %s" %
@@ -795,7 +826,7 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
 
     # sound environments
     for b in meta.sound_environments_palette.STEPTREE:
-        recursive_rename(get_tag_id(b.sound_environment),
+        min_prio.val = recursive_rename(get_tag_id(b.sound_environment),
                          sub_dir=snd_sound_env_dir,
                          name=sanitize_name_piece(
                              b.name, "protected sound env %s" %
@@ -804,6 +835,7 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
 
 def rename_sky_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = sky_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -812,9 +844,9 @@ def rename_sky_(tag_id, halo_map, tag_path_handler,
     elif not name:
         name = 'sky'
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority', DEFAULT_PRIORITY),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -822,16 +854,17 @@ def rename_sky_(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault("priority", DEFAULT_PRIORITY)
 
-    recursive_rename(get_tag_id(meta.model), name=name, **kw)
+    min_prio.val = recursive_rename(get_tag_id(meta.model), name=name, **kw)
     for b in meta.lights.STEPTREE:
         light_name = sanitize_name(b.global_function_name)
         if not light_name:
             widget_name = "light"
-        recursive_rename(get_tag_id(b.lens_flare), name=light_name, **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.lens_flare), name=light_name, **kw)
 
 
 def rename_obje(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
 
@@ -908,9 +941,9 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
     if sub_dir.lower().endswith(obje_dir):
         sub_dir += name + "\\"
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'), kw.get("override"),
+        kw.get("do_printout"))
 
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
@@ -924,13 +957,13 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
 
     for b in (obje_attrs.model, obje_attrs.animation_graph,
               obje_attrs.collision_model, obje_attrs.physics):
-        recursive_rename(get_tag_id(b), sub_dir=sub_dir, name=name, **kw)
+        min_prio.val = recursive_rename(get_tag_id(b), sub_dir=sub_dir, name=name, **kw)
 
-    recursive_rename(get_tag_id(obje_attrs.creation_effect),
+    min_prio.val = recursive_rename(get_tag_id(obje_attrs.creation_effect),
                      sub_dir=sub_dir + effects_dir,
                      name="creation effect", **kw)
 
-    recursive_rename(get_tag_id(obje_attrs.modifier_shader),
+    min_prio.val = recursive_rename(get_tag_id(obje_attrs.modifier_shader),
                      sub_dir=sub_dir + shaders_dir,
                      name="modifier shader", **kw)
 
@@ -942,32 +975,32 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
             if b.type.tag_class.enum_name not in a_name.lower():
                 a_name += b.type.tag_class.enum_name
 
-        recursive_rename(get_tag_id(b.type), name=a_name,
+        min_prio.val = recursive_rename(get_tag_id(b.type), name=a_name,
                          sub_dir=sub_dir + obje_effects_dir, **kw)
 
     for b in obje_attrs.widgets.STEPTREE:
-        recursive_rename(get_tag_id(b.reference),
+        min_prio.val = recursive_rename(get_tag_id(b.reference),
                          sub_dir=sub_dir + "widgets\\", **kw)
 
     proj_attrs = getattr(meta, "proj_attrs", None)
     if obje_type != "proj" or not proj_attrs:
         return
 
-    recursive_rename(get_tag_id(proj_attrs.super_detonation),
+    min_prio.val = recursive_rename(get_tag_id(proj_attrs.super_detonation),
                      sub_dir=sub_dir + effects_dir,
                      name="super detonation", **kw)
-    recursive_rename(get_tag_id(proj_attrs.detonation.effect),
+    min_prio.val = recursive_rename(get_tag_id(proj_attrs.detonation.effect),
                      sub_dir=sub_dir + effects_dir,
                      name="detonation", **kw)
 
-    recursive_rename(get_tag_id(proj_attrs.physics.detonation_started),
+    min_prio.val = recursive_rename(get_tag_id(proj_attrs.physics.detonation_started),
                      sub_dir=sub_dir + effects_dir,
                      name="detonation started", **kw)
-    recursive_rename(get_tag_id(proj_attrs.physics.flyby_sound),
+    min_prio.val = recursive_rename(get_tag_id(proj_attrs.physics.flyby_sound),
                      sub_dir=sub_dir + sound_dir, name="flyby sound", **kw)
-    recursive_rename(get_tag_id(proj_attrs.physics.attached_detonation_damage),
+    min_prio.val = recursive_rename(get_tag_id(proj_attrs.physics.attached_detonation_damage),
                      sub_dir=sub_dir, name="attached detonation", **kw)
-    recursive_rename(get_tag_id(proj_attrs.physics.impact_damage),
+    min_prio.val = recursive_rename(get_tag_id(proj_attrs.physics.impact_damage),
                      sub_dir=sub_dir, name="impact", **kw)
 
     i = 0
@@ -977,13 +1010,13 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
         else:
             mat_name = materials_list[i].replace("_", " ")
 
-        recursive_rename(get_tag_id(b.effect),
+        min_prio.val = recursive_rename(get_tag_id(b.effect),
                          sub_dir=sub_dir + "impact effects\\",
                          name=mat_name, **kw)
-        recursive_rename(get_tag_id(b.potential_response.effect),
+        min_prio.val = recursive_rename(get_tag_id(b.potential_response.effect),
                          sub_dir=sub_dir + "impact effects\\",
                          name="alt %s" % mat_name, **kw)
-        recursive_rename(get_tag_id(b.detonation_effect),
+        min_prio.val = recursive_rename(get_tag_id(b.detonation_effect),
                          sub_dir=sub_dir + "impact effects\\",
                          name="detonation %s" % mat_name, **kw)
         i += 1
@@ -991,6 +1024,7 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
 
 def rename_shdr(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = obje_shaders_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -1011,9 +1045,9 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
     if func_name and ("protected" in name or not name):
         name = func_name
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'),
+        kw.get("override"), kw.get("do_printout"))
 
     name = tag_path_handler.get_basename(tag_id)
     bitmaps_sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
@@ -1026,48 +1060,48 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
 
     if shdr_type == "senv":
         senv_attrs = meta.senv_attrs
-        recursive_rename(get_tag_id(senv_attrs.diffuse.base_map),
+        min_prio.val = recursive_rename(get_tag_id(senv_attrs.diffuse.base_map),
                          name="senv %s diffuse" % name, **kw)
-        recursive_rename(get_tag_id(senv_attrs.diffuse.primary_detail_map),
+        min_prio.val = recursive_rename(get_tag_id(senv_attrs.diffuse.primary_detail_map),
                          name="senv %s pri detail" % name, **kw)
-        recursive_rename(get_tag_id(senv_attrs.diffuse.secondary_detail_map),
+        min_prio.val = recursive_rename(get_tag_id(senv_attrs.diffuse.secondary_detail_map),
                          name="senv %s sec detail" % name, **kw)
-        recursive_rename(get_tag_id(senv_attrs.diffuse.micro_detail_map),
+        min_prio.val = recursive_rename(get_tag_id(senv_attrs.diffuse.micro_detail_map),
                          name="senv %s micro detail" % name, **kw)
-        recursive_rename(get_tag_id(senv_attrs.bump_properties.map),
+        min_prio.val = recursive_rename(get_tag_id(senv_attrs.bump_properties.map),
                          name="senv %s bump" % name, **kw)
-        recursive_rename(get_tag_id(senv_attrs.self_illumination.map),
+        min_prio.val = recursive_rename(get_tag_id(senv_attrs.self_illumination.map),
                          name="senv %s self illum" % name, **kw)
-        recursive_rename(get_tag_id(senv_attrs.reflection.cube_map),
+        min_prio.val = recursive_rename(get_tag_id(senv_attrs.reflection.cube_map),
                          name="senv %s reflection" % name, **kw)
 
         senv_ext = getattr(getattr(senv_attrs, "os_shader_environment_ext", ()),
                            "STEPTREE", ())
         for b in senv_ext:
-            recursive_rename(get_tag_id(b.specular_color_map),
+            min_prio.val = recursive_rename(get_tag_id(b.specular_color_map),
                              name="senv %s spec color" % name, **kw)
 
 
     elif shdr_type == "soso":
         soso_attrs = meta.soso_attrs
-        recursive_rename(get_tag_id(soso_attrs.maps.diffuse_map),
+        min_prio.val = recursive_rename(get_tag_id(soso_attrs.maps.diffuse_map),
                          name="soso %s diffuse" % name, **kw)
-        recursive_rename(get_tag_id(soso_attrs.maps.multipurpose_map),
+        min_prio.val = recursive_rename(get_tag_id(soso_attrs.maps.multipurpose_map),
                          name="soso %s multi" % name, **kw)
-        recursive_rename(get_tag_id(soso_attrs.maps.detail_map),
+        min_prio.val = recursive_rename(get_tag_id(soso_attrs.maps.detail_map),
                          name="soso %s detail" % name, **kw)
-        recursive_rename(get_tag_id(soso_attrs.reflection.cube_map),
+        min_prio.val = recursive_rename(get_tag_id(soso_attrs.reflection.cube_map),
                          name="soso %s reflection" % name, **kw)
         soso_ext = getattr(getattr(soso_attrs, "os_shader_model_ext", ()),
                            "STEPTREE", ())
         for b in soso_ext:
-            recursive_rename(get_tag_id(b.specular_color_map),
+            min_prio.val = recursive_rename(get_tag_id(b.specular_color_map),
                              name="soso %s spec color" % name, **kw)
-            recursive_rename(get_tag_id(b.base_normal_map),
+            min_prio.val = recursive_rename(get_tag_id(b.base_normal_map),
                              name="soso %s normal" % name, **kw)
-            recursive_rename(get_tag_id(b.detail_normal_1_map),
+            min_prio.val = recursive_rename(get_tag_id(b.detail_normal_1_map),
                              name="soso %s normal detail 1" % name, **kw)
-            recursive_rename(get_tag_id(b.detail_normal_2_map),
+            min_prio.val = recursive_rename(get_tag_id(b.detail_normal_2_map),
                              name="soso %s normal detail 2" % name, **kw)
 
     elif shdr_type in ("sotr", "schi", "scex"):
@@ -1084,7 +1118,7 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
 
         for maps in maps_list:
             for map in maps.STEPTREE:
-                recursive_rename(get_tag_id(map.bitmap), name="%s %s" %
+                min_prio.val = recursive_rename(get_tag_id(map.bitmap), name="%s %s" %
                                  (shdr_type, name), **kw)
 
         kw.update(sub_dir=sub_dir)
@@ -1095,38 +1129,38 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
                 ex_layer_name += " ex "
             else:
                 ex_layer_name += " ex %s" % i
-            recursive_rename(get_tag_id(extra_layer),
+            min_prio.val = recursive_rename(get_tag_id(extra_layer),
                              name=ex_layer_name, **kw)
             i += 1
 
     elif shdr_type == "swat":
         water_shader = meta.swat_attrs.water_shader
-        recursive_rename(get_tag_id(water_shader.base_map),
+        min_prio.val = recursive_rename(get_tag_id(water_shader.base_map),
                          name="swat %s base" % name, **kw)
-        recursive_rename(get_tag_id(water_shader.reflection_map),
+        min_prio.val = recursive_rename(get_tag_id(water_shader.reflection_map),
                          name="swat %s reflection" % name, **kw)
-        recursive_rename(get_tag_id(water_shader.ripple_maps),
+        min_prio.val = recursive_rename(get_tag_id(water_shader.ripple_maps),
                          name="swat %s ripples" % name, **kw)
 
     elif shdr_type == "sgla":
         sgla_attrs = meta.sgla_attrs
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(sgla_attrs.background_tint_properties.map),
             name="sgla %s background tint" % name, **kw)
 
-        recursive_rename(get_tag_id(sgla_attrs.reflection_properties.map),
+        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.reflection_properties.map),
                          name="sgla %s reflection" % name, **kw)
-        recursive_rename(get_tag_id(sgla_attrs.reflection_properties.bump_map),
+        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.reflection_properties.bump_map),
                          name="sgla %s bump" % name, **kw)
 
-        recursive_rename(get_tag_id(sgla_attrs.diffuse_properties.map),
+        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.diffuse_properties.map),
                          name="sgla %s diffuse" % name, **kw)
-        recursive_rename(get_tag_id(sgla_attrs.diffuse_properties.detail_map),
+        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.diffuse_properties.detail_map),
                          name="sgla %s diffuse detail" % name, **kw)
 
-        recursive_rename(get_tag_id(sgla_attrs.specular_properties.map),
+        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.specular_properties.map),
                          name="sgla %s specular" % name, **kw)
-        recursive_rename(get_tag_id(sgla_attrs.specular_properties.detail_map),
+        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.specular_properties.detail_map),
                          name="sgla %s specular detail" % name, **kw)
 
     elif shdr_type == "smet":
@@ -1141,7 +1175,7 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
         if not meter_name:
             meter_name = name if  "meter" in name else name + " meter"
 
-        recursive_rename(get_tag_id(smet_attrs.meter_shader.map),
+        min_prio.val = recursive_rename(get_tag_id(smet_attrs.meter_shader.map),
                          name="smet %s" % name, **kw)
 
     elif shdr_type == "spla":
@@ -1152,19 +1186,20 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
         if func_name:
             plasma_name = func_name
 
-        recursive_rename(get_tag_id(spla_attrs.primary_noise_map.noise_map),
+        min_prio.val = recursive_rename(get_tag_id(spla_attrs.primary_noise_map.noise_map),
                          name="spla %s noise" % plasma_name, **kw)
-        recursive_rename(get_tag_id(spla_attrs.primary_noise_map.noise_map),
+        min_prio.val = recursive_rename(get_tag_id(spla_attrs.primary_noise_map.noise_map),
                          name="spla %s noise sec" % plasma_name, **kw)
 
 
 def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
                       root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if meta is None:
         return
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler)
 
     item_attrs = meta.item_attrs
     eqip_attrs = getattr(meta, "eqip_attrs", None)
@@ -1172,63 +1207,63 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
 
     items_dir = '\\'.join(sub_dir.split('\\')[: -2])
     if items_dir: items_dir += "\\"
-    recursive_rename(get_tag_id(item_attrs.material_effects),
+    min_prio.val = recursive_rename(get_tag_id(item_attrs.material_effects),
                      sub_dir=items_dir, name="material effects", **kw)
-    recursive_rename(get_tag_id(item_attrs.collision_sound),
+    min_prio.val = recursive_rename(get_tag_id(item_attrs.collision_sound),
                      sub_dir=sub_dir + "sfx\\",
                      name="collision sound", **kw)
-    recursive_rename(get_tag_id(item_attrs.detonating_effect),
+    min_prio.val = recursive_rename(get_tag_id(item_attrs.detonating_effect),
                      sub_dir=sub_dir + obje_effects_dir,
                      name="item detonating", **kw)
-    recursive_rename(get_tag_id(item_attrs.detonation_effect),
+    min_prio.val = recursive_rename(get_tag_id(item_attrs.detonation_effect),
                      sub_dir=sub_dir + obje_effects_dir,
                      name="item detonation", **kw)
 
     if eqip_attrs:
-        recursive_rename(get_tag_id(eqip_attrs.pickup_sound),
+        min_prio.val = recursive_rename(get_tag_id(eqip_attrs.pickup_sound),
                          sub_dir=sub_dir + sound_dir,
                          name="pickup sound", **kw)
 
     if not weap_attrs:
         return
 
-    recursive_rename(get_tag_id(weap_attrs.ready_effect),
+    min_prio.val = recursive_rename(get_tag_id(weap_attrs.ready_effect),
                      sub_dir=sub_dir + obje_effects_dir,
                      name="weap ready", **kw)
-    recursive_rename(get_tag_id(weap_attrs.heat.overheated),
+    min_prio.val = recursive_rename(get_tag_id(weap_attrs.heat.overheated),
                      sub_dir=sub_dir + obje_effects_dir,
                      name="weap overheated", **kw)
-    recursive_rename(get_tag_id(weap_attrs.heat.detonation),
+    min_prio.val = recursive_rename(get_tag_id(weap_attrs.heat.detonation),
                      sub_dir=sub_dir + obje_effects_dir,
                      name="weap detonation", **kw)
 
-    recursive_rename(get_tag_id(weap_attrs.melee.player_damage),
+    min_prio.val = recursive_rename(get_tag_id(weap_attrs.melee.player_damage),
                      sub_dir=sub_dir, name="melee", **kw)
-    recursive_rename(get_tag_id(weap_attrs.melee.player_response),
+    min_prio.val = recursive_rename(get_tag_id(weap_attrs.melee.player_response),
                      sub_dir=sub_dir, name="melee response", **kw)
 
-    recursive_rename(get_tag_id(weap_attrs.aiming.actor_firing_parameters),
+    min_prio.val = recursive_rename(get_tag_id(weap_attrs.aiming.actor_firing_parameters),
                      sub_dir=sub_dir, name="firing parameters", **kw)
 
-    recursive_rename(get_tag_id(weap_attrs.light.power_on_effect),
+    min_prio.val = recursive_rename(get_tag_id(weap_attrs.light.power_on_effect),
                      sub_dir=sub_dir + obje_effects_dir,
                      name="light power on", **kw)
-    recursive_rename(get_tag_id(weap_attrs.light.power_off_effect),
+    min_prio.val = recursive_rename(get_tag_id(weap_attrs.light.power_off_effect),
                      sub_dir=sub_dir + obje_effects_dir,
                      name="light power off", **kw)
 
     interface = weap_attrs.interface
-    recursive_rename(get_tag_id(interface.first_person_model),
+    min_prio.val = recursive_rename(get_tag_id(interface.first_person_model),
                      sub_dir=sub_dir + weap_fp_dir, name="fp", **kw)
-    recursive_rename(get_tag_id(interface.first_person_animations),
+    min_prio.val = recursive_rename(get_tag_id(interface.first_person_animations),
                      sub_dir=sub_dir + weap_fp_dir, name="fp", **kw)
-    recursive_rename(get_tag_id(interface.hud_interface),
+    min_prio.val = recursive_rename(get_tag_id(interface.hud_interface),
                      sub_dir=sub_dir, name=name, **kw)
-    recursive_rename(get_tag_id(interface.pickup_sound), name="weap pickup",
+    min_prio.val = recursive_rename(get_tag_id(interface.pickup_sound), name="weap pickup",
                      sub_dir=sub_dir + "sfx\\", **kw)
-    recursive_rename(get_tag_id(interface.zoom_in_sound), name="zoom in",
+    min_prio.val = recursive_rename(get_tag_id(interface.zoom_in_sound), name="zoom in",
                      sub_dir=sub_dir + "sfx\\", **kw)
-    recursive_rename(get_tag_id(interface.zoom_out_sound), name="zoom out",
+    min_prio.val = recursive_rename(get_tag_id(interface.zoom_out_sound), name="zoom out",
                      sub_dir=sub_dir + "sfx\\", **kw)
 
     i = 0
@@ -1237,10 +1272,10 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
         if len(weap_attrs.magazines.STEPTREE) > 1:
             mag_str = "secondary " if i else "primary "
 
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(mag.reloading_effect), name="%sreloading" % mag_str,
             sub_dir=sub_dir + obje_effects_dir, **kw)
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(mag.chambering_effect), name="%schambering" % mag_str,
             sub_dir=sub_dir + obje_effects_dir, **kw)
 
@@ -1251,7 +1286,7 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
                 mag_item_name += "secondary " if j else "primary "
 
             mag_item_name = "%s%s ammo" % (mag_item_name, name)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(mag_item.equipment), name=mag_item_name,
                 sub_dir=powerups_dir + mag_item_name + "\\", **kw)
             j += 1
@@ -1265,32 +1300,32 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
         if len(weap_attrs.triggers.STEPTREE) > 1:
             trig_str = "secondary " if i else "primary "
 
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(trig.charging.charging_effect),
             name="%scharging" % trig_str,
             sub_dir=sub_dir + obje_effects_dir, **kw)
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(trig.projectile.projectile), name="projectile",
             sub_dir=sub_dir + "%sprojectile\\" % trig_str, **kw)
 
         for b in trig.misc.firing_effects.STEPTREE:
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.firing_effect), name=trig_str + "fire",
                 sub_dir=sub_dir + obje_effects_dir, **kw)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.misfire_effect), name=trig_str + "misfire",
                 sub_dir=sub_dir + obje_effects_dir, **kw)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.empty_effect), name=trig_str + "empty",
                 sub_dir=sub_dir + obje_effects_dir, **kw)
 
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.firing_damage), name=trig_str + "fire response",
                 sub_dir=sub_dir + "firing effects\\", **kw)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.misfire_damage), name=trig_str + "misfire response",
                 sub_dir=sub_dir + "firing effects\\", **kw)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(b.empty_damage), name=trig_str + "empty response",
                 sub_dir=sub_dir + "firing effects\\", **kw)
 
@@ -1299,6 +1334,7 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
 
 def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
                       root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if meta is None:
         return
 
@@ -1315,17 +1351,17 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
                                kw.get("priority", 0) < VEHICLE_WEAP_PRIORITY
                                else kw.get("priority", 0))
 
-    recursive_rename(get_tag_id(unit_attrs.integrated_light_toggle),
+    min_prio.val = recursive_rename(get_tag_id(unit_attrs.integrated_light_toggle),
                      sub_dir=sub_dir + obje_effects_dir,
                      name="integrated light toggle", **kw)
 
     parent_dir = '\\'.join(sub_dir.split('\\')[: -2])
     if parent_dir: parent_dir += "\\"
 
-    recursive_rename(get_tag_id(unit_attrs.spawned_actor), sub_dir=parent_dir,
+    min_prio.val = recursive_rename(get_tag_id(unit_attrs.spawned_actor), sub_dir=parent_dir,
                      name=(name + " spawned actor").strip(), **kw)
 
-    recursive_rename(get_tag_id(unit_attrs.melee_damage),
+    min_prio.val = recursive_rename(get_tag_id(unit_attrs.melee_damage),
                      sub_dir=sub_dir, name="melee impact", **kw)
 
     unit_ext_array = getattr(getattr(unit_attrs, "unit_extensions", ()), "STEPTREE", ())
@@ -1333,17 +1369,17 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
     unhi_array = unit_attrs.new_hud_interfaces.STEPTREE
     udlg_array = unit_attrs.dialogue_variants.STEPTREE
     for i in range(len(trak_array)):
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(trak_array[i].track), sub_dir=sub_dir,
             name={0:"loose", 1:"tight"}.get(i, "unknown"), **kw)
 
     for i in range(len(unhi_array)):
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(unhi_array[i].unit_hud_interface), sub_dir=sub_dir,
             name={0:"sp", 1:"mp"}.get(i, "unknown"), **kw)
 
     for i in range(len(udlg_array)):
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(udlg_array[i].dialogue),
             sub_dir=sub_dir, name=name + " dialogue", **kw)
 
@@ -1353,7 +1389,7 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
       for mounted_state in unit_ext.mounted_states.STEPTREE:
         i = 0
         for b in mounted_state.camera_tracks.STEPTREE:
-            recursive_rename(get_tag_id(b.track), sub_dir=sub_dir,
+            min_prio.val = recursive_rename(get_tag_id(b.track), sub_dir=sub_dir,
                              name={0:"mounted loose",
                                    1:"mounted tight"}.get(i, "unknown"), **kw)
             i += 1
@@ -1378,13 +1414,13 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
         trak_array = seat.camera_tracks.STEPTREE
         unhi_array = seat.new_hud_interfaces.STEPTREE
         for i in range(len(trak_array)):
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(trak_array[i].track), sub_dir=sub_dir,
                 name=seat_name + {0:"loose", 1:"tight"}.get(i, "unknown"),
                 **trak_kwargs)
 
         for i in range(len(unhi_array)):
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(unhi_array[i].unit_hud_interface), sub_dir=sub_dir,
                 name=seat_name + {0:"sp", 1:"mp"}.get(i, "unknown"), **kw)
 
@@ -1396,33 +1432,33 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
                         b, seat_name, sub_dir=boarding_dir + effects_dir, **kw)
 
             for b in seat_ext.seat_damage.STEPTREE:
-                recursive_rename(get_tag_id(b.melee_damage.damage_effect),
+                min_prio.val = recursive_rename(get_tag_id(b.melee_damage.damage_effect),
                                  sub_dir=boarding_dir,
                                  name=seat_name + " melee damage", **kw)
-                recursive_rename(get_tag_id(b.region_damage.damage_effect),
+                min_prio.val = recursive_rename(get_tag_id(b.region_damage.damage_effect),
                                  sub_dir=boarding_dir,
                                  name=seat_name + " region damage", **kw)
 
-        recursive_rename(get_tag_id(seat.built_in_gunner),
+        min_prio.val = recursive_rename(get_tag_id(seat.built_in_gunner),
                          sub_dir=sub_dir, name="built in gunner", **kw)
 
 
     if bipd_attrs:
-        recursive_rename(get_tag_id(bipd_attrs.movement.footsteps),
+        min_prio.val = recursive_rename(get_tag_id(bipd_attrs.movement.footsteps),
                          sub_dir=sub_dir, name="footsteps", **kw)
 
 
     if vehi_attrs:
-        recursive_rename(get_tag_id(vehi_attrs.suspension_sound),
+        min_prio.val = recursive_rename(get_tag_id(vehi_attrs.suspension_sound),
                          sub_dir=sub_dir, name="suspension sound", **kw)
-        recursive_rename(get_tag_id(vehi_attrs.crash_sound),
+        min_prio.val = recursive_rename(get_tag_id(vehi_attrs.crash_sound),
                          sub_dir=sub_dir, name="crash sound", **kw)
-        recursive_rename(get_tag_id(vehi_attrs.effect),
+        min_prio.val = recursive_rename(get_tag_id(vehi_attrs.effect),
                          sub_dir=sub_dir, name="unknown effect", **kw)
 
         vehi_dir = '\\'.join(sub_dir.split('\\')[: -2])
         if vehi_dir: vehi_dir += "\\"
-        recursive_rename(get_tag_id(vehi_attrs.material_effect),
+        min_prio.val = recursive_rename(get_tag_id(vehi_attrs.material_effect),
                          sub_dir=vehi_dir, name="material effects", **kw)
 
 
@@ -1441,39 +1477,41 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
         if len(weap_array) > 1:
             gun_name += " %s" % i
 
-        recursive_rename(gun_id, name=gun_name,
+        min_prio.val = recursive_rename(gun_id, name=gun_name,
                          sub_dir=sub_dir + gun_name + "\\", **weap_kwargs)
 
 
 def rename_devi_attrs(meta, tag_id, halo_map, tag_path_handler,
                       root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if meta is None:
         return
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  sub_dir=sub_dir + obje_effects_dir,
-                  tag_path_handler=tag_path_handler)
+              sub_dir=sub_dir + obje_effects_dir,
+              tag_path_handler=tag_path_handler)
 
     devi_attrs = meta.devi_attrs
     ctrl_attrs = getattr(meta, "ctrl_attrs", None)
 
-    recursive_rename(get_tag_id(devi_attrs.open), name="open", **kw)
-    recursive_rename(get_tag_id(devi_attrs.close), name="close", **kw)
-    recursive_rename(get_tag_id(devi_attrs.opened), name="opened", **kw)
-    recursive_rename(get_tag_id(devi_attrs.closed), name="closed", **kw)
-    recursive_rename(get_tag_id(devi_attrs.depowered), name="depowered", **kw)
-    recursive_rename(get_tag_id(devi_attrs.repowered), name="repowered", **kw)
+    min_prio.val = recursive_rename(get_tag_id(devi_attrs.open), name="open", **kw)
+    min_prio.val = recursive_rename(get_tag_id(devi_attrs.close), name="close", **kw)
+    min_prio.val = recursive_rename(get_tag_id(devi_attrs.opened), name="opened", **kw)
+    min_prio.val = recursive_rename(get_tag_id(devi_attrs.closed), name="closed", **kw)
+    min_prio.val = recursive_rename(get_tag_id(devi_attrs.depowered), name="depowered", **kw)
+    min_prio.val = recursive_rename(get_tag_id(devi_attrs.repowered), name="repowered", **kw)
 
-    recursive_rename(get_tag_id(devi_attrs.delay_effect), name="delay", **kw)
+    min_prio.val = recursive_rename(get_tag_id(devi_attrs.delay_effect), name="delay", **kw)
 
     if ctrl_attrs:
-        recursive_rename(get_tag_id(ctrl_attrs.on), name="on", **kw)
-        recursive_rename(get_tag_id(ctrl_attrs.off), name="off", **kw)
-        recursive_rename(get_tag_id(ctrl_attrs.deny), name="deny", **kw)
+        min_prio.val = recursive_rename(get_tag_id(ctrl_attrs.on), name="on", **kw)
+        min_prio.val = recursive_rename(get_tag_id(ctrl_attrs.off), name="off", **kw)
+        min_prio.val = recursive_rename(get_tag_id(ctrl_attrs.deny), name="deny", **kw)
 
 
 def rename_actv(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name:
         name = "protected %s" % tag_id
     if not sub_dir:
@@ -1506,33 +1544,34 @@ def rename_actv(tag_id, halo_map, tag_path_handler,
 
             break
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.unit), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.unit), sub_dir=sub_dir,
                      name=name + " unit", **kw)
 
     kw["override"] = True
-    recursive_rename(get_tag_id(meta.actor_definition), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.actor_definition), sub_dir=sub_dir,
                      name=name + " actor", **kw)
-    recursive_rename(get_tag_id(meta.major_variant), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.major_variant), sub_dir=sub_dir,
                      name=name + " major", **kw)
 
     # don't want to tie any items to an actor_variant with infinite priority
     if kw.get("priority", 0) > UNIT_WEAPON_PRIORITY:
         kw["priority"] = UNIT_WEAPON_PRIORITY
 
-    recursive_rename(get_tag_id(meta.ranged_combat.weapon), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.ranged_combat.weapon), sub_dir=sub_dir,
                      name=name + " weapon", **kw)
-    recursive_rename(get_tag_id(meta.items.equipment), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.items.equipment), sub_dir=sub_dir,
                      name=name + " drop", **kw)
 
 
 def rename_flag(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
 
@@ -1542,9 +1581,9 @@ def rename_flag(tag_id, halo_map, tag_path_handler,
     elif not name:
         name = 'flag'
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority', DEFAULT_PRIORITY),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1555,23 +1594,24 @@ def rename_flag(tag_id, halo_map, tag_path_handler,
     shdr_dir = '\\'.join(sub_dir.split('\\')[: -2])
     if shdr_dir: shdr_dir += "\\"
     shdr_dir += shaders_dir
-    recursive_rename(get_tag_id(meta.red_flag_shader), sub_dir=shdr_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.red_flag_shader), sub_dir=shdr_dir,
                      name=shader_name + "_red", **kw)
-    recursive_rename(get_tag_id(meta.blue_flag_shader), sub_dir=shdr_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.blue_flag_shader), sub_dir=shdr_dir,
                      name=shader_name + "_blue", **kw)
-    recursive_rename(get_tag_id(meta.physics), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.physics), sub_dir=sub_dir,
                      name=name, **kw)
 
 
 def rename_mode(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1611,19 +1651,20 @@ def rename_mode(tag_id, halo_map, tag_path_handler,
     for i in range(len(meta.shaders.STEPTREE)):
         shader_name = shader_names.get(i, "").replace("_", " ").\
                       replace(".", "_").strip()
-        recursive_rename(get_tag_id(meta.shaders.STEPTREE[i].shader),
+        min_prio.val = recursive_rename(get_tag_id(meta.shaders.STEPTREE[i].shader),
                          name=shader_name.strip(), **kw)
 
 
 def rename_coll(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1632,28 +1673,28 @@ def rename_coll(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
 
     body, shield = meta.body, meta.shield
-    recursive_rename(get_tag_id(body.localized_damage_effect),
+    min_prio.val = recursive_rename(get_tag_id(body.localized_damage_effect),
                      name=name + " localized damage", **kw)
-    recursive_rename(get_tag_id(body.area_damage_effect),
+    min_prio.val = recursive_rename(get_tag_id(body.area_damage_effect),
                      name=name + " area damage", **kw)
-    recursive_rename(get_tag_id(body.body_damaged_effect),
+    min_prio.val = recursive_rename(get_tag_id(body.body_damaged_effect),
                      name=name + " body damaged", **kw)
-    recursive_rename(get_tag_id(body.body_depleted_effect),
+    min_prio.val = recursive_rename(get_tag_id(body.body_depleted_effect),
                      name=name + " body depleted", **kw)
-    recursive_rename(get_tag_id(body.body_destroyed_effect),
+    min_prio.val = recursive_rename(get_tag_id(body.body_destroyed_effect),
                      name=name + " body destroyed", **kw)
 
-    recursive_rename(get_tag_id(shield.shield_damaged_effect),
+    min_prio.val = recursive_rename(get_tag_id(shield.shield_damaged_effect),
                      name=name + " shield damaged", **kw)
-    recursive_rename(get_tag_id(shield.shield_depleted_effect),
+    min_prio.val = recursive_rename(get_tag_id(shield.shield_depleted_effect),
                      name=name + " shield depleted", **kw)
-    recursive_rename(get_tag_id(shield.shield_recharging_effect),
+    min_prio.val = recursive_rename(get_tag_id(shield.shield_recharging_effect),
                      name=name + " shield recharging", **kw)
 
     i = 0
     for region in meta.regions.STEPTREE:
         region_name = sanitize_name_piece(region.name, "region %s" % i)
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(region.destroyed_effect),
             name=("%s %s destroyed" % (name, region_name)).strip(), **kw)
         i += 1
@@ -1661,15 +1702,16 @@ def rename_coll(tag_id, halo_map, tag_path_handler,
 
 def rename_rain(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = weather_dir
 
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1681,15 +1723,15 @@ def rename_rain(tag_id, halo_map, tag_path_handler,
     i = 0
     for b in meta.particle_types.STEPTREE:
         type_name = sanitize_name_piece(b.name, "particle %s" % i)
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(b.physics), sub_dir=effect_physics_dir,
             name=name + type_name, **kw)
 
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(b.shader.sprite_bitmap), sub_dir=weather_bitmaps_dir,
             name=name + (type_name + " sprites").strip(), **kw)
 
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(b.secondary_bitmap.bitmap), sub_dir=weather_bitmaps_dir,
             name=name + (type_name + " sec map").strip(), **kw)
         i += 1
@@ -1697,34 +1739,36 @@ def rename_rain(tag_id, halo_map, tag_path_handler,
 
 def rename_fog_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = weather_dir
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
 
-    recursive_rename(
+    min_prio.val = recursive_rename(
         get_tag_id(meta.screen_layers.fog_map), sub_dir=sub_dir + bitmaps_dir,
         name=(name + " fog map").strip(), **kw)
 
-    recursive_rename(
+    min_prio.val = recursive_rename(
         get_tag_id(meta.background_sound), sub_dir=sub_dir,
         name=(name + " fog background sound").strip(), **kw)
-    recursive_rename(
+    min_prio.val = recursive_rename(
         get_tag_id(meta.sound_environment), sub_dir=sub_dir,
         name=(name + " fog sound environment").strip(), **kw)
 
 
 def rename_foot(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
 
@@ -1732,9 +1776,9 @@ def rename_foot(tag_id, halo_map, tag_path_handler,
     if meta is None:
         return
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority', DEFAULT_PRIORITY),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1745,25 +1789,26 @@ def rename_foot(tag_id, halo_map, tag_path_handler,
         materials = meta.effects.STEPTREE[i].materials.STEPTREE
 
         for j in range(len(materials)):
-            recursive_rename(get_tag_id(materials[j].effect),
+            min_prio.val = recursive_rename(get_tag_id(materials[j].effect),
                              sub_dir=mat_effects_dir,
                              name=materials_list[j], **kw)
-            recursive_rename(get_tag_id(materials[j].sound),
+            min_prio.val = recursive_rename(get_tag_id(materials[j].sound),
                              sub_dir=mat_sounds_dir,
                              name=materials_list[j], **kw)
 
 
 def rename_antr(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
     elif not name:
         name = 'animations'
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority', DEFAULT_PRIORITY),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -1778,18 +1823,19 @@ def rename_antr(tag_id, halo_map, tag_path_handler,
 
     anim_sfx_dir = sub_dir + "anim_sfx\\"
     for i in range(len(meta.sound_references.STEPTREE)):
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(meta.sound_references.STEPTREE[i].sound),
             name=sfx_names.get(i, name), sub_dir=anim_sfx_dir, **kw)
 
     if hasattr(meta, "stock_animation"):
-        recursive_rename(
+        min_prio.val = recursive_rename(
             get_tag_id(meta.stock_animation),
             name=name + " base", sub_dir=sub_dir, **kw)
 
 
 def rename_deca(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
 
@@ -1799,20 +1845,21 @@ def rename_deca(tag_id, halo_map, tag_path_handler,
     elif not name:
         name = 'decal %s' % tag_id
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority', DEFAULT_PRIORITY),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.next_decal_in_chain), name=name + " next",
+    min_prio.val = recursive_rename(get_tag_id(meta.next_decal_in_chain), name=name + " next",
                      sub_dir=sub_dir, **kw)
-    recursive_rename(get_tag_id(meta.shader.shader_map), name=name + " bitmaps",
+    min_prio.val = recursive_rename(get_tag_id(meta.shader.shader_map), name=name + " bitmaps",
                      sub_dir=sub_dir + bitmaps_dir, **kw)
 
 
 def rename_ant_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
 
@@ -1825,23 +1872,24 @@ def rename_ant_(tag_id, halo_map, tag_path_handler,
         if 'antenna' not in meta.attachment_marker_name:
             name += meta.attachment_marker_name
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority', DEFAULT_PRIORITY),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     bitm_dir = '\\'.join(sub_dir.split('\\')[: -2])
     if bitm_dir: bitm_dir += "\\"
     bitm_dir += bitmaps_dir
-    recursive_rename(get_tag_id(meta.bitmaps), sub_dir=bitm_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.bitmaps), sub_dir=bitm_dir,
                      name=name, **kw)
-    recursive_rename(get_tag_id(meta.physics), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.physics), sub_dir=sub_dir,
                      name=name, **kw)
 
 
 def rename_dobc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
@@ -1855,26 +1903,27 @@ def rename_dobc(tag_id, halo_map, tag_path_handler,
     dobc_name = join_names(sorted(dobc_type_names), 96)
     if (not name or "protected" in name) and dobc_name: name = dobc_name
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(
+    min_prio.val = recursive_rename(
         get_tag_id(meta.sprite_plate), halo_map, tag_path_handler,
         root_dir, sub_dir + bitmaps_dir, dobc_name, **kw)
 
 
 def rename_udlg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'),
+        kw.get("override"), kw.get("do_printout"))
     name = tag_path_handler.get_basename(tag_id)
     sub_dir = snd_dialog_dir + name + "\\"
 
@@ -1885,12 +1934,13 @@ def rename_udlg(tag_id, halo_map, tag_path_handler,
                    meta.post_combat_actions, meta.post_combat_chatter):
         snd_dir = sub_dir + "%s\\" % struct.NAME
         for dep in struct:
-            recursive_rename(get_tag_id(dep), halo_map, tag_path_handler,
+            min_prio.val = recursive_rename(get_tag_id(dep), halo_map, tag_path_handler,
                              root_dir, snd_dir, dep.NAME, **kw)
 
 
 def rename_DeLa(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
 
@@ -1913,39 +1963,38 @@ def rename_DeLa(tag_id, halo_map, tag_path_handler,
     kw["priority"] = (MEDIUM_HIGH_PRIORITY if
                       kw.get("priority", 0) < MEDIUM_HIGH_PRIORITY
                       else kw.get("priority", 0))
-
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     for b in meta.event_handlers.STEPTREE:
-        recursive_rename(get_tag_id(b.sound_effect),
+        min_prio.val = recursive_rename(get_tag_id(b.sound_effect),
                          sub_dir=sub_dir + "sfx\\", **kw)
 
         if (tag_path_handler.get_priority(get_tag_id(b.widget_tag)) >=
             kw["priority"] and tag_id in seen):
             continue
-        recursive_rename(get_tag_id(b.widget_tag), sub_dir=sub_dir, **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.widget_tag), sub_dir=sub_dir, **kw)
 
 
     kw.update(sub_dir=sub_dir + bitmaps_dir)
-    recursive_rename(get_tag_id(meta.background_bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.background_bitmap),
                      name=name + " bg", **kw)
-    recursive_rename(get_tag_id(meta.spinner_list.list_header_bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.spinner_list.list_header_bitmap),
                      name=name + " header", **kw)
-    recursive_rename(get_tag_id(meta.spinner_list.list_footer_bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.spinner_list.list_footer_bitmap),
                      name=name + " footer", **kw)
 
     kw.update(sub_dir=sub_dir + name + "\\")
-    recursive_rename(get_tag_id(meta.text_box.text_label_unicode_strings_list),
+    min_prio.val = recursive_rename(get_tag_id(meta.text_box.text_label_unicode_strings_list),
                      name="text labels", **kw)
-    recursive_rename(get_tag_id(meta.text_box.text_font),
+    min_prio.val = recursive_rename(get_tag_id(meta.text_box.text_font),
                      name="text font", **kw)
-    recursive_rename(get_tag_id(meta.column_list.extended_description_widget),
+    min_prio.val = recursive_rename(get_tag_id(meta.column_list.extended_description_widget),
                      name="ext desc", **kw)
 
     if kw.get("shallow_ui_widget_nesting"):
@@ -1955,19 +2004,20 @@ def rename_DeLa(tag_id, halo_map, tag_path_handler,
         if (tag_path_handler.get_priority(get_tag_id(b.widget_tag)) >=
             kw["priority"] and tag_id in seen):
             continue
-        recursive_rename(get_tag_id(b.widget_tag),
+        min_prio.val = recursive_rename(get_tag_id(b.widget_tag),
                          dela_name=sanitize_name(b.name), **kw)
 
     for b in meta.child_widgets.STEPTREE:
         if (tag_path_handler.get_priority(get_tag_id(b.widget_tag)) >=
             kw["priority"] and tag_id in seen):
             continue
-        recursive_rename(get_tag_id(b.widget_tag),
+        min_prio.val = recursive_rename(get_tag_id(b.widget_tag),
                          dela_name=sanitize_name(b.name), **kw)
 
 
 def rename_lsnd(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir:
         sub_dir = snd_music_dir
 
@@ -1981,42 +2031,43 @@ def rename_lsnd(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.continuous_damage_effect),
+    min_prio.val = recursive_rename(get_tag_id(meta.continuous_damage_effect),
                      name=name + " continuous damage",
                      sub_dir=sub_dir, **kw)
 
     i = 0
     tracks_dir = sub_dir + name + " tracks & details\\"
     for b in meta.tracks.STEPTREE:
-        recursive_rename(get_tag_id(b.start), name="track %s start" % i,
+        min_prio.val = recursive_rename(get_tag_id(b.start), name="track %s start" % i,
                          sub_dir=tracks_dir, **kw)
-        recursive_rename(get_tag_id(b.loop), name="track %s loop" % i,
+        min_prio.val = recursive_rename(get_tag_id(b.loop), name="track %s loop" % i,
                          sub_dir=tracks_dir, **kw)
-        recursive_rename(get_tag_id(b.end), name="track %s end" % i,
+        min_prio.val = recursive_rename(get_tag_id(b.end), name="track %s end" % i,
                          sub_dir=tracks_dir, **kw)
-        recursive_rename(get_tag_id(b.alternate_loop),
+        min_prio.val = recursive_rename(get_tag_id(b.alternate_loop),
                          name="track %s alt loop" % i,
                          sub_dir=tracks_dir, **kw)
-        recursive_rename(get_tag_id(b.alternate_end),
+        min_prio.val = recursive_rename(get_tag_id(b.alternate_end),
                          name="track %s alt end" % i,
                          sub_dir=tracks_dir, **kw)
         i += 1
 
     i = 0
     for b in meta.detail_sounds.STEPTREE:
-        recursive_rename(get_tag_id(b.sound), name="detail sound %s" % i,
+        min_prio.val = recursive_rename(get_tag_id(b.sound), name="detail sound %s" % i,
                          sub_dir=tracks_dir, **kw)
         i += 1
 
 
 def rename_snd_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     meta = halo_map.get_meta(tag_id, ignore_rawdata=True)
     non_rsrc_meta = halo_map.get_meta(tag_id, False, True, ignore_rawdata=True)
     if meta is None:
@@ -2027,19 +2078,20 @@ def rename_snd_(tag_id, halo_map, tag_path_handler,
     if (not name or name.startswith("protected")) and name2:
         name = name2
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority'), kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority'),
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(non_rsrc_meta.promotion_sound), halo_map,
+    min_prio.val = recursive_rename(get_tag_id(non_rsrc_meta.promotion_sound), halo_map,
                      tag_path_handler, root_dir, sub_dir,
                      name + " promo", **kw)
 
 
 def rename_vcky(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = ui_dir
     if not name: name = "virtual kbd english"
 
@@ -2050,34 +2102,35 @@ def rename_vcky(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.display_font),
+    min_prio.val = recursive_rename(get_tag_id(meta.display_font),
                      sub_dir=sub_dir, name="virtual kbd font", **kw)
-    recursive_rename(get_tag_id(meta.special_key_labels_string_list),
+    min_prio.val = recursive_rename(get_tag_id(meta.special_key_labels_string_list),
                      sub_dir=sub_dir, name="virtual kbd key labels", **kw)
 
     kw.update(sub_dir=sub_dir + "virtual kbd bitmaps\\")
-    recursive_rename(get_tag_id(meta.background_bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.background_bitmap),
                      name="background", **kw)
     for b in meta.virtual_keys.STEPTREE:
         key_name = b.keyboard_key.enum_name
-        recursive_rename(get_tag_id(b.unselected_background_bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.unselected_background_bitmap),
                          name=key_name, **kw)
-        recursive_rename(get_tag_id(b.selected_background_bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.selected_background_bitmap),
                          name="highlight " + key_name, **kw)
-        recursive_rename(get_tag_id(b.active_background_bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.active_background_bitmap),
                          name="select " + key_name, **kw)
-        recursive_rename(get_tag_id(b.sticky_background_bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.sticky_background_bitmap),
                          name="engaged " + key_name, **kw)
 
 
 def rename_soul(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = ui_shell_dir
     if not name: name = "protected %s" % tag_id
 
@@ -2088,18 +2141,19 @@ def rename_soul(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
     for b in meta.ui_widget_definitions.STEPTREE:
-        recursive_rename(get_tag_id(b.ui_widget_definition),
+        min_prio.val = recursive_rename(get_tag_id(b.ui_widget_definition),
                          sub_dir=sub_dir, **kw)
 
 
 def rename_tagc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
 
     meta = halo_map.get_meta(tag_id)
@@ -2112,48 +2166,52 @@ def rename_tagc(tag_id, halo_map, tag_path_handler,
     #                                things that it's not smart to expect
     #                                their contents should share the tag
     #                                collection's priority or directory
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(sub_dir=sub_dir + name + "\\")
     for b in meta.tag_references.STEPTREE:
-        recursive_rename(get_tag_id(b.tag), **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.tag), **kw)
 
 
 def rename_trak(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
-    tag_path_handler.set_path(
+    min_prio = kw.get("min_priority", MinPriority())
+    min_prio.val = tag_path_handler.set_path_by_priority(
         tag_id, root_dir + (sub_dir if sub_dir else camera_dir) + name,
         kw.get('priority', LOW_PRIORITY), kw.get("override"),
-        kw.get("print_new_name"))
+        kw.get("do_printout"))
 
 
 def rename_snde(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
-    tag_path_handler.set_path(
+    min_prio = kw.get("min_priority", MinPriority())
+    min_prio.val = tag_path_handler.set_path_by_priority(
         tag_id, root_dir + (sub_dir if sub_dir else snd_sound_env_dir) + name,
         kw.get('priority', LOW_PRIORITY), kw.get("override"),
-        kw.get("print_new_name"))
+        kw.get("do_printout"))
 
 
 def rename_devc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir:
         sub_dir = ui_devc_def_dir
         kw.setdefault("priority", MEDIUM_PRIORITY)
     if not name:
         name = tag_path_handler.get_basename(tag_id)
 
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw.get('priority', DEFAULT_PRIORITY),
-                              kw.get("override"), kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw.get('priority', DEFAULT_PRIORITY),
+        kw.get("override"), kw.get("do_printout"))
 
 
 def rename_ligh(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effect_lights_dir
 
@@ -2164,24 +2222,25 @@ def rename_ligh(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.lens_flare),
+    min_prio.val = recursive_rename(get_tag_id(meta.lens_flare),
                      sub_dir=sub_dir, name=name + " lens flare", **kw)
 
     sub_dir = sub_dir + bitmaps_dir
-    recursive_rename(get_tag_id(meta.gel_map.primary_cube_map),
+    min_prio.val = recursive_rename(get_tag_id(meta.gel_map.primary_cube_map),
                      sub_dir=sub_dir, name=name + " gel glow pri", **kw)
-    recursive_rename(get_tag_id(meta.gel_map.secondary_cube_map),
+    min_prio.val = recursive_rename(get_tag_id(meta.gel_map.secondary_cube_map),
                      sub_dir=sub_dir, name=name + " gel glow sec", **kw)
 
 
 def rename_glw_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effect_lights_dir
 
@@ -2192,18 +2251,19 @@ def rename_glw_(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.texture), name=name + " glow sprite",
+    min_prio.val = recursive_rename(get_tag_id(meta.texture), name=name + " glow sprite",
                      sub_dir=sub_dir + bitmaps_dir, **kw)
 
 
 def rename_lens(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effect_lens_flares_dir
 
@@ -2214,19 +2274,20 @@ def rename_lens(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.bitmaps.bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.bitmaps.bitmap),
                      name=name + " bitmaps",
                      sub_dir=sub_dir + bitmaps_dir, **kw)
 
 
 def rename_mgs2(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effect_lens_flares_dir
 
@@ -2237,18 +2298,19 @@ def rename_mgs2(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.map), name=name + " light vol map",
+    min_prio.val = recursive_rename(get_tag_id(meta.map), name=name + " light vol map",
                      sub_dir=sub_dir + bitmaps_dir, **kw)
 
 
 def rename_elec(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effect_lens_flares_dir
 
@@ -2259,18 +2321,19 @@ def rename_elec(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.bitmap), name=name + " elec map",
+    min_prio.val = recursive_rename(get_tag_id(meta.bitmap), name=name + " elec map",
                      sub_dir=sub_dir + bitmaps_dir, **kw)
 
 
 def rename_part(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effect_particles_dir
 
@@ -2281,34 +2344,35 @@ def rename_part(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.physics),
+    min_prio.val = recursive_rename(get_tag_id(meta.physics),
                      sub_dir=sub_dir + effects_dir, name=name, **kw)
-    recursive_rename(get_tag_id(meta.impact_effect),
+    min_prio.val = recursive_rename(get_tag_id(meta.impact_effect),
                      sub_dir=sub_dir + effects_dir,
                      name=name + " impact effect", **kw)
-    recursive_rename(get_tag_id(meta.collision_effect),
+    min_prio.val = recursive_rename(get_tag_id(meta.collision_effect),
                      sub_dir=sub_dir + effects_dir,
                      name=name + " collision", **kw)
-    recursive_rename(get_tag_id(meta.death_effect),
+    min_prio.val = recursive_rename(get_tag_id(meta.death_effect),
                      sub_dir=sub_dir + effects_dir,
                      name=name + " death", **kw)
 
-    recursive_rename(get_tag_id(meta.bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.bitmap),
                      sub_dir=sub_dir + bitmaps_dir,
                      name=name + " sprite", **kw)
-    recursive_rename(get_tag_id(meta.secondary_map.bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.secondary_map.bitmap),
                      sub_dir=sub_dir + bitmaps_dir,
                      name=name + " sprite sec", **kw)
 
 
 def rename_pctl(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effect_contrails_dir
 
@@ -2319,13 +2383,13 @@ def rename_pctl(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.point_physics), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.point_physics), sub_dir=sub_dir,
                      name=name + " default physics", **kw)
     i = 0
     for b in meta.particle_types.STEPTREE:
@@ -2335,13 +2399,13 @@ def rename_pctl(tag_id, halo_map, tag_path_handler,
         for s in b.particle_states.STEPTREE:
             s_name = t_name + " " + sanitize_name_piece(s.name, "state %s" % j)
 
-            recursive_rename(get_tag_id(s.physics),
+            min_prio.val = recursive_rename(get_tag_id(s.physics),
                              sub_dir=sub_dir + effects_dir,
                              name=s_name, **kw)
-            recursive_rename(get_tag_id(s.bitmaps),
+            min_prio.val = recursive_rename(get_tag_id(s.bitmaps),
                              sub_dir=sub_dir + bitmaps_dir,
                              name=s_name + " bitmaps", **kw)
-            recursive_rename(get_tag_id(s.secondary_map.bitmap),
+            min_prio.val = recursive_rename(get_tag_id(s.secondary_map.bitmap),
                              sub_dir=sub_dir + bitmaps_dir,
                              name=s_name + " bitmaps sec", **kw)
             j += 1
@@ -2350,6 +2414,7 @@ def rename_pctl(tag_id, halo_map, tag_path_handler,
 
 def rename_cont(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effect_contrails_dir
 
@@ -2360,26 +2425,27 @@ def rename_cont(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.rendering.bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.rendering.bitmap),
                      sub_dir=sub_dir + bitmaps_dir,
                      name=name + " sprite", **kw)
-    recursive_rename(get_tag_id(meta.secondary_map.bitmap),
+    min_prio.val = recursive_rename(get_tag_id(meta.secondary_map.bitmap),
                      sub_dir=sub_dir + bitmaps_dir,
                      name=name + " sprite sec", **kw)
 
     for b in meta.point_states.STEPTREE:
-        recursive_rename(get_tag_id(b.physics), sub_dir=sub_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.physics), sub_dir=sub_dir,
                          name=name, **kw)
 
 
 def rename_jpt_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effects_dir + "damage\\"
 
@@ -2390,18 +2456,19 @@ def rename_jpt_(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.sound), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.sound), sub_dir=sub_dir,
                      name=name + " sfx", **kw)
 
 
 def rename_effe(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = effects_dir
     meta = halo_map.get_meta(tag_id)
@@ -2409,9 +2476,9 @@ def rename_effe(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2426,13 +2493,13 @@ def rename_effe(tag_id, halo_map, tag_path_handler,
 
         j = 0
         for b in event.parts.STEPTREE:
-            recursive_rename(get_tag_id(b.type),
+            min_prio.val = recursive_rename(get_tag_id(b.type),
                              name=event_name + "part %s" % j, **kw)
             j += 1
 
         j = 0
         for b in event.particles.STEPTREE:
-            recursive_rename(get_tag_id(b.particle_type),
+            min_prio.val = recursive_rename(get_tag_id(b.particle_type),
                              name=event_name + "particle %s" % j, **kw)
             j += 1
 
@@ -2440,6 +2507,7 @@ def rename_effe(tag_id, halo_map, tag_path_handler,
 
 
 def rename_multitex_overlay(block, name, overlay_name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if block is None:
         return
 
@@ -2448,12 +2516,13 @@ def rename_multitex_overlay(block, name, overlay_name="", **kw):
     else:
         name += " " + block.NAME
 
-    recursive_rename(get_tag_id(block.primary_map), name=name + " pri", **kw)
-    recursive_rename(get_tag_id(block.secondary_map), name=name + " sec", **kw)
-    recursive_rename(get_tag_id(block.tertiary_map), name=name + " ter", **kw)
+    min_prio.val = recursive_rename(get_tag_id(block.primary_map), name=name + " pri", **kw)
+    min_prio.val = recursive_rename(get_tag_id(block.secondary_map), name=name + " sec", **kw)
+    min_prio.val = recursive_rename(get_tag_id(block.tertiary_map), name=name + " ter", **kw)
 
 
 def rename_hud_background(block, name, background_name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if block is None:
         return
 
@@ -2462,13 +2531,14 @@ def rename_hud_background(block, name, background_name="", **kw):
     else:
         name += " " + block.NAME.replace("background", "bg")
 
-    recursive_rename(get_tag_id(block.interface_bitmap), name=name, **kw)
+    min_prio.val = recursive_rename(get_tag_id(block.interface_bitmap), name=name, **kw)
     for b in block.multitex_overlays.STEPTREE:
         rename_multitex_overlay(b, name, "static element", **kw)
 
 
 def rename_grhi(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = ui_hud_dir
     meta = halo_map.get_meta(tag_id)
@@ -2476,19 +2546,20 @@ def rename_grhi(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = "hud " + tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, tag_path_handler=tag_path_handler,
-                  root_dir=root_dir, sub_dir=sub_dir + bitmaps_dir)
+              root_dir=root_dir, sub_dir=sub_dir + bitmaps_dir)
 
     rename_hud_background(meta.grenade_hud_background, name, **kw)
     rename_hud_background(meta.total_grenades.background, name, **kw)
-    recursive_rename(get_tag_id(meta.total_grenades.overlay_bitmap),
-                     name=name + " grenades overlay", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.total_grenades.overlay_bitmap),
+        name=name + " grenades overlay", **kw)
 
     kw.update(sub_dir=sub_dir + sounds_dir + name + "\\")
     for b in meta.warning_sounds.STEPTREE:
@@ -2498,11 +2569,13 @@ def rename_grhi(tag_id, halo_map, tag_path_handler,
                 snd_name += flag_name + " & "
         if not snd_name:
             snd_name = "unused"
-        recursive_rename(get_tag_id(b.sound), name=snd_name.strip(" &"), **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.sound), name=snd_name.strip(" &"), **kw)
 
 
 def rename_unhi(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = ui_hud_dir
     meta = halo_map.get_meta(tag_id)
@@ -2510,9 +2583,9 @@ def rename_unhi(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = "hud " + tag_path_handler.get_basename(tag_id)
 
@@ -2525,18 +2598,20 @@ def rename_unhi(tag_id, halo_map, tag_path_handler,
     rename_hud_background(meta.motion_sensor_background, name, **kw)
     rename_hud_background(meta.motion_sensor_foreground, name, **kw)
 
-    recursive_rename(get_tag_id(meta.health_panel_meter.meter_bitmap),
-                     name=name + "health meter", **kw)
-    recursive_rename(get_tag_id(meta.shield_panel_meter.meter_bitmap),
-                     name=name + "shield meter", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.health_panel_meter.meter_bitmap),
+        name=name + "health meter", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.shield_panel_meter.meter_bitmap),
+        name=name + "shield meter", **kw)
 
     for b in meta.auxilary_overlays.STEPTREE:
         rename_hud_background(b.background, name, "flashlight overlay", **kw)
 
     for b in meta.auxilary_meters.STEPTREE:
         rename_hud_background(b.background, name, "flashlight meter bg", **kw)
-        recursive_rename(get_tag_id(b.meter_bitmap),
-                         name=name + "flashlight meter", **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.meter_bitmap),
+                                        name=name + "flashlight meter", **kw)
 
     kw.update(sub_dir=sub_dir + sounds_dir + name + "\\")
     for b in meta.warning_sounds.STEPTREE:
@@ -2546,11 +2621,13 @@ def rename_unhi(tag_id, halo_map, tag_path_handler,
                 snd_name += flag_name + " & "
         if not snd_name:
             snd_name = "unused"
-        recursive_rename(get_tag_id(b.sound), name=snd_name.strip(" &"), **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.sound), name=snd_name.strip(" &"), **kw)
 
 
 def rename_wphi(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = ui_hud_dir
     meta = halo_map.get_meta(tag_id)
@@ -2558,18 +2635,18 @@ def rename_wphi(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, tag_path_handler=tag_path_handler,
               root_dir=root_dir, )#sub_dir=sub_dir)
 
-    recursive_rename(get_tag_id(meta.child_hud),
-                     name=name + ("" if name.endswith("child") else " child"),
-                     **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.child_hud),
+        name=name + ("" if name.endswith("child") else " child"), **kw)
     name = "hud " + name
 
     kw.update(sub_dir=sub_dir + bitmaps_dir)
@@ -2577,26 +2654,27 @@ def rename_wphi(tag_id, halo_map, tag_path_handler,
         rename_hud_background(b, name, "static elements", **kw)
 
     for b in meta.meter_elements.STEPTREE:
-        recursive_rename(get_tag_id(b.meter_bitmap),
-                         name=name + " meter element", **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.meter_bitmap),
+                                        name=name + " meter element", **kw)
 
     for b in meta.crosshairs.STEPTREE:
-        recursive_rename(get_tag_id(b.crosshair_bitmap),
-                         name=name + " crosshair", **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.crosshair_bitmap),
+                                        name=name + " crosshair", **kw)
 
     for b in meta.overlay_elements.STEPTREE:
-        recursive_rename(get_tag_id(b.overlay_bitmap),
-                         name=name + " overlay", **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.overlay_bitmap),
+                                        name=name + " overlay", **kw)
 
     for b in meta.screen_effect.STEPTREE:
-        recursive_rename(get_tag_id(b.mask.fullscreen_mask),
-                         name=name + " fullscreen mask", **kw)
-        recursive_rename(get_tag_id(b.mask.splitscreen_mask),
-                         name=name + " splitscreen mask", **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.mask.fullscreen_mask),
+                                        name=name + " fullscreen mask", **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.mask.splitscreen_mask),
+                                        name=name + " splitscreen mask", **kw)
 
 
 def rename_mply(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "multiplayer_scenarios"
     if not sub_dir: sub_dir = ui_dir
     meta = halo_map.get_meta(tag_id)
@@ -2604,9 +2682,9 @@ def rename_mply(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2615,12 +2693,13 @@ def rename_mply(tag_id, halo_map, tag_path_handler,
 
     for b in meta.multiplayer_scenario_descriptions.STEPTREE:
         name = sanitize_name(b.scenario_tag_directory_path).split("\\")[-1]
-        recursive_rename(get_tag_id(b.descriptive_bitmap), name=name, **kw)
-        recursive_rename(get_tag_id(b.displayed_map_name), name=name, **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.descriptive_bitmap), name=name, **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.displayed_map_name), name=name, **kw)
 
 
 def rename_ngpr(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
@@ -2632,20 +2711,21 @@ def rename_ngpr(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.pattern), sub_dir=sub_dir + bitmaps_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.pattern), sub_dir=sub_dir + bitmaps_dir,
                      name=name + " pattern", **kw)
-    recursive_rename(get_tag_id(meta.decal), sub_dir=sub_dir + bitmaps_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.decal), sub_dir=sub_dir + bitmaps_dir,
                      name=name + " decal", **kw)
 
 
 def rename_hud_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "counter"
     if not sub_dir: sub_dir = ui_hud_dir
 
@@ -2656,18 +2736,19 @@ def rename_hud_(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    recursive_rename(get_tag_id(meta.digits_bitmap), sub_dir=sub_dir,
+    min_prio.val = recursive_rename(get_tag_id(meta.digits_bitmap), sub_dir=sub_dir,
                      name=name + " digits", **kw)
 
 
 def rename_yelo(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name:
         name = 'yelo'
     if not sub_dir:
@@ -2683,9 +2764,9 @@ def rename_yelo(tag_id, halo_map, tag_path_handler,
         return
 
     # rename this project_yellow tag
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2693,15 +2774,15 @@ def rename_yelo(tag_id, halo_map, tag_path_handler,
     override_kw['priority'] = INF
 
     # rename the yelo globals
-    recursive_rename(get_tag_id(meta.yelo_globals),
+    min_prio.val = recursive_rename(get_tag_id(meta.yelo_globals),
                      sub_dir=sub_dir, name="yelo globals", **override_kw)
 
     # rename the globals override
-    recursive_rename(get_tag_id(meta.globals_override),
+    min_prio.val = recursive_rename(get_tag_id(meta.globals_override),
                      sub_dir=sub_dir, name="globals", **override_kw)
 
     # rename the explicit references
-    recursive_rename(get_tag_id(meta.scenario_explicit_references),
+    min_prio.val = recursive_rename(get_tag_id(meta.scenario_explicit_references),
                      sub_dir=sub_dir, name="scenario refs", **override_kw)
 
     # rename scripted ui widget references
@@ -2711,13 +2792,14 @@ def rename_yelo(tag_id, halo_map, tag_path_handler,
         widget_name = sanitize_name(b.name)
         if not widget_name:
             widget_name = "scripted ui widget %s" % i
-        recursive_rename(get_tag_id(b.definition), sub_dir=widgets_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.definition), sub_dir=widgets_dir,
                          name=widget_name, **kw)
         i += 1
 
 
 def rename_gelo(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = levels_dir
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
@@ -2731,14 +2813,14 @@ def rename_gelo(tag_id, halo_map, tag_path_handler,
         name = 'yelo globals'
 
     # rename this project_yellow_globals tag
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     # rename the explicit references
-    recursive_rename(get_tag_id(meta.global_explicit_references),
+    min_prio.val = recursive_rename(get_tag_id(meta.global_explicit_references),
                      name="global refs", **kw)
 
     # rename the chokin victim globals
@@ -2747,7 +2829,7 @@ def rename_gelo(tag_id, halo_map, tag_path_handler,
     except AttributeError:
         sub_id = None
     if sub_id is not None:
-        recursive_rename(sub_id, sub_dir=sub_dir, name="yelo globals cv", **kw)
+        min_prio.val = recursive_rename(sub_id, sub_dir=sub_dir, name="yelo globals cv", **kw)
 
     # rename scripted ui widget references
     widgets_dir = ui_dir + "gelo widgets\\"
@@ -2755,13 +2837,14 @@ def rename_gelo(tag_id, halo_map, tag_path_handler,
         widget_name = sanitize_name(b.name)
         if not widget_name:
             widget_name = "scripted ui widget %s" % i
-        recursive_rename(get_tag_id(b.definition), sub_dir=widgets_dir,
+        min_prio.val = recursive_rename(get_tag_id(b.definition), sub_dir=widgets_dir,
                          name=widget_name, **kw)
         i += 1
 
 
 def rename_gelc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = levels_dir
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
@@ -2775,9 +2858,9 @@ def rename_gelc(tag_id, halo_map, tag_path_handler,
         name = 'yelo globals cv'
 
     # rename this project_yellow_globals tag
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2787,15 +2870,16 @@ def rename_gelc(tag_id, halo_map, tag_path_handler,
 
 def rename_efpc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     name = sanitize_name(halo_map.map_header.map_name) + " postprocess effects"
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2803,11 +2887,12 @@ def rename_efpc(tag_id, halo_map, tag_path_handler,
               root_dir=root_dir, sub_dir=sub_dir + "postprocess\\")
 
     for b in meta.effects.STEPTREE:
-        recursive_rename(get_tag_id(b.effect), name=sanitize_name(b.name), **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.effect), name=sanitize_name(b.name), **kw)
 
 
 def rename_efpg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     sub_dir = "postprocess\\"
     meta = halo_map.get_meta(tag_id)
@@ -2815,9 +2900,9 @@ def rename_efpg(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2825,11 +2910,12 @@ def rename_efpg(tag_id, halo_map, tag_path_handler,
               root_dir=root_dir, sub_dir=sub_dir + name + " shaders\\")
 
     for b in meta.efpg_attrs.shaders.STEPTREE:
-        recursive_rename(get_tag_id(b.shader), **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.shader), **kw)
 
 
 def rename_shpg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = "postprocess\\"
     meta = halo_map.get_meta(tag_id)
@@ -2837,51 +2923,54 @@ def rename_shpg(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, tag_path_handler=tag_path_handler,
                   root_dir=root_dir)
 
-    recursive_rename(get_tag_id(meta.shpg_attrs.base_shader),
+    min_prio.val = recursive_rename(get_tag_id(meta.shpg_attrs.base_shader),
                      sub_dir=sub_dir, name=name + " base", **kw)
 
     kw.update(sub_dir=sub_dir + name + "\\")
     for b in meta.shpg_attrs.merged_values.STEPTREE:
-        recursive_rename(get_tag_id(b.bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.bitmap),
                          name=sanitize_name(b.value_name), **kw)
 
     for b in meta.shpg_attrs.bitmaps.STEPTREE:
-        recursive_rename(get_tag_id(b.bitmap),
+        min_prio.val = recursive_rename(get_tag_id(b.bitmap),
                          name=sanitize_name(b.value_name), **kw)
 
 
 def rename_sppg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if halo_map.get_meta(tag_id) is not None:
-        tag_path_handler.set_path(
+        min_prio.val = tag_path_handler.set_path_by_priority(
             tag_id, root_dir + "postprocess\\%s postprocess globals" %
             sanitize_name(halo_map.map_header.map_name),
             kw.get('priority', DEFAULT_PRIORITY),
-            kw.get("override"), kw.get("print_new_name"))
+            kw.get("override"), kw.get("do_printout"))
 
 
 def rename_efpp(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     meta = halo_map.get_meta(tag_id)
     if meta is not None:
-        tag_path_handler.set_path(
+        min_prio.val = tag_path_handler.set_path_by_priority(
             tag_id, root_dir + "postprocess\\" + name,
             kw.get('priority', DEFAULT_PRIORITY),
-            kw.get("override"), kw.get("print_new_name"))
+            kw.get("override"), kw.get("do_printout"))
 
 
 def rename_sily(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = ui_dir
     meta = halo_map.get_meta(tag_id)
@@ -2889,34 +2978,35 @@ def rename_sily(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, tag_path_handler=tag_path_handler,
               root_dir=root_dir, sub_dir=sub_dir + name + "\\")
 
-    recursive_rename(get_tag_id(meta.parameter), name="parameter", **kw)
-    recursive_rename(get_tag_id(meta.title_text), name="title", **kw)
-    recursive_rename(get_tag_id(meta.description_text),
+    min_prio.val = recursive_rename(get_tag_id(meta.parameter), name="parameter", **kw)
+    min_prio.val = recursive_rename(get_tag_id(meta.title_text), name="title", **kw)
+    min_prio.val = recursive_rename(get_tag_id(meta.description_text),
                      name="description", **kw)
 
     kw.update(sub_dir=sub_dir + name + "\\string id pairs\\")
     i = 0
     for b in meta.string_references.STEPTREE:
-        recursive_rename(get_tag_id(b.string_id),
+        min_prio.val = recursive_rename(get_tag_id(b.string_id),
                          name=str(i), **kw)
-        recursive_rename(get_tag_id(b.label_string_id),
+        min_prio.val = recursive_rename(get_tag_id(b.label_string_id),
                          name="label %s" % i, **kw)
-        recursive_rename(get_tag_id(b.description_string_id),
+        min_prio.val = recursive_rename(get_tag_id(b.description_string_id),
                          name="description %s" % i, **kw)
         i += 1
 
 
 def rename_unic(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     if not sub_dir: sub_dir = ui_dir
     meta = halo_map.get_meta(tag_id)
@@ -2924,9 +3014,9 @@ def rename_unic(tag_id, halo_map, tag_path_handler,
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2934,19 +3024,20 @@ def rename_unic(tag_id, halo_map, tag_path_handler,
                   root_dir=root_dir, sub_dir=sub_dir + name + " strings\\")
 
     for b in meta.string_references.STEPTREE:
-        recursive_rename(get_tag_id(b.string_id), name=name + " string id", **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.string_id), name=name + " string id", **kw)
 
 
 def rename_avtc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     name = sanitize_name(halo_map.map_header.map_name) + " actor variant transforms"
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
     kw.setdefault('priority', VERY_HIGH_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + name, kw['priority'],
-                              True, kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + name, kw['priority'], True, kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -2955,7 +3046,7 @@ def rename_avtc(tag_id, halo_map, tag_path_handler,
 
     sub_dir += "actor variant transforms\\"
     for b in meta.actor_variant_transforms.STEPTREE:
-        recursive_rename(get_tag_id(b.actor_variant), sub_dir=sub_dir, **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.actor_variant), sub_dir=sub_dir, **kw)
         actv_name = tag_path_handler.get_basename(get_tag_id(b.actor_variant))
         actv_sub_dir = tag_path_handler.get_sub_dir(
             get_tag_id(b.actor_variant), root_dir) + "transforms\\"
@@ -2966,30 +3057,32 @@ def rename_avtc(tag_id, halo_map, tag_path_handler,
             if not trans_name:
                 trans_name = "unnamed"
 
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(stages.transform_out), sub_dir=actv_sub_dir,
                 name=trans_name + " transform out", **kw)
-            recursive_rename(
+            min_prio.val = recursive_rename(
                 get_tag_id(stages.transform_in), sub_dir=actv_sub_dir,
                 name=trans_name + " transform in", **kw)
 
 
 def rename_keyframe_action(b, name, **kw):
-    recursive_rename(get_tag_id(b.damage_effect), name=name + " damage", **kw)
-    recursive_rename(get_tag_id(b.effect), name=name + " effect", **kw)
+    min_prio = kw.get("min_priority", MinPriority())
+    min_prio.val = recursive_rename(get_tag_id(b.damage_effect), name=name + " damage", **kw)
+    min_prio.val = recursive_rename(get_tag_id(b.effect), name=name + " effect", **kw)
 
 
 def rename_atvi(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'], kw.get("override"),
+        kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -3002,7 +3095,7 @@ def rename_atvi(tag_id, halo_map, tag_path_handler,
         if not target_name:
             target_name = "transform target"
 
-        recursive_rename(get_tag_id(target.ai.actor_variant),
+        min_prio.val = recursive_rename(get_tag_id(target.ai.actor_variant),
                          sub_dir=sub_dir, name=target_name, **kw)
 
         transform_name = sanitize_name(target.animation.transform_in_anim)
@@ -3016,15 +3109,16 @@ def rename_atvi(tag_id, halo_map, tag_path_handler,
 
 def rename_atvo(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
+    min_prio = kw.get("min_priority", MinPriority())
     if not name: name = "protected %s" % tag_id
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
 
     kw.setdefault('priority', DEFAULT_PRIORITY)
-    tag_path_handler.set_path(tag_id, root_dir + sub_dir + name,
-                              kw['priority'], kw.get("override"),
-                              kw.get("print_new_name"))
+    min_prio.val = tag_path_handler.set_path_by_priority(
+        tag_id, root_dir + sub_dir + name, kw['priority'],
+        kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
@@ -3032,10 +3126,10 @@ def rename_atvo(tag_id, halo_map, tag_path_handler,
               root_dir=root_dir, sub_dir=sub_dir + name + "\\")
 
     for b in meta.transform_instigators.STEPTREE:
-        recursive_rename(get_tag_id(b.unit), name="instigator", **kw)
+        min_prio.val = recursive_rename(get_tag_id(b.unit), name="instigator", **kw)
 
     for b in meta.attachments.attachments.STEPTREE:
-        recursive_rename(get_tag_id(b.object),
+        min_prio.val = recursive_rename(get_tag_id(b.object),
                          name=sanitize_name(b.object_marker +
                                             " attachment").strip(), **kw)
 
