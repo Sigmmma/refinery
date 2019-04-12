@@ -5,12 +5,21 @@ from supyr_struct.defs.util import str_to_identifier
 from os.path import splitext
 from queue import LifoQueue, Empty as EmptyQueueException
 
+def get_unique_name(collection, name="", ext=""):
+    if name + ext not in collection:
+        return name + ext
+
+    i = 1
+    while "%s %s%s" % (name, i, ext) in collection:
+        i += 1
+    return "%s %s%s" % (name, i, ext)
+
 
 class TagPathHandler():
     _path_map = ()
     _index_map = ()
-    _shared_by = ()
     _priorities = ()
+    _priority_mins = ()
 
     _icon_strings = ()
     _item_strings = ()
@@ -22,18 +31,16 @@ class TagPathHandler():
     def __init__(self, tag_index_array, **kwargs):
         self._def_priority = kwargs.get('def_priority', 0)
         self._index_map = list(tag_index_array)
-        self._shared_by = {i: [] for i in range(len(tag_index_array))}
         self._priorities = dict(kwargs.get('priorities', {}))
+        self._priority_mins = dict(kwargs.get('priority_mins', {}))
         self._path_map = dict()
 
         i = 0
         for ref in self._index_map:
             path = (ref.path + '.%s' % ref.class_1.enum_name).lower()
             self._path_map[path] = i
-            if ref.indexed:
-                self._priorities[i] = INF
-            else:
-                self._priorities[i] = self._def_priority
+            priority = INF if ref.indexed else self._def_priority
+            self._priorities[i] = self._priority_mins[i] = priority
             i += 1
 
     @property
@@ -90,11 +97,11 @@ class TagPathHandler():
             return tag_ref.path
         return ""
 
-    def get_shared_by(self, index):
-        return self._shared_by.get(index, ())
-
     def get_priority(self, index):
-        return self._priorities.get(index, float("-inf"))
+        return self._priorities.get(index, -INF)
+
+    def get_priority_min(self, index):
+        return self._priority_mins.get(index, -INF)
 
     def get_sub_dir(self, index, root=""):
         tag_ref = self.get_index_ref(index)
@@ -131,33 +138,54 @@ class TagPathHandler():
             return False
         return True
 
-    def set_path(self, index, new_path_no_ext, priority=None,
-                 override=False, do_printout=True):
+    def set_path(self, index, new_path_no_ext, do_printout=False):
+        tag_ref = self.get_index_ref(index)
+        if tag_ref is None:
+            return
+        elif not new_path_no_ext or new_path_no_ext[-1] == "\\":
+            new_path_no_ext += "protected"
+
+        ext = "." + tag_ref.class_1.enum_name
+        new_path_no_ext = sanitize_path(new_path_no_ext).lower()
+        old_path = tag_ref.path.lower() + ext
+        new_path = new_path_no_ext + ext
+        if self._path_map.get(new_path, None) not in (None, index):
+            raise KeyError(
+                'Cannot rename tag to "%s", as that tag already exists.')
+
+        self._path_map.pop(old_path, None)
+        self._path_map[new_path] = index
+        tag_ref.path = new_path_no_ext
+        if do_printout:
+            print(index, priority, new_path, sep="\t")
+
+        return new_path
+
+    def set_path_by_priority(self, index, new_path_no_ext, priority=None,
+                             override=False, do_printout=False):
         if index is None:
-            return ""
+            return -INF
         elif priority is None:
             priority = self._def_priority
         assert isinstance(new_path_no_ext, str)
 
         tag_ref = self.get_index_ref(index)
-        if not self.get_will_overwrite(index, priority, override):
-            return
+        if tag_ref is None:
+            return -INF
+        elif not self.get_will_overwrite(index, priority, override):
+            return self.get_priority(index)
 
         ext = "." + tag_ref.class_1.enum_name
         new_path_no_ext, ext = sanitize_path(new_path_no_ext), ext.lower()
-        old_path = tag_ref.path.lower() + ext
-
-        if not new_path_no_ext or new_path_no_ext[-1] == "\\":
-            new_path_no_ext += "protected"
 
         if self._path_map.get(new_path_no_ext + ext, None) not in (None, index):
             paths = new_path_no_ext.split("\\")
             path_basename = paths[-1]
             try:
-                i = int(path_basename.split("#")[-1])
                 path_basename = "#".join(path_basename.split("#")[: -1])
                 # decided to always reset to 1 because this will make sure
                 # all final tag names don't end up stupidly high numbered
+                #i = int(path_basename.split("#")[-1])
                 i = 1
             except Exception:
                 i = 1
@@ -171,20 +199,19 @@ class TagPathHandler():
 
             new_path_no_ext += "#%s" % i
 
-        new_path = new_path_no_ext + ext
-
-        self._priorities[index] = priority
-
-        self._path_map.pop(old_path, None)
-        self._path_map[new_path] = index
-        tag_ref.path = new_path_no_ext
-        if do_printout:
-            print(index, priority, new_path, sep="\t")
-
-        return new_path
+        self.set_path(index, new_path_no_ext, do_printout)
+        self.set_priority(index, priority)
+        return priority
 
     def set_priority(self, index, priority):
-        self._priorities[index] = float(priority)
+        priority = float(priority)
+        self._priorities[index] = priority
+        self.set_priority_min(index, priority)
+
+    def set_priority_min(self, index, priority, override=False):
+        priority = float(priority)
+        if not override or self.get_priority_min(index) < priority:
+            self._priority_mins[index] = priority
 
     def shorten_paths(self, max_len, **kw):
         paths = {}
@@ -242,7 +269,7 @@ class TagPathHandler():
                     # directory. store the current state to
                     # the stack and jump into this dir.
                     stack.put([parent, curr_paths, curr_new_paths, reparent])
-                    new_name = self.get_unique_name(
+                    new_name = get_unique_name(
                         curr_new_paths,
                         self.shorten_name_to_parent(parent, name)
                         )
@@ -280,8 +307,8 @@ class TagPathHandler():
             for name in curr_reparent:
                 for item in curr_reparent[name]:
                     curr_new_paths[
-                        self.get_unique_name(curr_new_paths,
-                                             *splitext(name))] = item
+                        self.get_unique_name(
+                            curr_new_paths, *splitext(name))] = item
 
             curr_reparent.clear()
 
@@ -349,15 +376,3 @@ class TagPathHandler():
             end -= 1
 
         return join_char.join(name_pieces[start: end])
-
-    def get_unique_name(self, collection=None, name="", ext=""):
-        if collection is None:
-            collection = self._path_map
-
-        if name + ext not in collection:
-            return name + ext
-
-        i = 1
-        while "%s %s%s" % (name, i, ext) in collection:
-            i += 1
-        return "%s %s%s" % (name, i, ext)
