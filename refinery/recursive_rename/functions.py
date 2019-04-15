@@ -34,15 +34,14 @@ class MinPriority:
             self._tag_path_handler.set_priority_min(self._index, new_val)
 
 
-def sanitize_path(name):
+def sanitize_win32_path(name):
     for c in ':*?"<>|':
         name = name.replace(c, '')
     return name.lower().replace('/', '\\').strip()
 
 
 def sanitize_name(name):
-    return sanitize_path(name).replace("~", "").\
-           replace("\\", " ").lower().strip()
+    return sanitize_win32_path(name).replace("~", "").replace("\\", " ").strip()
 
 
 def sanitize_name_piece(name, default_name):
