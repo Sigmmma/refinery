@@ -1,18 +1,17 @@
 from refinery.recursive_rename.constants import *
-from refinery.recursive_rename.functions import sanitize_path
+from refinery.recursive_rename.functions import sanitize_win32_path
 from supyr_struct.defs.util import str_to_identifier
 
 from os.path import splitext
 from queue import LifoQueue, Empty as EmptyQueueException
 
 def get_unique_name(collection, name="", ext=""):
-    if name + ext not in collection:
-        return name + ext
-
+    final_name = name + ext
     i = 1
-    while "%s %s%s" % (name, i, ext) in collection:
+    while final_name in collection:
+        final_name = "%s %s%s" % (name, i, ext)
         i += 1
-    return "%s %s%s" % (name, i, ext)
+    return final_name
 
 
 class TagPathHandler():
@@ -25,8 +24,7 @@ class TagPathHandler():
     _item_strings = ()
     _def_priority = 0.0
 
-    max_object_str_len = 120
-
+    max_object_str_len = 120  # arbitrary limit. Meant to keep tag paths short
 
     def __init__(self, tag_index_array, **kwargs):
         self._def_priority = kwargs.get('def_priority', 0)
@@ -146,7 +144,7 @@ class TagPathHandler():
             new_path_no_ext += "protected"
 
         ext = "." + tag_ref.class_1.enum_name
-        new_path_no_ext = sanitize_path(new_path_no_ext).lower()
+        new_path_no_ext = sanitize_win32_path(new_path_no_ext)
         old_path = tag_ref.path.lower() + ext
         new_path = new_path_no_ext + ext
         if self._path_map.get(new_path, None) not in (None, index):
@@ -176,7 +174,7 @@ class TagPathHandler():
             return self.get_priority(index)
 
         ext = "." + tag_ref.class_1.enum_name
-        new_path_no_ext, ext = sanitize_path(new_path_no_ext), ext.lower()
+        new_path_no_ext, ext = sanitize_win32_path(new_path_no_ext), ext.lower()
 
         if self._path_map.get(new_path_no_ext + ext, None) not in (None, index):
             paths = new_path_no_ext.split("\\")
