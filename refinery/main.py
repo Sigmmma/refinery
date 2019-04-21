@@ -124,7 +124,7 @@ class Refinery(tk.Tk, RefineryCore):
         self._do_printout  = tk.IntVar(self, 1)
 
         self._force_lower_case_paths = tk.IntVar(self, 1)
-        self._extract_cheape = tk.IntVar(self)
+        self._extract_yelo_cheape = tk.IntVar(self)
         self._rename_duplicates_in_scnr = tk.IntVar(self)
         self._overwrite = tk.IntVar(self)
         self._recursive = tk.IntVar(self)
@@ -161,7 +161,7 @@ class Refinery(tk.Tk, RefineryCore):
             autoload_resources=self._autoload_resources,
 
             force_lower_case_paths=self._force_lower_case_paths,
-            extract_cheape=self._extract_cheape,
+            extract_yelo_cheape=self._extract_yelo_cheape,
             rename_duplicates_in_scnr=self._rename_duplicates_in_scnr,
             overwrite=self._overwrite,
             recursive=self._recursive,
@@ -813,15 +813,17 @@ class Refinery(tk.Tk, RefineryCore):
         print("    Finished loading %s..." % os.path.basename(map_path))
         return new_map
 
-    def load_maps(self, map_paths, make_active=True, ask_close_open=False, **kw):
+    def load_maps(self, map_paths, make_active=False, ask_close_open=False, **kw):
         if not map_paths:
             return
 
         make_active |= self.active_map is None
-        new_map = None
+        first_loaded_map = None
         for map_path in map_paths:
             try:
                 new_map = self.load_map(map_path, False, ask_close_open, **kw)
+                if new_map is not None and first_loaded_map is None:
+                    first_loaded_map = new_map
             except EngineDetectionError:
                 print(format_exc(0))
             except Exception:
@@ -836,7 +838,7 @@ class Refinery(tk.Tk, RefineryCore):
                       "made, and opening in this mode fails on read-only files.\n")
 
         self.reload_engine_select_options()
-        if make_active and new_map is not None:
+        if make_active and first_loaded_map is not None:
             self.set_active_engine(
                 new_map.engine, new_map.map_name, force_reload=True)
 
@@ -931,7 +933,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._running = False
 
-    def deprotect(self, save_path=None):
+    def deprotect(self, save_path=None, **kw):
         if self.active_map is None:
             print("No map loaded.")
             return
@@ -961,7 +963,7 @@ class Refinery(tk.Tk, RefineryCore):
 
                 start = time()
 
-                RefineryCore.deprotect(self, save_path)
+                RefineryCore.deprotect(self, save_path, **kw)
                 print("Completed. Took %s seconds." % round(time() - start, 1))
         except Exception:
             print(format_exc())
@@ -1051,8 +1053,7 @@ class Refinery(tk.Tk, RefineryCore):
         prompt_strings_expand = kw.pop("prompt_strings_expand", False)
         prompt_internal_rename = kw.pop("prompt_internal_rename", False)
 
-        maps = self.maps_by_engine.get(engine, {})
-        halo_map = maps.get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if halo_map is None:
             return ""
         elif halo_map.is_resource:
@@ -1110,304 +1111,41 @@ class Refinery(tk.Tk, RefineryCore):
         if self.running:
             return
 
-        queue_tree = self.queue_tree.tags_tree
-
         if not self.map_loaded:
             return
-        elif not queue_tree.get_children():
+        elif not self.extract_queue:
             self.queue_add_all()
-            if not queue_tree.get_children():
+            if not self.extract_queue:
                 return
 
         self._running = True
         try:
-            self._start_extraction()
+            self.process_queue()
         except Exception:
             print(format_exc())
         self._running = False
 
-    def _start_extraction(self):
-        queue_tree = self.queue_tree.tags_tree
+    def process_queue(self, **kw):
+        tags_by_map, data_by_map = RefineryCore.process_queue(self, **kw)
+        tags_extracted = data_extracted = 0
+        for tag_ids in tags_by_map.values():
+            tags_extracted += len(tag_ids)
 
-        print("Starting extraction...")
-        start = time()
+        for tag_ids in data_by_map.values():
+            data_extracted += len(tag_ids)
 
-        queue_info = self.queue_tree.queue_info
-        queue_items = queue_tree.get_children()
-        total = 0
-        cheapes_extracted = set()
-        last_map_name = None
+        if not tags_extracted and not data_extracted:
+            print("Nothing was extracted. This might be a permissions issue.\n"
+                  "Close Refinery and run it as admin to potentially fix this.")
 
-        for iid in tuple(queue_items):
-            self.update_idletasks()
-            try:
-                info = queue_info.get(iid)
-                if not info:
-                    # item was removed during processing
-                    continue
-                curr_map       = info['halo_map']
-                tag_index_refs = info['tag_index_refs']
-
-                out_dir        = info['out_dir'].get()
-                recursive      = info['recursive'].get()
-                overwrite      = info['overwrite'].get()
-                do_printout    = info['do_printout'].get()
-                extract_mode   = info['extract_mode'].get()
-                tagslist_path  = info['tagslist_path'].get()
-                map_name = curr_map.map_name
-                is_halo1_map = ("halo1"  in curr_map.engine or
-                                "stubbs" in curr_map.engine or
-                                "shadowrun" in curr_map.engine)
-                tags_are_extractable = bool(curr_map.tag_headers)
-                recursive &= is_halo1_map
-
-                extract_bitmap_to = info['bitmap_extract_format'].get()
-                if extract_bitmap_to not in range(len(bitmap_file_formats)):
-                    extract_bitmap_to = 0
-
-                extract_kw = dict(
-                    out_dir=out_dir, overwrite=overwrite,
-                    decode_adpcm=info['decode_adpcm'].get(),
-                    bitmap_ext=bitmap_file_formats[extract_bitmap_to],
-                    bitmap_keep_alpha=info["bitmap_extract_keep_alpha"].get(),
-                    )
-
-            except Exception:
-                print(format_exc())
-                continue
-
-            if extract_mode == "tags" and not tags_are_extractable:
-                try: queue_tree.delete(iid)
-                except Exception: pass
-                continue
-
-            if curr_map.is_resource and "halo1pc" in curr_map.engine:
-                print("\nCannot extract PC resource caches, as they ONLY"
-                      "\ncontain raw data(pixels/sound samples).\n")
-                continue
-
-            if last_map_name != map_name:
-                print("\nExtracting from %s" % map_name)
-
-            if self.extract_cheape and (curr_map.engine == "halo1yelo" and
-                                        map_name not in cheapes_extracted):
-                try:
-                    cheapes_extracted.add(map_name)
-                    print(self.extract_cheape_from_halo_map(curr_map))
-                except Exception:
-                    print(format_exc())
-                    print("Error ocurred while extracting cheape.map")
-
-            force_lower_case_paths = self.force_lower_case_paths
-
-            map_magic = curr_map.map_magic
-            tag_index = curr_map.tag_index
-            tag_index_array = tag_index.tag_index
-            tagslist = ""
-            extracted = set()
-            local_total = 0
-            convert_kwargs = dict(
-                rename_scnr_dups=self.rename_duplicates_in_scnr,
-                generate_uncomp_verts=self.generate_uncomp_verts,
-                generate_comp_verts=self.generate_comp_verts,
-                force_lower_case_paths=force_lower_case_paths
-                )
-
-            extract_kw["hsc_node_strings_by_type"] = hsc_strings_by_type = {}
-            if is_halo1_map and curr_map.scnr_meta:
-                if self.use_scenario_names_for_script_names:
-                    hsc_strings_by_type.update(
-                        get_h1_scenario_script_object_type_strings(
-                            curr_map.scnr_meta))
-
-                if self.use_tag_index_for_script_names:
-                    bipeds = curr_map.scnr_meta.bipeds_palette.STEPTREE
-                    strings = {i: tag_index_array[i].path.lower() for
-                               i in range(len(tag_index_array))}
-                    actors = {i: bipeds[i].name.filepath.split("/")\
-                              [-1].split("\\")[-1] for i in range(len(bipeds))}
-
-                    if force_lower_case_paths:
-                        strings = {k: v.lower() for k, v in strings.items()}
-                        actors  = {k: v.lower() for k, v in actors.items()}
-
-                    # tag reference path strings
-                    for i in range(24, 32):
-                        hsc_strings_by_type[i] = strings
-
-                    # actor type strings
-                    hsc_strings_by_type[35] = actors
-
-            while tag_index_refs:
-                next_refs = []
-
-                for tag_index_ref in tag_index_refs:
-                    file_path = "<Could not get filepath>"
-                    try:
-                        self.update()
-                        file_path = sanitize_path("%s.%s" %
-                            (tag_index_ref.path,
-                             tag_index_ref.class_1.enum_name))
-                        if force_lower_case_paths:
-                            file_path = file_path.lower()
-
-                        tag_id = tag_index_ref.id & 0xFFff
-                        if not map_magic:
-                            # resource cache tag
-                            tag_id = tag_index_ref.id
-
-                        # dont want to re-extract tags
-                        if (tag_id, extract_mode) in extracted:
-                            continue
-                        extracted.add((tag_id, extract_mode))
-                        abs_file_path = os.path.join(out_dir, file_path)
-
-                        if tag_index_ref.class_1.enum_name in ("<INVALID>", "NONE"):
-                            print(("Unknown tag class for '%s'\n" +
-                                   "    Run deprotection to fix this.") %
-                                  file_path)
-                            continue
-
-                        # determine if not overwriting and we are about to
-                        dont_extract = not overwrite and (
-                            extract_mode == "tags" and os.path.isfile(abs_file_path))
-
-                        if dont_extract and not recursive:
-                            continue
-
-                        tag_cls = fourcc(tag_index_ref.class_1.data)
-                        if extract_mode == "tags" and tag_cls not in curr_map.tag_headers:
-                            continue
-
-                        if do_printout and not dont_extract:
-                            print("%s: %s" % (extract_mode, file_path))
-
-                        meta = curr_map.get_meta(tag_id, True)
-                        self.update()
-                        if not meta:
-                            print("    Could not get meta")
-                            continue
-
-                        if tagslist_path:
-                            tagslist += "%s: %s\n" % (extract_mode, file_path)
-
-                        tag_refs = ()
-                        if recursive or force_lower_case_paths:
-                            try:
-                                tag_refs = curr_map.get_dependencies(
-                                    meta, tag_id, tag_cls)
-                            except Exception:
-                                print(format_exc())
-                                print("    Could not get tag references.")
-
-                        if force_lower_case_paths:
-                            # force all tag references to lowercase
-                            for ref in tag_refs:
-                                ref.filepath = ref.filepath.lower()
-
-                        if recursive:
-                            # add dependencies to list to be extracted
-                            index_len = len(tag_index_array)
-                            extracting = set(extracted)
-                            for ref in tag_refs:
-                                index = ref.id & 0xFFff
-                                key = (index, extract_mode)
-                                if key not in extracting and index < index_len:
-                                    extracting.add(key)
-                                    next_refs.append(tag_index_array[index])
-
-                            if dont_extract:
-                                continue
-
-
-                        meta = curr_map.meta_to_tag_data(
-                            meta, tag_cls, tag_index_ref, **convert_kwargs)
-                        if not meta:
-                            print("    Failed to convert meta to tag")
-                            continue
-
-                        if extract_mode == "tags":
-                            try:
-                                if not os.path.exists(os.path.dirname(abs_file_path)):
-                                    os.makedirs(os.path.dirname(abs_file_path))
-
-                                if is_halo1_map: FieldType.force_big()
-                                mode = 'r+b' if os.path.isfile(abs_file_path) else 'w+b'
-                                with open(abs_file_path, mode) as f:
-                                    try:
-                                        f.truncate(0)
-                                        f.write(curr_map.tag_headers[tag_cls])
-                                        f.write(meta.serialize(calc_pointers=False))
-                                    except Exception:
-                                        print(format_exc())
-                                        print("    Failed to serialize tag")
-                                        continue
-                            except FileNotFoundError:
-                                if platform == "win32" and len(abs_file_path) >= 256:
-                                    fp, ext = os.path.splitext(abs_file_path)
-                                    print(("    Failed to extract. Absolute filepath is over 260 "
-                                           "characters. Must be shortened by %s characters. "
-                                           "Try extracting to a more shallow tags directory.") % (
-                                              len(abs_file_path) - 260))
-                                else:
-                                    print(format_exc())
-
-                                del meta
-                                continue
-                        elif extract_mode == "data":
-                            try:
-                                error_str = curr_map.extract_tag_data(
-                                    meta, tag_index_ref, **extract_kw)
-                            except Exception:
-                                error_str = ("%s\nFailed to extract data" %
-                                             format_exc())
-
-                            if error_str:
-                                print(error_str)
-                                continue
-                        else:
-                            continue
-
-                        local_total += 1
-                        del meta
-                    except PermissionError:
-                        print("Refinery does not have permission to save here.\n"
-                              "Try running Refinery as admin to potentially fix this.\n")
-                    except Exception:
-                        print(format_exc())
-                        print("Error ocurred while extracting '%s'" % file_path)
-
-                tag_index_refs = next_refs
-
-
-            if last_map_name != map_name:
-                curr_map.clear_map_cache()
-                for halo_map in curr_map.maps.values():
-                    if halo_map.is_resource:
-                        halo_map.clear_map_cache()
-
-            FieldType.force_normal()
-            try: queue_tree.delete(iid)
-            except Exception: pass
-
-            tagslist = "%s tags in: %s\n%s" % (local_total, out_dir, tagslist)
-            if tagslist_path:
-                if self.write_tagslist(tagslist, tagslist_path):
-                    print("Could not create\open tagslist. Either run "
-                          "Refinery as admin, or choose a directory "
-                          "you have permission to edit/make files in.")
-
-            total += local_total
-            local_total = 0
-            last_map_name = map_name
-
-        if total == 0:
-            print(
-                "No tags were extracted. This might be a permissions issue.\n"
-                "Close Refinery and run it as admin to potentially fix this.")
-
-        print("Extracted %s tags. Took %s seconds\n" %
-              (total, round(time()-start, 1)))
+    def process_queue_item(self, queue_item, **kw):
+        self.update_idletasks()
+        try:
+            self.queue_tree.tags_tree.delete(queue_item.iid)
+        except Exception:
+            print(format_exc())
+        self.update_idletasks()
+        RefineryCore.process_queue_item(self, queue_item, **kw)
 
     def reload_explorers(self):
         #for line in format_stack():

@@ -1,5 +1,3 @@
-TOKEN_PREFIX = "<"
-
 TOKEN_ALL_TAGS = "<all_tags>"
 
 TOKEN_SCNR = "<scenario>"
@@ -117,3 +115,8 @@ XBOX_SOUL_TAG_PATHS = (
     "ui\\shell\\multiplayer.ui_widget_collection",
     "ui\\shell\\main_menu.ui_widget_collection",
     )
+
+_ = locals()
+ALL_TOKENS = {n: _[n] for n in _ if n.startswith("TOKEN_")}
+ALL_EXTRACT_OPTIONS = {n: _[n] for n in _ if n.startswith("EXTRACT_")}
+del _
