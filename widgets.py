@@ -842,8 +842,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "rename_duplicates_in_scnr", "decode_adpcm",
                      "bitmap_extract_keep_alpha",
                      "generate_comp_verts", "generate_uncomp_verts",
-                     "force_lower_case_paths",
-                     "fix_tag_classes", "autoload_resources", "extract_cheape",
+                     "force_lower_case_paths", "fix_tag_classes",
+                     "autoload_resources", "extract_yelo_cheape",
                      "use_minimum_priorities", "use_heuristics",
                      "rename_cached_tags", "show_all_fields",
                      "edit_all_fields", "allow_corrupt",
@@ -984,8 +984,8 @@ class RefinerySettingsWindow(tk.Toplevel):
             self.other_frame, text=("Load resource maps automatically\n" +
                                     "when loading a non-resource map"),
             variable=self.autoload_resources, justify="left")
-        self.extract_cheape_cbtn = tk.Checkbutton(
-            self.other_frame, variable=self.extract_cheape,
+        self.extract_yelo_cheape_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.extract_yelo_cheape,
             text="Extract cheape.map when extracting from yelo maps")
         self.show_all_fields_cbtn = tk.Checkbutton(
             self.other_frame, variable=self.show_all_fields,
@@ -1036,7 +1036,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                   ):
             w.pack(padx=4, anchor='w')
 
-        for w in (self.autoload_resources_cbtn, self.extract_cheape_cbtn,
+        for w in (self.autoload_resources_cbtn, self.extract_yelo_cheape_cbtn,
                   self.show_all_fields_cbtn, self.edit_all_fields_cbtn,
                   self.allow_corrupt_cbtn):
             w.pack(padx=4, anchor='w')
