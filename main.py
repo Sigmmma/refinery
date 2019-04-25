@@ -810,7 +810,7 @@ class Refinery(tk.Tk, RefineryCore):
         if autoload_resources:
             self.load_resource_maps(new_map)
 
-        print("    Finished loading %s..." % os.path.basename(map_path))
+        print("    Finished loading %s" % os.path.basename(map_path))
         return new_map
 
     def load_maps(self, map_paths, make_active=False, ask_close_open=False, **kw):
@@ -889,7 +889,8 @@ class Refinery(tk.Tk, RefineryCore):
             map_path = askopenfilename(
                 initialdir=maps_dir, title="Select the %s.map" % map_name,
                 filetypes=((map_name, "*.map"), (map_name, "*.yelo"),
-                           (map_name, "*.map.dtz"), ("All", "*.*")))
+                           (map_name, "*.vap"), (map_name, "*.map.dtz"),
+                           ("All", "*.*")))
 
             if not map_path:
                 print("You wont be able to extract from %s.map" % map_name)
@@ -940,7 +941,8 @@ class Refinery(tk.Tk, RefineryCore):
         elif self.active_map.is_resource:
             print("Cannot deprotect resource maps.")
             return
-        elif self.active_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+        elif self.active_map.engine not in ("halo1ce", "halo1yelo",
+                                            "halo1pc", "halo1vap"):
             print("Cannot deprotect this kind of map.")
             return
 
@@ -952,6 +954,7 @@ class Refinery(tk.Tk, RefineryCore):
                     title="Choose where to save the deprotected map",
                     filetypes=(("Halo mapfile", "*.map"),
                                ("Halo mapfile(extra sauce)", "*.yelo"),
+                               ("Halo mapfile(chimerified)", "*.vap"),
                                ("All", "*")))
 
             if not save_path:
@@ -1025,7 +1028,8 @@ class Refinery(tk.Tk, RefineryCore):
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
             return ""
-        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+                                     "halo1pc", "halo1vap"):
             print("Cannot save this kind of map.")
             return ""
 
@@ -1034,6 +1038,7 @@ class Refinery(tk.Tk, RefineryCore):
             title="Choose where to save the map",
             filetypes=(("Halo mapfile", "*.map"),
                        ("Halo mapfile(extra sauce)", "*.yelo"),
+                       ("Halo mapfile(chimerified)", "*.vap"),
                        ("All", "*")))
 
         if not save_path:
@@ -1059,7 +1064,8 @@ class Refinery(tk.Tk, RefineryCore):
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
             return ""
-        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+                                     "halo1pc", "halo1vap"):
             print("Cannot save this kind of map.")
             return ""
         elif not save_path:
@@ -1170,6 +1176,7 @@ class Refinery(tk.Tk, RefineryCore):
             title="Select map(s) to load", parent=self,
             filetypes=(("Halo mapfile", "*.map"),
                        ("Halo mapfile(extra sauce)", "*.yelo"),
+                       ("Halo mapfile(chimerified)", "*.vap"),
                        ("Halo 2 Vista compressed mapfile", "*.map.dtz"),
                        ("All", "*")))
 

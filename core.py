@@ -313,7 +313,8 @@ class RefineryCore:
             raise KeyError("No map loaded and none provided.")
         elif halo_map.is_resource:
             raise TypeError("Cannot save resource maps.")
-        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+                                     "halo1pc", "halo1vap"):
             raise TypeError("Cannot save this kind of map.")
         elif not save_path:
             save_path = halo_map.filepath
@@ -424,7 +425,7 @@ class RefineryCore:
             # set the size of the map in the header to 0 to fix a bug where
             # halo will leak file handles for very large maps. Also removes
             # the map size limitation so halo can load stupid big maps.
-            if halo_map.engine in ("halo1ce", "halo1yelo"):
+            if halo_map.engine in ("halo1ce", "halo1yelo", "halo1vap"):
                 map_header.decomp_len = 0
 
             # write the map header so the calculate_ce_checksum can read it
@@ -506,7 +507,8 @@ class RefineryCore:
 
     def deprotect_all(self, **kw):
         for engine_name in self.maps_by_engine:
-            if engine_name not in ("halo1ce", "halo1yelo", "halo1pc"):
+            if engine_name not in ("halo1ce", "halo1yelo",
+                                   "halo1pc", "halo1vap"):
                 continue
 
             engine_set = False
@@ -533,7 +535,8 @@ class RefineryCore:
             raise KeyError("No map loaded.")
         elif halo_map.is_resource:
             raise TypeError("Cannot deprotect resource maps.")
-        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+                                     "halo1pc", "halo1vap"):
             raise TypeError("Cannot deprotect this kind of map.")
 
         do_printout  = kw.pop("do_printout", self.do_printout)
@@ -721,7 +724,8 @@ class RefineryCore:
         if halo_map is None:
             halo_map  = self.active_map
 
-        if halo_map.engine not in ("halo1ce", "halo1yelo", "halo1pc"):
+        if halo_map.engine not in ("halo1ce", "halo1yelo",
+                                   "halo1pc", "halo1vap"):
             raise TypeError('Cannot repair tag classes in "%s" maps' %
                             halo_map.engine)
 
