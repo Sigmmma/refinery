@@ -5,11 +5,11 @@ from supyr_struct.defs.util import str_to_identifier
 from os.path import splitext
 from queue import LifoQueue, Empty as EmptyQueueException
 
-def get_unique_name(collection, name="", ext=""):
-    final_name = name + ext
-    i = 1
-    while final_name in collection:
-        final_name = "%s %s%s" % (name, i, ext)
+def get_unique_name(collection, name="", ext="", curr_value=object()):
+    final_name = name
+    i = 2
+    while collection.get(final_name + ext) not in (None, curr_value):
+        final_name = "%s #%s" % (name, i)
         i += 1
     return final_name
 
@@ -95,11 +95,11 @@ class TagPathHandler():
             return tag_ref.path
         return ""
 
-    def get_priority(self, index):
-        return self._priorities.get(index, -INF)
+    def get_priority(self, index, default=-INF):
+        return self._priorities.get(index, default)
 
-    def get_priority_min(self, index):
-        return self._priority_mins.get(index, -INF)
+    def get_priority_min(self, index, default=INF):
+        return self._priority_mins.get(index, default)
 
     def get_sub_dir(self, index, root=""):
         tag_ref = self.get_index_ref(index)
@@ -136,26 +136,43 @@ class TagPathHandler():
             return False
         return True
 
-    def set_path(self, index, new_path_no_ext, do_printout=False):
+    def set_path(self, index, new_path_no_ext, do_printout=False, ensure_unique_name=True):
         tag_ref = self.get_index_ref(index)
         if tag_ref is None:
             return
         elif not new_path_no_ext or new_path_no_ext[-1] == "\\":
-            new_path_no_ext += "protected"
+            new_path_no_ext += "protected %s" % index
 
-        ext = "." + tag_ref.class_1.enum_name
+        ext = "." + tag_ref.class_1.enum_name.lower()
         new_path_no_ext = sanitize_win32_path(new_path_no_ext)
+
+        if ensure_unique_name and self._path_map.get(new_path_no_ext + ext) not in (None, index):
+            path_pieces = new_path_no_ext.split("\\")
+            path_basename = path_pieces[-1]
+            try:
+                path_basename_pieces = path_basename.split("#")
+                if len(path_basename_pieces) > 1:
+                    path_basename = "#".join(path_basename_pieces[: -1])
+            except Exception:
+                pass
+
+            path_pieces = tuple(path_pieces[: -1]) + (path_basename, )
+            new_path_no_ext = get_unique_name(
+                self._path_map, "\\".join(path_pieces), ext, index)
+
         old_path = tag_ref.path.lower() + ext
         new_path = new_path_no_ext + ext
+
         if self._path_map.get(new_path, None) not in (None, index):
             raise KeyError(
-                'Cannot rename tag to "%s", as that tag already exists.')
+                'Cannot rename tag to "%s", as that tag already exists.' %
+                new_path)
 
         self._path_map.pop(old_path, None)
         self._path_map[new_path] = index
         tag_ref.path = new_path_no_ext
         if do_printout:
-            print(index, priority, new_path, sep="\t")
+            print(index, new_path, sep="\t")
 
         return new_path
 
@@ -173,43 +190,17 @@ class TagPathHandler():
         elif not self.get_will_overwrite(index, priority, override):
             return self.get_priority(index)
 
-        ext = "." + tag_ref.class_1.enum_name
-        new_path_no_ext, ext = sanitize_win32_path(new_path_no_ext), ext.lower()
-
-        if self._path_map.get(new_path_no_ext + ext, None) not in (None, index):
-            paths = new_path_no_ext.split("\\")
-            path_basename = paths[-1]
-            try:
-                path_basename = "#".join(path_basename.split("#")[: -1])
-                # decided to always reset to 1 because this will make sure
-                # all final tag names don't end up stupidly high numbered
-                #i = int(path_basename.split("#")[-1])
-                i = 1
-            except Exception:
-                i = 1
-
-            new_path_no_ext = "\\".join(tuple(paths[: -1]) + (path_basename,))
-
-            while (self._path_map.get(
-                   "%s#%s%s" % (new_path_no_ext, i, ext), None)
-                   not in (None, index)):
-                i += 1
-
-            new_path_no_ext += "#%s" % i
-
         self.set_path(index, new_path_no_ext, do_printout)
         self.set_priority(index, priority)
         return priority
 
     def set_priority(self, index, priority):
-        priority = float(priority)
-        self._priorities[index] = priority
-        self.set_priority_min(index, priority)
+        if index in range(len(self._index_map)):
+            self._priorities[index] = float(priority)
 
-    def set_priority_min(self, index, priority, override=False):
-        priority = float(priority)
-        if not override or self.get_priority_min(index) < priority:
-            self._priority_mins[index] = priority
+    def set_priority_min(self, index, priority):
+        if index in range(len(self._index_map)):
+            self._priority_mins[index] = float(priority)
 
     def shorten_paths(self, max_len, **kw):
         paths = {}
@@ -218,8 +209,11 @@ class TagPathHandler():
         print_errors = kw.pop("print_errors", False)
 
         for tag_path, index in self._path_map.items():
+            tag_path = sanitize_win32_path(tag_path)
             if len(splitext(tag_path)[0]) < max_len:
-                continue
+                # don't rename tags below the limit. use None as the key so
+                # the tag path is still considered when chosing unique names
+                index = None
 
             tag_path_pieces = tag_path.split("\\")
             curr_dir = paths
@@ -235,7 +229,11 @@ class TagPathHandler():
             for dirname in tag_path_pieces[: -1]:
                 curr_dir = curr_dir.setdefault(dirname, {})
 
-            curr_dir[tag_path_pieces[-1]] = self._index_map[index]
+            tag_ref = None
+            if index is not None:
+                tag_ref = self._index_map[index]
+
+            curr_dir[tag_path_pieces[-1]] = tag_ref
 
         # do a preliminary filepath shortening by removing any
         # words the directories and paths start and end with
@@ -246,14 +244,16 @@ class TagPathHandler():
         curr_new_paths = new_paths
         reparent = {}
 
-
         while True:
             for name in sorted(curr_paths):
                 val = curr_paths[name]
                 if not isinstance(val, dict):
                     # reached a filename. move the item and continue.
                     basename, ext = splitext(name)
-                    new_basename = self.shorten_name_to_parent(parent, basename)
+                    new_basename = basename
+                    if val is not None:
+                        new_basename = self.shorten_name_to_parent(parent, basename)
+
                     curr_paths.pop(name)
                     if new_basename:
                         curr_new_paths[new_basename + ext] = val
@@ -304,9 +304,10 @@ class TagPathHandler():
 
             for name in curr_reparent:
                 for item in curr_reparent[name]:
+                    no_ext_name, ext = splitext(name)
                     curr_new_paths[
                         self.get_unique_name(
-                            curr_new_paths, *splitext(name))] = item
+                            curr_new_paths, no_ext_name, ext) + ext] = item
 
             curr_reparent.clear()
 
@@ -327,17 +328,15 @@ class TagPathHandler():
                         curr_paths = val
                         path_pieces += (name, )
                     break
-
-                # reached a filename. rename the item and continue.
-                if val.indexed:
+                elif val is None or val.indexed:
                     continue
 
+                # reached a filename that needs to be renamed. rename the item and continue.
                 tag_path = val.path
                 new_tag_path = "\\".join(path_pieces + splitext(name)[: 1])
                 if do_printout:
                     print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
                           (len(tag_path), len(new_tag_path), tag_path, new_tag_path))
-                self._path_map.pop(tag_path, None)
                 val.path = new_tag_path
 
             if not curr_paths:
@@ -346,7 +345,6 @@ class TagPathHandler():
                     path_pieces, curr_paths = stack.get_nowait()
                 except EmptyQueueException:
                     break
-
 
         # remake the path map
         self._path_map.clear()

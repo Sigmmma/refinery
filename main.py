@@ -114,7 +114,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._active_map_path = tk.StringVar(self)
         self._active_map_name = tk.StringVar(self)
-        self._active_engine = tk.StringVar(self)
+        self._active_engine_name = tk.StringVar(self)
 
         self._tags_dir = tk.StringVar(self, self.tags_dir)
         self._data_dir = tk.StringVar(self, self.data_dir)
@@ -175,7 +175,7 @@ class Refinery(tk.Tk, RefineryCore):
 
             fix_tag_classes=self._fix_tag_classes,
             fix_tag_index_offset=self._fix_tag_index_offset,
-            use_minimum_priorities=self.use_minimum_priorities,
+            use_minimum_priorities=self._use_minimum_priorities,
             use_heuristics=self._use_heuristics,
             valid_tag_paths_are_accurate=self._valid_tag_paths_are_accurate,
             scrape_tag_paths_from_scripts=self._scrape_tag_paths_from_scripts,
@@ -208,19 +208,19 @@ class Refinery(tk.Tk, RefineryCore):
         self.file_menu.add_separator()
         self.file_menu.add_command(
             label="Unload active map",
-            command=lambda s=self: s.unload_maps_clicked(None))
+            command=lambda s=self: s.unload_maps_clicked(MAP_TYPE_ANY))
         self.file_menu.add_command(
             label="Unload all non-resource maps",
-            command=lambda s=self: s.unload_maps_clicked(False, ("<active>",), None))
+            command=lambda s=self: s.unload_maps_clicked(MAP_TYPE_REGULAR, (ACTIVE_INDEX,), None))
         self.file_menu.add_command(
             label="Unload all resource maps",
-            command=lambda s=self: s.unload_maps_clicked(True, ("<active>",), None))
+            command=lambda s=self: s.unload_maps_clicked(MAP_TYPE_RESOURCE, (ACTIVE_INDEX,), None))
         self.file_menu.add_command(
             label="Unload all maps",
-            command=lambda s=self: s.unload_maps_clicked(None, ("<active>",), None))
+            command=lambda s=self: s.unload_maps_clicked(MAP_TYPE_ANY, (ACTIVE_INDEX,), None))
         self.file_menu.add_command(
             label="Unload all maps from all engines",
-            command=lambda s=self: s.unload_maps_clicked(None, None, None))
+            command=lambda s=self: s.unload_maps_clicked(MAP_TYPE_ANY, None, None))
         self.file_menu.add_separator()
         self.file_menu.add_command(
             label="Save map as", command=self.save_map_as)
@@ -318,7 +318,7 @@ class Refinery(tk.Tk, RefineryCore):
             command=self.queue_del_all)
 
         self.engine_select_menu = ScrollMenu(
-            self.map_action_frame, str_variable=self._active_engine,
+            self.map_action_frame, str_variable=self._active_engine_name,
             callback=self.set_active_engine, menu_width=15)
         self.map_select_menu = ScrollMenu(
             self.map_action_frame, str_variable=self._active_map_name,
@@ -676,7 +676,8 @@ class Refinery(tk.Tk, RefineryCore):
     def set_active_engine(self, name_or_index=None, map_name=None,
                           force_reload=False):
         engine_name = None
-        engine_names = sorted(n for n in self.maps_by_engine if n != "<active>")
+        engine_names = sorted(n for n in self._maps_by_engine if n != ACTIVE_INDEX)
+
         if isinstance(name_or_index, int):
             if name_or_index in range(len(engine_names)):
                 engine_name = engine_names[name_or_index]
@@ -688,7 +689,7 @@ class Refinery(tk.Tk, RefineryCore):
         if engine_name is None and not force_reload:
             return
 
-        next_maps = self.maps_by_engine.get(engine_name)
+        next_maps = self._maps_by_engine.get(engine_name)
         if self.active_maps is next_maps and not force_reload:
             # selected same engine. nothing to change
             return
@@ -696,27 +697,31 @@ class Refinery(tk.Tk, RefineryCore):
             next_map_name = None
         elif map_name in next_maps:
             next_map_name = map_name
-        elif next_maps.get("<active>"):
-            next_map_name = next_maps.get("<active>").map_name
+        elif next_maps.get(ACTIVE_INDEX):
+            next_map_name = next_maps[ACTIVE_INDEX].map_name
         else:
             next_map_name = iter(sorted(next_maps)).__next__()
 
         # unset any currently active engine and only set
         # it if we have a valid map name to make active
-        self.maps_by_engine.pop("<active>", None)
+        self._maps_by_engine.pop(ACTIVE_INDEX, None)
         if next_map_name:
-            self.maps_by_engine["<active>"] = next_maps
-            next_maps.pop("<active>", None)
+            self._maps_by_engine[ACTIVE_INDEX] = next_maps
+            next_maps.pop(ACTIVE_INDEX, None)
 
         self.active_engine_name = engine_name if next_maps else ""
-        self.reload_map_select_options()
+        # set the active map BEFORE reloading the options. this ensures
+        # the active map name is properly displayed in the scroll menu
         self.set_active_map(next_map_name, True)
+        self.reload_map_select_options()
 
     def set_active_map(self, name_or_index=None, force_reload=False):
         map_name = None
-        map_names = sorted(n for n in self.active_maps if n != "<active>")
+        map_names = sorted(n for n in self.active_maps if n != ACTIVE_INDEX)
         if name_or_index in range(len(map_names)):
             map_name = map_names[name_or_index]
+        elif name_or_index in map_names:
+            map_name = name_or_index
 
         prev_map = self.active_map
         RefineryCore.set_active_map(self, map_name)
@@ -725,8 +730,8 @@ class Refinery(tk.Tk, RefineryCore):
             self.reload_explorers()
 
     def reload_engine_select_options(self):
-        opts = dict(self.maps_by_engine)
-        opts.pop("<active>", None)
+        opts = dict(self._maps_by_engine)
+        opts.pop(ACTIVE_INDEX, None)
         if opts:
             opts = sorted(opts.keys())
         else:
@@ -741,7 +746,7 @@ class Refinery(tk.Tk, RefineryCore):
 
     def reload_map_select_options(self):
         opts = dict(self.active_maps)
-        opts.pop("<active>", None)
+        opts.pop(ACTIVE_INDEX, None)
         if opts:
             opts = sorted(opts.keys())
         else:
@@ -753,8 +758,9 @@ class Refinery(tk.Tk, RefineryCore):
         menu.set_options(opts)
         menu.sel_index = sel_index
 
-    def unload_maps_clicked(self, map_type=False, engines_to_unload=("<active>", ),
-                            maps_to_unload=("<active>", )):
+    def unload_maps_clicked(self, map_type=MAP_TYPE_REGULAR,
+                            engines_to_unload=(ACTIVE_INDEX, ),
+                            maps_to_unload=(ACTIVE_INDEX, )):
         if self._running:
             return
         self._running = True
@@ -765,8 +771,8 @@ class Refinery(tk.Tk, RefineryCore):
             print(format_exc())
         self._running = False
 
-    def unload_maps(self, map_type=False, engines_to_unload=("<active>", ),
-                    maps_to_unload=("<active>", )):
+    def unload_maps(self, map_type=False, engines_to_unload=(ACTIVE_INDEX, ),
+                    maps_to_unload=(ACTIVE_INDEX, )):
         RefineryCore.unload_maps(self, map_type, engines_to_unload,
                                  maps_to_unload)
         if not self.active_maps:
@@ -776,11 +782,11 @@ class Refinery(tk.Tk, RefineryCore):
 
     def load_map(self, map_path, make_active=True, ask_close_open=False, **kw):
         autoload_resources = kw.pop("autoload_resources", self.autoload_resources)
-        new_map = None
+        new_map = prev_active_engine = prev_active_map = None
         try:
             print("Loading %s..." % os.path.basename(map_path))
             new_map = RefineryCore.load_map(
-                self, map_path, not ask_close_open,
+                self, map_path, not ask_close_open, make_active=False,
                 autoload_resources=False, decompress_overwrite=True)
         except MapAlreadyLoadedError:
             if not(ask_close_open and messagebox.askyesno(
@@ -790,14 +796,26 @@ class Refinery(tk.Tk, RefineryCore):
                     os.path.basename(map_path), icon='warning', parent=self)):
                 print("    Skipped")
                 return
-            new_map = RefineryCore.load_map(self, map_path, True,
-                                            autoload_resources=False)
+            prev_active_engine = self.active_engine_name
+            prev_active_map = self.active_map_name
+            new_map = RefineryCore.load_map(
+                self, map_path, True, make_active=False,
+                autoload_resources=False)
+
+            if (new_map.engine == prev_active_engine and
+                new_map.map_name == prev_active_map):
+                # if the map was active before we closed it, make the
+                # newly loaded map active in its place.
+                make_active = True
         except Exception:
             try:
                 self.unload_maps(None)
             except Exception:
                 print(format_exc())
             raise
+
+        if autoload_resources:
+            self.load_resource_maps(new_map)
 
         # TODO: Fix bug where reload_explorers is getting called WAY too often
         # when loading maps outside of the load button, and where the active
@@ -807,9 +825,6 @@ class Refinery(tk.Tk, RefineryCore):
             self.set_active_engine(
                 new_map.engine, new_map.map_name, force_reload=True)
 
-        if autoload_resources:
-            self.load_resource_maps(new_map)
-
         print("    Finished loading %s" % os.path.basename(map_path))
         return new_map
 
@@ -817,13 +832,13 @@ class Refinery(tk.Tk, RefineryCore):
         if not map_paths:
             return
 
-        make_active |= self.active_map is None
-        first_loaded_map = None
+        first_map = None
         for map_path in map_paths:
             try:
                 new_map = self.load_map(map_path, False, ask_close_open, **kw)
-                if new_map is not None and first_loaded_map is None:
-                    first_loaded_map = new_map
+
+                if new_map is not None and first_map is None:
+                    first_map = new_map
             except EngineDetectionError:
                 print(format_exc(0))
             except Exception:
@@ -838,9 +853,9 @@ class Refinery(tk.Tk, RefineryCore):
                       "made, and opening in this mode fails on read-only files.\n")
 
         self.reload_engine_select_options()
-        if make_active and first_loaded_map is not None:
+        if make_active and first_map is not None:
             self.set_active_engine(
-                new_map.engine, new_map.map_name, force_reload=True)
+                first_map.engine, first_map.map_name, force_reload=True)
 
     def load_resource_maps_clicked(self):
         if self.active_map is None:
@@ -934,49 +949,63 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._running = False
 
-    def deprotect(self, save_path=None, **kw):
-        if self.active_map is None:
-            print("No map loaded.")
+    def deprotect(self, save_path=None, map_name=ACTIVE_INDEX,
+                  engine=ACTIVE_INDEX, **kw):
+        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+
+        if halo_map is None:
+            print('No map named "%s" under engine "%s" is loaded.' %
+                  (map_name, engine))
             return
-        elif self.active_map.is_resource:
+        elif halo_map.is_resource:
             print("Cannot deprotect resource maps.")
             return
-        elif self.active_map.engine not in ("halo1ce", "halo1yelo",
-                                            "halo1pc", "halo1vap"):
+        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+                                     "halo1pc", "halo1vap"):
             print("Cannot deprotect this kind of map.")
+            return
+
+        if not save_path:
+            filetypes = [("All", "*")]
+            if halo_map.engine == "halo1vap":
+                filetypes.insert(0, ("Halo mapfile(chimerified)", "*.vap"))
+            elif halo_map.engine == "halo1yelo":
+                filetypes.insert(0, ("Halo mapfile(extra sauce)", "*.yelo"))
+            else:
+                filetypes.insert(0, ("Halo mapfile", "*.map"))
+
+            save_path = asksaveasfilename(
+                initialdir=os.path.dirname(halo_map.filepath), parent=self,
+                title="Choose where to save the deprotected map",
+                filetypes=filetypes)
+
+        if not save_path:
+            print("Deprotection cancelled.")
             return
 
         self._running = True
         try:
-            if not save_path:
-                save_path = asksaveasfilename(
-                    initialdir=os.path.dirname(self.active_map_path), parent=self,
-                    title="Choose where to save the deprotected map",
-                    filetypes=(("Halo mapfile", "*.map"),
-                               ("Halo mapfile(extra sauce)", "*.yelo"),
-                               ("Halo mapfile(chimerified)", "*.vap"),
-                               ("All", "*")))
+            save_path, ext = os.path.splitext(save_path)
+            save_path = sanitize_path(save_path + (ext if ext else (
+                '.yelo' if 'yelo' in halo_map.engine else '.map')))
 
-            if not save_path:
-                print("Deprotection cancelled.")
-            else:
-                save_path, ext = os.path.splitext(save_path)
-                save_path = sanitize_path(save_path + (ext if ext else (
-                    '.yelo' if 'yelo' in self.active_map.engine else '.map')))
+            start = time()
 
-                start = time()
-
-                RefineryCore.deprotect(self, save_path, **kw)
-                print("Completed. Took %s seconds." % round(time() - start, 1))
+            RefineryCore.deprotect(self, save_path, map_name, engine, **kw)
+            print("Completed. Took %s seconds." % round(time() - start, 1))
         except Exception:
             print(format_exc())
 
         self._running = False
 
-    def repair_tag_classes(self):
+    def repair_tag_classes(self, map_name=ACTIVE_INDEX, engine=ACTIVE_INDEX):
         print("Repairing tag classes...")
-        tag_index_array = self.active_map.tag_index.tag_index
-        repaired = RefineryCore.repair_tag_classes(self)
+        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        if not halo_map:
+            return {}
+
+        tag_index_array = halo_map.tag_index.tag_index
+        repaired = RefineryCore.repair_tag_classes(self, map_name, engine)
 
         print("    Deprotected classes of %s of the %s total tags(%s%%)." %
               (len(repaired), len(tag_index_array),
@@ -993,36 +1022,34 @@ class Refinery(tk.Tk, RefineryCore):
                 b = tag_index_array[i]
                 try:
                     print("  [ %s, %s, %s, %s ]" % (
-                        i, b.meta_offset - self.active_map.map_magic,
+                        i, b.meta_offset - halo_map.map_magic,
                         b.class_1.enum_name, b.path))
                 except Exception:
                     print("  [ %s, %s, %s ]" % (
-                        i, b.meta_offset - self.active_map.map_magic, "<UNPRINTABLE>"))
+                        i, b.meta_offset - halo_map.map_magic, "<UNPRINTABLE>"))
             print()
 
         return repaired
 
-    def sanitize_resource_tag_paths(self):
+    def sanitize_resource_tag_paths(self, map_name=ACTIVE_INDEX,
+                                    engine=ACTIVE_INDEX):
         print("Renaming tags using resource map tag paths...")
-        RefineryCore.sanitize_resource_tag_paths(self)
+        RefineryCore.sanitize_resource_tag_paths(self, map_name, engine)
 
-    def _script_scrape_deprotect(self, tag_path_handler, **kw):
+    def _script_scrape_deprotect(self, tag_path_handler, map_name=ACTIVE_INDEX,
+                                 engine=ACTIVE_INDEX, **kw):
         print("Renaming tags using script strings...")
-        RefineryCore._script_scrape_deprotect(self, tag_path_handler, **kw)
+        RefineryCore._script_scrape_deprotect(self, tag_path_handler,
+                                              map_name, engine, **kw)
 
-    def _heuristics_deprotect(self, tag_path_handler, **kw):
-        print("Renaming tags using script strings...")
-        RefineryCore._heuristics_deprotect(self, tag_path_handler, **kw)
-        print("    Finished")
-
-    def _shorten_tag_handler_paths(self, tag_path_handler, **kw):
-        print("Renaming tags using script strings...")
-        RefineryCore._shorten_tag_handler_paths(self, tag_path_handler, **kw)
-
+    def _heuristics_deprotect(self, tag_path_handler, map_name=ACTIVE_INDEX,
+                              engine=ACTIVE_INDEX, **kw):
+        print("Renaming tags using heuristics...")
+        RefineryCore._heuristics_deprotect(self, tag_path_handler,
+                                           map_name, engine, **kw)
     def save_map_as(self, e=None):
-        if not self.map_loaded: return
-
         halo_map = self.active_map
+
         if self.running or halo_map is None:
             return ""
         elif halo_map.is_resource:
@@ -1033,13 +1060,18 @@ class Refinery(tk.Tk, RefineryCore):
             print("Cannot save this kind of map.")
             return ""
 
+        filetypes = [("All", "*")]
+        if halo_map.engine == "halo1vap":
+            filetypes.insert(0, ("Halo mapfile(chimerified)", "*.vap"))
+        elif halo_map.engine == "halo1yelo":
+            filetypes.insert(0, ("Halo mapfile(extra sauce)", "*.yelo"))
+        else:
+            filetypes.insert(0, ("Halo mapfile", "*.map"))
+
         save_path = asksaveasfilename(
             initialdir=os.path.dirname(self.active_map_path), parent=self,
             title="Choose where to save the map",
-            filetypes=(("Halo mapfile", "*.map"),
-                       ("Halo mapfile(extra sauce)", "*.yelo"),
-                       ("Halo mapfile(chimerified)", "*.vap"),
-                       ("All", "*")))
+            filetypes=tuple(filetypes))
 
         if not save_path:
             return ""
@@ -1053,12 +1085,13 @@ class Refinery(tk.Tk, RefineryCore):
         self._running = False
         return save_path
 
-    def save_map(self, save_path=None, engine="<active>", map_name="<active>", **kw):
+    def save_map(self, save_path=None, map_name=ACTIVE_INDEX,
+                 engine=ACTIVE_INDEX, **kw):
         reload_window = kw.pop("reload_window", True)
         prompt_strings_expand = kw.pop("prompt_strings_expand", False)
         prompt_internal_rename = kw.pop("prompt_internal_rename", False)
 
-        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
         if halo_map is None:
             return ""
         elif halo_map.is_resource:
@@ -1070,17 +1103,6 @@ class Refinery(tk.Tk, RefineryCore):
             return ""
         elif not save_path:
             save_path = halo_map.filepath
-
-        new_map_name = os.path.basename(save_path)
-        if (prompt_internal_rename and len(new_map_name) < 32 and
-            halo_map.map_name.lower() != new_map_name.lower()):
-            if messagebox.askyesno(
-                    "Internal name mismatch",
-                    ("A maps internal and file names must match for Halo "
-                     "to be able to properly load them. Do you want to "
-                     "change the internal name to match its filename?"),
-                    icon='question', parent=self):
-                halo_map.map_header.map_name = new_map_name
 
         orig_tag_paths = halo_map.orig_tag_paths
         index_array    = halo_map.tag_index.STEPTREE
@@ -1099,9 +1121,21 @@ class Refinery(tk.Tk, RefineryCore):
             print("    Save cancelled")
             return ""
 
+        new_map_name = os.path.basename(save_path)
+        if (prompt_internal_rename and len(new_map_name) < 32 and
+            halo_map.map_name.lower() != new_map_name.lower()):
+            if messagebox.askyesno(
+                    "Internal name mismatch",
+                    ("A maps internal and file names must match for Halo "
+                     "to be able to properly load them. Do you want to "
+                     "change the internal name to match its filename?"),
+                    icon='question', parent=self):
+                halo_map.map_header.map_name = new_map_name
+
         print('Saving "%s"' % save_path)
         try:
-            save_path = RefineryCore.save_map(self, halo_map=halo_map, **kw)
+            save_path = RefineryCore.save_map(self, save_path, map_name,
+                                              engine, **kw)
             print("    Finished")
         except Exception:
             print(format_exc())

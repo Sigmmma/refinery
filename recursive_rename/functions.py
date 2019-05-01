@@ -19,19 +19,11 @@ INVALID_MODEL_NAMES = frozenset(
 
 
 class MinPriority:
-    _tag_path_handler = None
-    _index = None
-    def __init__(self, tag_path_handler=None, index=0):
-        self._tag_path_handler = tag_path_handler
-        self._index = int(index)
+    _val = INF
     @property
-    def val(self):
-        if self.tag_path_handler:
-            return self._tag_path_handler.get_priority_min(self._index)
+    def val(self): return self._val
     @val.setter
-    def val(self, new_val):
-        if self.tag_path_handler:
-            self._tag_path_handler.set_priority_min(self._index, new_val)
+    def val(self, new_val): self._val = min(new_val, self.val)
 
 
 def sanitize_win32_path(name):
@@ -191,19 +183,20 @@ def recursive_rename(tag_id, halo_map, tag_path_handler,
     kw.setdefault("depth", INF)
     priority = kw.get("priority")
     if tag_id is None or tag_id not in range(len(halo_map.tag_index.tag_index)):
-        return -INF
+        return INF
 
-    min_prio = MinPriority(tag_path_handler, tag_id & 0xFFff)
+    min_priority = MinPriority()
+    curr_min_prio = tag_path_handler.get_priority_min(tag_id & 0xFFff)
     if tag_id in seen or kw["depth"] < 0:
         # do nothing if tag already seen or already at max depth
-        return min_prio.val
-    elif kw.get("use_minimum_priorities"):
-        if priority is not None and min_prio.val > priority:
-            # do nothing if priority is lower than the lowest priority
-            # of any tag referenced by this tag or its dependencies
-            return min_prio.val
+        return curr_min_prio
+    elif kw.get("use_minimum_priorities") and (priority is not None and
+                                               curr_min_prio > priority):
+        # do nothing if priority is lower than the lowest priority
+        # of any tag referenced by this tag or its dependencies
+        return curr_min_prio
 
-    kw.update(depth=kw.setdefault("depth", INF) - 1, min_priority=min_prio)
+    kw.update(depth=kw["depth"] - 1, min_priority=min_priority)
     seen.add(tag_id)
 
     rename_func = recursive_rename_functions.get(
@@ -215,13 +208,14 @@ def recursive_rename(tag_id, halo_map, tag_path_handler,
         except Exception:
             print(format_exc())
     else:
-        min_prio.val = tag_path_handler.set_path_by_priority(
+        min_priority.val = tag_path_handler.set_path_by_priority(
             tag_id, root_dir + sub_dir + name, priority,
             kw.get("override"), kw.get("do_printout"))
 
     # remove the tag_id so this tag can be revisited by higher up references
     seen.remove(tag_id)
-    return min_prio.val
+    tag_path_handler.set_priority_min(tag_id & 0xFFff, min_priority.val)
+    return min_priority.val
 
 
 def rename_scnr(tag_id, halo_map, tag_path_handler,
@@ -245,7 +239,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         kw.get("override"), kw.get("do_printout"))
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
-    
+
     kw_no_priority = dict(kw)
     kw_no_priority.pop("priority", None)
 
@@ -364,15 +358,18 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         if not anim_name:
             anim_name = "ai anim"
 
-        min_prio.val = recursive_rename(get_tag_id(b.animation_graph), name=anim_name,
-                         sub_dir=cinematics_dir + "animations\\",
-                         priority=LOW_PRIORITY, **kw_no_priority)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.animation_graph), name=anim_name,
+            sub_dir=cinematics_dir + "animations\\",
+            priority=LOW_PRIORITY, **kw_no_priority)
 
     # rename bsp references
+    i = 0
     for b in meta.structure_bsps.STEPTREE:
-        min_prio.val = recursive_rename(get_tag_id(b.structure_bsp),
-                         priority=SCNR_BSPS_PRIORITY,
-                         sub_dir=sub_dir, name=name, **kw_no_priority)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.structure_bsp), priority=SCNR_BSPS_PRIORITY,
+            sub_dir=sub_dir, name="%s %s" % (name, i), **kw_no_priority)
+        i += 1
 
     # rename bsp modifiers
     bsp_modifiers = getattr(getattr(meta, "bsp_modifiers", ()), "STEPTREE", ())
@@ -500,13 +497,14 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
     for i in range(len(meta.sounds.STEPTREE)):
         water_name = {0:"enter_water", 1:"exit_water"}.get(i, "unknown")
         min_prio.val = recursive_rename(
-            get_tag_id(meta.sounds.STEPTREE[i].sound),
-            name=water_name, priority=INF,
-            sub_dir="sound\\sfx\\impulse\\coolant\\", **kwargs_no_priority)
+            get_tag_id(meta.sounds.STEPTREE[i].sound), priority=INF,
+            sub_dir="sound\\sfx\\impulse\\coolant\\", name=water_name,
+            **kwargs_no_priority)
 
     for b in meta.cameras.STEPTREE:
-        min_prio.val = recursive_rename(get_tag_id(b.camera), sub_dir=sub_dir, priority=INF,
-                         name="default unit camera track", **kwargs_no_priority)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.camera), priority=INF, sub_dir=sub_dir,
+            name="default unit camera track", **kwargs_no_priority)
 
     i = 0
     for b in meta.grenades.STEPTREE:
@@ -543,36 +541,46 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
         exp_tex = b.experimental_textures
         vid_eff_tex = b.video_effect_textures
 
-        min_prio.val = recursive_rename(get_tag_id(func_tex.distance_attenuation),
-                         name="distance attenuation", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(func_tex.vector_normalization),
-                         name="vector normalization", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(func_tex.atmospheric_fog_density),
-                         name="atmospheric fog density", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(func_tex.planar_fog_density),
-                         name="planar fog density", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(func_tex.linear_corner_fade),
-                         name="linear corner fade", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(func_tex.active_camouflage_distortion),
-                         name="active camouflage distortion", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(func_tex.glow), name="glow", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(func_tex.distance_attenuation),
+            name="distance attenuation", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(func_tex.vector_normalization),
+            name="vector normalization", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(func_tex.atmospheric_fog_density),
+            name="atmospheric fog density", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(func_tex.planar_fog_density),
+            name="planar fog density", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(func_tex.linear_corner_fade),
+            name="linear corner fade", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(func_tex.active_camouflage_distortion),
+            name="active camouflage distortion", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(func_tex.glow), name="glow", **rast_kwargs)
 
-        min_prio.val = recursive_rename(get_tag_id(def_tex.default_2d),
-                         name="default 2d", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(def_tex.default_3d),
-                         name="default 3d", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(def_tex.default_cubemap),
-                         name="default cube map", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(def_tex.default_2d), name="default 2d", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(def_tex.default_3d), name="default 3d", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(def_tex.default_cubemap),
+            name="default cube map", **rast_kwargs)
 
-        min_prio.val = recursive_rename(get_tag_id(exp_tex.test0),
-                         name="water_ff", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(exp_tex.test1),
-                         name="cryo glass", **exp_tex_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(exp_tex.test0), name="water_ff", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(exp_tex.test1), name="cryo glass", **exp_tex_kwargs)
 
-        min_prio.val = recursive_rename(get_tag_id(vid_eff_tex.video_scanline_map),
-                         name="video mask", **rast_kwargs)
-        min_prio.val = recursive_rename(get_tag_id(vid_eff_tex.video_noise_map),
-                         name="video noise", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(vid_eff_tex.video_scanline_map),
+            name="video mask", **rast_kwargs)
+        min_prio.val = recursive_rename(
+            get_tag_id(vid_eff_tex.video_noise_map),
+            name="video noise", **rast_kwargs)
 
     old_tags_kwargs = dict(kw)
     ui_bitm_kwargs = dict(kw)
@@ -720,36 +728,44 @@ def rename_hudg(tag_id, halo_map, tag_path_handler,
     name = tag_path_handler.get_basename(tag_id)
 
     msg_param = meta.messaging_parameters
-    min_prio.val = recursive_rename(get_tag_id(msg_param.single_player_font),
-                     sub_dir=ui_dir, name="font sp", **kw)
-    min_prio.val = recursive_rename(get_tag_id(msg_param.multi_player_font),
-                     sub_dir=ui_dir, name="font mp", **kw)
-    min_prio.val = recursive_rename(get_tag_id(msg_param.item_message_text),
-                     sub_dir=ui_hud_dir, name="hud item messages", **kw)
-    min_prio.val = recursive_rename(get_tag_id(msg_param.alternate_icon_text),
-                     sub_dir=ui_hud_dir, name="hud icon messages", **kw)
-    min_prio.val = recursive_rename(get_tag_id(msg_param.icon_bitmap),
-                     sub_dir=ui_hud_dir + bitmaps_dir,
-                     name="hud msg icons", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(msg_param.single_player_font),
+        sub_dir=ui_dir, name="font sp", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(msg_param.multi_player_font),
+        sub_dir=ui_dir, name="font mp", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(msg_param.item_message_text),
+        sub_dir=ui_hud_dir, name="hud item messages", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(msg_param.alternate_icon_text),
+        sub_dir=ui_hud_dir, name="hud icon messages", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(msg_param.icon_bitmap),
+        sub_dir=ui_hud_dir + bitmaps_dir, name="hud msg icons", **kw)
 
-    min_prio.val = tag_path_handler.set_path_by_priority(
+    tag_path_handler.set_path_by_priority(
          get_tag_id(meta.hud_messages), sub_dir + "hud_messages", INF,
          kw.get("override"), kw.get("do_printout"))
 
-    min_prio.val = recursive_rename(get_tag_id(meta.waypoint_parameters.arrow_bitmaps),
-                     sub_dir=ui_hud_dir + bitmaps_dir + "combined\\",
-                     name="hud waypoints", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.waypoint_parameters.arrow_bitmaps),
+        sub_dir=ui_hud_dir + bitmaps_dir + "combined\\",
+        name="hud waypoints", **kw)
 
-    min_prio.val = recursive_rename(get_tag_id(meta.hud_globals.default_weapon_hud),
-                     sub_dir=ui_hud_dir, name="empty", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.hud_globals.default_weapon_hud),
+        sub_dir=ui_hud_dir, name="empty", **kw)
 
-    min_prio.val = recursive_rename(get_tag_id(meta.hud_damage_indicators.indicator_bitmap),
-                     sub_dir=ui_hud_dir + bitmaps_dir + "combined\\",
-                     name="hud damage arrows", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.hud_damage_indicators.indicator_bitmap),
+        sub_dir=ui_hud_dir + bitmaps_dir + "combined\\",
+        name="hud damage arrows", **kw)
 
-    min_prio.val = recursive_rename(get_tag_id(meta.carnage_report_bitmap),
-                     sub_dir=ui_shell_dir + bitmaps_dir,
-                     name="postgame carnage report", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.carnage_report_bitmap),
+        sub_dir=ui_shell_dir + bitmaps_dir,
+        name="postgame carnage report", **kw)
 
 
 def rename_sbsp(tag_id, halo_map, tag_path_handler,
@@ -1124,12 +1140,12 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
         i = 0
         for extra_layer in extra_layers.STEPTREE:
             ex_layer_name = name
-            if "ex " not in name:
+            if len(extra_layers.STEPTREE) == 1:
                 ex_layer_name += " ex "
             else:
                 ex_layer_name += " ex %s" % i
-            min_prio.val = recursive_rename(get_tag_id(extra_layer),
-                             name=ex_layer_name, **kw)
+            min_prio.val = recursive_rename(
+                get_tag_id(extra_layer), name=ex_layer_name, **kw)
             i += 1
 
     elif shdr_type == "swat":
@@ -1549,14 +1565,16 @@ def rename_actv(tag_id, halo_map, tag_path_handler,
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    min_prio.val = recursive_rename(get_tag_id(meta.unit), sub_dir=sub_dir,
-                     name=name + " unit", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.unit), sub_dir=sub_dir, name=name, **kw)
 
     kw["override"] = True
-    min_prio.val = recursive_rename(get_tag_id(meta.actor_definition), sub_dir=sub_dir,
-                     name=name + " actor", **kw)
-    min_prio.val = recursive_rename(get_tag_id(meta.major_variant), sub_dir=sub_dir,
-                     name=name + " major", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.actor_definition), sub_dir=sub_dir,
+        name=name + " actor", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.major_variant), sub_dir=sub_dir,
+        name=name + " major", **kw)
 
     # don't want to tie any items to an actor_variant with infinite priority
     if kw.get("priority", 0) > UNIT_WEAPON_PRIORITY:
@@ -2036,31 +2054,35 @@ def rename_lsnd(tag_id, halo_map, tag_path_handler,
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    min_prio.val = recursive_rename(get_tag_id(meta.continuous_damage_effect),
-                     name=name + " continuous damage",
-                     sub_dir=sub_dir, **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(meta.continuous_damage_effect),
+        name=name + " continuous damage", sub_dir=sub_dir, **kw)
 
     i = 0
     tracks_dir = sub_dir + name + " tracks & details\\"
     for b in meta.tracks.STEPTREE:
-        min_prio.val = recursive_rename(get_tag_id(b.start), name="track %s start" % i,
-                         sub_dir=tracks_dir, **kw)
-        min_prio.val = recursive_rename(get_tag_id(b.loop), name="track %s loop" % i,
-                         sub_dir=tracks_dir, **kw)
-        min_prio.val = recursive_rename(get_tag_id(b.end), name="track %s end" % i,
-                         sub_dir=tracks_dir, **kw)
-        min_prio.val = recursive_rename(get_tag_id(b.alternate_loop),
-                         name="track %s alt loop" % i,
-                         sub_dir=tracks_dir, **kw)
-        min_prio.val = recursive_rename(get_tag_id(b.alternate_end),
-                         name="track %s alt end" % i,
-                         sub_dir=tracks_dir, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.start), name="track %s start" % i,
+            sub_dir=tracks_dir, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.loop), name="track %s loop" % i,
+            sub_dir=tracks_dir, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.end), name="track %s end" % i,
+            sub_dir=tracks_dir, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.alternate_loop), name="track %s alt loop" % i,
+            sub_dir=tracks_dir, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.alternate_end), name="track %s alt end" % i,
+            sub_dir=tracks_dir, **kw)
         i += 1
 
     i = 0
     for b in meta.detail_sounds.STEPTREE:
-        min_prio.val = recursive_rename(get_tag_id(b.sound), name="detail sound %s" % i,
-                         sub_dir=tracks_dir, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.sound), name="detail sound %s" % i,
+            sub_dir=tracks_dir, **kw)
         i += 1
 
 

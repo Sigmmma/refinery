@@ -249,8 +249,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
         item_name = self.active_map.map_header.map_name
 
         # ask for extraction settings
-        settings = ask_extract_settings(self, def_settings,
-                                        title=item_name, renamable=False)
+        settings = ask_extract_settings(
+            self, def_settings, title=item_name, renamable=False)
 
         if settings['accept_settings'].get():
             settings['tag_index_refs'] = self._compile_list_of_selected("")
