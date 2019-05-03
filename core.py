@@ -203,7 +203,7 @@ class RefineryCore:
         kwargs.setdefault("overwrite", self.overwrite)
         kwargs.setdefault("recursive", self.recursive)
         kwargs.setdefault("tagslist_path", self.tagslist_path)
-        kwargs.setdefault("engine_name", ACTIVE_INDEX)
+        kwargs.setdefault("engine", ACTIVE_INDEX)
         kwargs.setdefault("map_name", ACTIVE_INDEX)
         self._extract_queue.append(RefineryQueueItem(operation, **kwargs))
 
@@ -222,13 +222,13 @@ class RefineryCore:
         if name == ACTIVE_INDEX:
             return
 
-        engine_name = None
+        engine = None
         if name is None and self._maps_by_engine:
-            engine_name = iter(self._maps_by_engine).__next__()
+            engine = iter(self._maps_by_engine).__next__()
         elif name in self._maps_by_engine:
-            engine_name = name
+            engine = name
 
-        next_maps = self._maps_by_engine.get(engine_name)
+        next_maps = self._maps_by_engine.get(engine)
         if not next_maps:
             next_map_name = None
         elif map_name in next_maps:
@@ -245,7 +245,7 @@ class RefineryCore:
             self._maps_by_engine[ACTIVE_INDEX] = next_maps
             next_maps.pop(ACTIVE_INDEX, None)
 
-        self.active_engine_name = engine_name if next_maps else ""
+        self.active_engine_name = engine if next_maps else ""
         self.set_active_map(next_map_name)
 
     def set_active_map(self, name=None):
@@ -529,16 +529,15 @@ class RefineryCore:
         return halo_map.load_resource_maps(maps_dir, map_paths, **kw)
 
     def deprotect_all(self, **kw):
-        for engine_name in self._maps_by_engine:
-            if engine_name not in ("halo1ce", "halo1yelo",
-                                   "halo1pc", "halo1vap"):
+        for engine in self._maps_by_engine:
+            if engine not in ("halo1ce", "halo1yelo", "halo1pc", "halo1vap"):
                 continue
 
-            maps = self._maps_by_engine[engine_name]
+            maps = self._maps_by_engine[engine]
             for map_name in sorted(maps):
                 try:
                     if map_name != ACTIVE_INDEX and not maps[map_name].is_resource:
-                        self.deprotect(None, engine_name, map_name, **kw)
+                        self.deprotect(None, engine, map_name, **kw)
                 except Exception:
                     print(format_exc())
 
@@ -1069,12 +1068,17 @@ class RefineryCore:
         item = self.dequeue()
         while item:
             if do_printout:
-                print("\n%s:" % item.operation, end="")
-                if hasattr(item, "engine_name"):
-                    print(" %s:" % item.engine_name, end="")
-                if hasattr(item, "map_name"):
-                    print(" %s" % item.map_name, end="")
-                print()
+                engine = getattr(item, "engine", None)
+                map_name = getattr(item, "map_name", None)
+                
+                halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+                print("\n%s: " % item.operation, end="")
+                if halo_map:
+                    print("%s: %s" % (halo_map.engine, halo_map.map_name))
+                elif engine:
+                    print(item.engine)
+                elif map_name:
+                    print(item.map_name)
 
             try:
                 self.process_queue_item(item, **extract_kw)
@@ -1104,25 +1108,25 @@ class RefineryCore:
         op = queue_item.operation
         kw.update(queue_item.operation_kwargs)
 
-        engine_name = kw.pop("engine_name", ACTIVE_INDEX)
+        engine = kw.pop("engine", ACTIVE_INDEX)
         map_name = kw.pop("map_name", ACTIVE_INDEX)
         tag_ids = kw.pop("tag_ids", ())
         tag_id = kw.pop("tag_id", 0xFFff)
         filepath = sanitize_path(kw.pop("filepath", ""))
 
-        halo_map = self._maps_by_engine.get(engine_name, {}).get(map_name)
+        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
         if not halo_map:
             return
 
         if op in ("extract_tags", "extract_data"):
-            kw.update(tags_to_ignore=ignore)
             if op == "extract_tags":
                 kw["extract_mode"] = "tags"
-                ignore = tags_by_map.setdefault((engine_name, map_name), set())
+                ignore = tags_by_map.setdefault((engine, map_name), set())
             else:
                 kw["extract_mode"] = "data"
-                ignore = data_by_map.setdefault((engine_name, map_name), set())
+                ignore = data_by_map.setdefault((engine, map_name), set())
 
+            kw.update(tags_to_ignore=ignore)
             ignore.update(self.extract_tags(
                 TagIndexCrawler(tag_ids).get_filtered_tag_ids(halo_map), **kw))
         elif op == "extract_tag":
@@ -1133,22 +1137,22 @@ class RefineryCore:
                 kw["filepath"] = filepath
 
             kw["extract_mode"] = "tags"
-            ignore = tags_by_map.setdefault((engine_name, map_name), set())
+            ignore = tags_by_map.setdefault((engine, map_name), set())
 
             if tag_ids[0] not in ignore:
-                self.extract_tag(tag_ids[0], map_name, engine_name, **kw)
+                self.extract_tag(tag_ids[0], map_name, engine, **kw)
                 ignore.add(tag_ids[0])
         elif op == "extract_cheape" and map_name not in cheapes:
             cheapes_extracted.add(map_name)
-            self.extract_cheape(filepath, map_name, engine_name)
+            self.extract_cheape(filepath, map_name, engine)
         elif op == "deprotect_map":
-            self.deprotect(filepath, map_name, engine_name, **kw)
+            self.deprotect(filepath, map_name, engine, **kw)
         elif op == "load_map":
             self.load_map(filepath, **kw)
         elif op == "unload_map":
-            self.unload_map(map_name, engine_name, **kw)
+            self.unload_map(map_name, engine, **kw)
         elif op == "save_map":
-            self.save_map(filepath, map_name, engine_name, **kw)
+            self.save_map(filepath, map_name, engine, **kw)
         elif op == "rename_map":
             halo_map.map_header.map_name = item.new_name
         elif op == "spoof_map_crc":
@@ -1171,7 +1175,7 @@ class RefineryCore:
         elif op == "switch_map":
             self.set_active_map(map_name)
         elif op == "switch_engine":
-            self.set_active_engine(engine_name)
+            self.set_active_engine(engine)
         else:
             raise ValueError('Unknown queue operation "%s"' % op)
 
@@ -1181,13 +1185,14 @@ class RefineryCore:
         If recursive == True and extract_mode == "tags", all dependent tags
         will be extracted as well. Returns a set() of all tag ids extracted.
         '''
-        extract_mode = kw.pop("extract_mode", self.extract_mode)
+        extract_mode = kw.setdefault("extract_mode", self.extract_mode)
         assert extract_mode in ("tags", "data")
 
         tags_to_ignore = set(kw.pop("tags_to_ignore", ()))
-        print_errors = kw.pop("print_errors", self.print_errors)
-        overwrite    = kw.pop("overwrite", self.overwrite)
-        recursive    = kw.pop("recursive", False)
+        recursive     = kw.pop("recursive", self.recursive)
+        tagslist_path = kw.pop("tagslist_path", self.tagslist_path)
+
+        print_errors  = kw.get("print_errors", self.print_errors)
 
         if isinstance(tag_ids, int):
             tag_ids = (tag_ids, )
@@ -1236,7 +1241,7 @@ class RefineryCore:
                 try:
                     if self.extract_tag(tag_id, map_name, engine, **kw):
                         extracted.add(tag_id)
-                        if not self.tagslist_path:
+                        if not tagslist_path:
                             continue
 
                         tag_index_ref = halo_map.tag_index.tag_index[tag_id]
@@ -1258,10 +1263,10 @@ class RefineryCore:
             if rsrc_map.is_resource or rsrc_map is halo_map:
                 rsrc_map.clear_map_cache()
 
-        if self.tagslist_path:
+        if tagslist_path:
             tagslist = "%s tags in: %s\n%s" % (
                 len(extracted), out_dir, tagslist)
-            if self.write_tagslist(tagslist, self.tagslist_path):
+            if self.write_tagslist(tagslist, tagslist_path):
                 if do_printout:
                     print("Could not create/open tagslist. Either run "
                           "Refinery as admin, or choose a directory "
@@ -1311,18 +1316,17 @@ class RefineryCore:
         if self.force_lower_case_paths:
             tag_path = tag_path.lower()
 
-
         tag_cls = fourcc(tag_index_ref.class_1.data)
         if extract_mode == "tags":
             out_dir = kw.get("out_dir", self.tags_dir)
             filepath = kw.pop("filepath", os.path.join(out_dir, tag_path))
             do_extract = ((overwrite or not os.path.isfile(filepath))
-                          and tag_cls not in halo_map.tag_headers)
+                          and tag_cls in halo_map.tag_headers)
 
             if not(do_extract or get_dependencies):
                 return False
         else:
-            kw.setdefault("out_dir", self.data_dir)
+            out_dir = kw.get("out_dir", self.data_dir)
             do_extract = True
             get_dependencies = False # it makes no sense to fill out
             #                          dependencies in data extraction
@@ -1345,7 +1349,7 @@ class RefineryCore:
             decode_adpcm=kw.pop("decode_adpcm", self.decode_adpcm),
             )
 
-        if is_gen1 and full_tag_class == "scenario":
+        if is_gen1 and full_tag_class == "scenario" and extract_mode == "data":
             if self.use_scenario_names_for_script_names:
                 extract_kw["hsc_node_strings_by_type"].update(
                     get_h1_scenario_script_object_type_strings(meta))
@@ -1385,7 +1389,7 @@ class RefineryCore:
             if not do_extract:
                 return False
 
-        meta = halo_map.meta_to_tag_data(meta, tag_cls, tag_index_ref, **convert_kw)
+        meta = halo_map.meta_to_tag_data(meta, tag_cls, tag_index_ref, **extract_kw)
         if not meta:
             raise MetaConversionError("Failed to convert meta to tag")
 
@@ -1402,10 +1406,10 @@ class RefineryCore:
                 f.truncate(0)
                 f.write(halo_map.tag_headers[tag_cls])
                 if is_gen1:
-                    with FieldType.force_big():
+                    with FieldType.force_big:
                         f.write(meta.serialize(calc_pointers=False))
                 else:
-                    with FieldType.force_normal():
+                    with FieldType.force_normal:
                         f.write(meta.serialize(calc_pointers=False))
         except PermissionError:
             raise RefineryError(
@@ -1420,13 +1424,13 @@ class RefineryCore:
 
     def write_tagslist(self, tagslist, tagslist_path):
         try:
-            f = open(tags_list_path, 'a')
+            f = open(tagslist_path, 'a')
         except Exception:
             try:
-                f = open(tags_list_path, 'w')
+                f = open(tagslist_path, 'w')
             except Exception:
                 try:
-                    f = open(tags_list_path, 'r+')
+                    f = open(tagslist_path, 'r+')
                 except Exception:
                     f = None
 
