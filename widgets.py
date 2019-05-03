@@ -81,7 +81,7 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
-        tags_list_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
+        tagslist_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
         )
 
     settings_vars['rename_string'].set(def_vars.pop('rename_string', ''))
@@ -239,11 +239,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
             print("Cannot interact with Halo 2 Xbox maps.")
             return
 
-        app_root = self.app_root
         def_settings = {}
-        if app_root:
-            def_settings = dict(app_root.tk_vars)
-            if app_root.running:
+        if self.app_root:
+            def_settings = dict(self.app_root.tk_vars)
+            if self.app_root.running:
                 return
 
         item_name = self.active_map.map_header.map_name
@@ -271,11 +270,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
             print("Cannot interact with Halo 2 Xbox maps.")
             return
 
-        app_root = self.app_root
         def_settings = {}
-        if app_root:
-            def_settings = dict(app_root.tk_vars)
-            if app_root.running:
+        if self.app_root:
+            def_settings = dict(self.app_root.tk_vars)
+            if self.app_root.running:
                 return
 
         map_name = self.active_map.map_header.map_name
@@ -653,11 +651,10 @@ class ExplorerClassTree(ExplorerHierarchyTree):
         if self.queue_tree is None:
             return
 
-        app_root = self.app_root
         def_settings = {}
-        if app_root:
-            def_settings = dict(app_root.tk_vars)
-            if app_root.running:
+        if self.app_root:
+            def_settings = dict(self.app_root.tk_vars)
+            if self.app_root.running:
                 return
 
         map_name = self.active_map.map_header.map_name
@@ -855,7 +852,7 @@ class RefinerySettingsWindow(tk.Toplevel):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("bitmap_extract_format",
-                     "tags_dir", "data_dir", "tags_list_path"):
+                     "tags_dir", "data_dir", "tagslist_path"):
             object.__setattr__(self, attr, settings.get(attr, tk.StringVar(self)))
 
 
@@ -877,7 +874,7 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         # tags list
         self.tags_list_entry = tk.Entry(
-            self.tags_list_frame, textvariable=self.tags_list_path)
+            self.tags_list_frame, textvariable=self.tagslist_path)
         self.browse_tags_list_button = tk.Button(
             self.tags_list_frame, text="Browse",
             command=self.tags_list_browse, width=6)
@@ -1083,7 +1080,7 @@ class RefinerySettingsWindow(tk.Toplevel):
 
     def tags_list_browse(self):
         try:
-            init_dir = dirname(self.tags_list_path.get())
+            init_dir = dirname(self.tagslist_path.get())
         except Exception:
             init_dir = None
         dirpath = asksaveasfilename(
@@ -1094,7 +1091,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         if not dirpath:
             return
 
-        self.tags_list_path.set(sanitize_path(dirpath))
+        self.tagslist_path.set(sanitize_path(dirpath))
 
 
 class RefineryActionsWindow(tk.Toplevel):
@@ -1138,7 +1135,7 @@ class RefineryActionsWindow(tk.Toplevel):
         self.rename_string   = settings.get('rename_string', tk.StringVar(self))
         self.newtype_string  = settings.get('newtype_string', tk.StringVar(self))
         self.extract_to_dir  = settings.get('out_dir', tk.StringVar(self))
-        self.tags_list_path  = settings.get('tags_list_path', tk.StringVar(self))
+        self.tagslist_path   = settings.get('tagslist_path', tk.StringVar(self))
         self.extract_mode    = settings.get('extract_mode', tk.StringVar(self))
         self.recursive_rename = tk.IntVar(self)
         self.resizable(1, 0)
@@ -1191,7 +1188,7 @@ class RefineryActionsWindow(tk.Toplevel):
 
         # tags list
         self.tags_list_entry = tk.Entry(
-            self.tags_list_frame, textvariable=self.tags_list_path)
+            self.tags_list_frame, textvariable=self.tagslist_path)
         self.browse_tags_list_button = tk.Button(
             self.tags_list_frame, text="Browse", command=self.tags_list_browse)
 
@@ -1329,7 +1326,7 @@ class RefineryActionsWindow(tk.Toplevel):
 
     def tags_list_browse(self):
         try:
-            init_dir = dirname(self.tags_list_path.get())
+            init_dir = dirname(self.tagslist_path.get())
         except Exception:
             init_dir = None
         dirpath = asksaveasfilename(
@@ -1340,7 +1337,7 @@ class RefineryActionsWindow(tk.Toplevel):
         if not dirpath:
             return
 
-        self.tags_list_path.set(sanitize_path(dirpath))
+        self.tagslist_path.set(sanitize_path(dirpath))
 
     def extract_to_browse(self):
         dirpath = askdirectory(
