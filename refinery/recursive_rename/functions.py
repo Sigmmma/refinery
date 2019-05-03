@@ -366,9 +366,13 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     # rename bsp references
     i = 0
     for b in meta.structure_bsps.STEPTREE:
+        bsp_name = name
+        if len(meta.structure_bsps.STEPTREE) == 1:
+            bsp_name += " %s" % i
+
         min_prio.val = recursive_rename(
             get_tag_id(b.structure_bsp), priority=SCNR_BSPS_PRIORITY,
-            sub_dir=sub_dir, name="%s %s" % (name, i), **kw_no_priority)
+            sub_dir=sub_dir, name=bsp_name, **kw_no_priority)
         i += 1
 
     # rename bsp modifiers

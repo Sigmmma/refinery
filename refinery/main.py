@@ -675,21 +675,21 @@ class Refinery(tk.Tk, RefineryCore):
 
     def set_active_engine(self, name_or_index=None, map_name=None,
                           force_reload=False):
-        engine_name = None
-        engine_names = sorted(n for n in self._maps_by_engine if n != ACTIVE_INDEX)
+        engine = None
+        engines = sorted(n for n in self._maps_by_engine if n != ACTIVE_INDEX)
 
         if isinstance(name_or_index, int):
-            if name_or_index in range(len(engine_names)):
-                engine_name = engine_names[name_or_index]
-        elif name_or_index is None and engine_names:
-            engine_name = iter(sorted(engine_names)).__next__()
-        elif name_or_index in engine_names:
-            engine_name = name_or_index
+            if name_or_index in range(len(engines)):
+                engine = engines[name_or_index]
+        elif name_or_index is None and engines:
+            engine = iter(sorted(engines)).__next__()
+        elif name_or_index in engines:
+            engine = name_or_index
 
-        if engine_name is None and not force_reload:
+        if engine is None and not force_reload:
             return
 
-        next_maps = self._maps_by_engine.get(engine_name)
+        next_maps = self._maps_by_engine.get(engine)
         if self.active_maps is next_maps and not force_reload:
             # selected same engine. nothing to change
             return
@@ -709,7 +709,7 @@ class Refinery(tk.Tk, RefineryCore):
             self._maps_by_engine[ACTIVE_INDEX] = next_maps
             next_maps.pop(ACTIVE_INDEX, None)
 
-        self.active_engine_name = engine_name if next_maps else ""
+        self.active_engine_name = engine if next_maps else ""
         # set the active map BEFORE reloading the options. this ensures
         # the active map name is properly displayed in the scroll menu
         self.set_active_map(next_map_name, True)
@@ -1153,9 +1153,9 @@ class Refinery(tk.Tk, RefineryCore):
 
         if not self.map_loaded:
             return
-        elif not self.extract_queue:
+        elif not self.queue_tree.queue_info:
             self.queue_add_all()
-            if not self.extract_queue:
+            if not self.queue_tree.queue_info:
                 return
 
         self._running = True
@@ -1166,6 +1166,32 @@ class Refinery(tk.Tk, RefineryCore):
         self._running = False
 
     def process_queue(self, **kw):
+        # lets be a lazy fuck and generate self._extract_queue
+        # on the fly rather than reworking a lot of the widgets
+        # module to work with RefineryQueueItem
+        del self._extract_queue[:]
+        cheapes = set()
+
+        for queue_item_iid, settings in self.queue_tree.queue_info.items():
+            op_kw = {k: v.get() for k, v in
+                     settings.items() if k in self.tk_vars}
+            tag_ids = list(b.id & 0xFFff for b in settings["tag_index_refs"])
+
+            engine = settings['halo_map'].engine
+            map_name = settings['halo_map'].map_name
+
+            self.enqueue("extract_tags"
+                         if op_kw["extract_mode"] == "tags" else
+                         "extract_data",
+                         queue_item_iid=queue_item_iid, tag_ids=tag_ids,
+                         **op_kw)
+
+            engine_map_key = (engine, map_name)
+            if (op_kw.get("extract_yelo_cheape", self.extract_yelo_cheape)
+                and engine_map_key not in cheapes):
+                self.enqueue("extract_cheape", **op_kw)
+                cheapes.add(engine_map_key)
+
         tags_by_map, data_by_map = RefineryCore.process_queue(self, **kw)
         tags_extracted = data_extracted = 0
         for tag_ids in tags_by_map.values():
@@ -1181,16 +1207,15 @@ class Refinery(tk.Tk, RefineryCore):
     def process_queue_item(self, queue_item, **kw):
         self.update_idletasks()
         try:
-            self.queue_tree.tags_tree.delete(queue_item.iid)
+            del self.queue_tree.queue_info[queue_item.queue_item_iid]
+            self.queue_tree.tags_tree.delete(queue_item.queue_item_iid)
         except Exception:
-            print(format_exc())
+            pass
+
         self.update_idletasks()
         RefineryCore.process_queue_item(self, queue_item, **kw)
 
     def reload_explorers(self):
-        #for line in format_stack():
-        #    print(line.strip())
-
         for name, tree in self.tree_frames.items():
             if name.startswith(self._display_mode):
                 tree.reload(self.active_map)
