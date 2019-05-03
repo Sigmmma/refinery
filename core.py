@@ -1168,6 +1168,8 @@ class RefineryCore:
             if len(tag_ids) == 0:
                 return
             halo_map.rename_tag_by_id(tag_ids[0], item.new_path)
+        elif op == "print_dir":
+            halo_map.print_tag_index(**kw)
         elif op == "rename_tag":
             halo_map.rename_tag(item.tag_path, item.new_path)
         elif op == "rename_dir":

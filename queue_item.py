@@ -21,6 +21,7 @@ class RefineryQueueItem:
         elif op in ("extract_tags", "extract_data"):
             required = ("tag_ids", )
 
+        elif op == "print_dir": pass
         elif op == "unload_map": pass
         elif op == "extract_tag": required = ("tag_id", )
         elif op == "switch_map":  required = ("map_name", )
