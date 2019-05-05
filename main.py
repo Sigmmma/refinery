@@ -125,7 +125,7 @@ class Refinery(tk.Tk, RefineryCore):
 
         self._force_lower_case_paths = tk.IntVar(self, 1)
         self._extract_yelo_cheape = tk.IntVar(self)
-        self._rename_duplicates_in_scnr = tk.IntVar(self)
+        self._rename_scnr_dups = tk.IntVar(self)
         self._overwrite = tk.IntVar(self)
         self._recursive = tk.IntVar(self)
         self._decode_adpcm = tk.IntVar(self, 1)
@@ -162,7 +162,7 @@ class Refinery(tk.Tk, RefineryCore):
 
             force_lower_case_paths=self._force_lower_case_paths,
             extract_yelo_cheape=self._extract_yelo_cheape,
-            rename_duplicates_in_scnr=self._rename_duplicates_in_scnr,
+            rename_scnr_dups=self._rename_scnr_dups,
             overwrite=self._overwrite,
             recursive=self._recursive,
             decode_adpcm=self._decode_adpcm,

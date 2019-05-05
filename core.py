@@ -152,12 +152,11 @@ class RefineryCore:
     # settings
     autoload_resources = True
     do_printout = False
-
     print_errors = False
 
     # extraction settings
     force_lower_case_paths = True
-    rename_duplicates_in_scnr = False
+    rename_scnr_dups = False
     overwrite = False
     recursive = False
     decode_adpcm = True
@@ -210,6 +209,11 @@ class RefineryCore:
     def dequeue(self, index=0):
         if index in range(len(self._extract_queue)):
             return self._extract_queue.pop(index)
+
+    @property
+    def maps_by_engine(self): return self._maps_by_engine
+    @property
+    def extract_queue(self): return self._extract_queue
 
     @property
     def map_loaded(self):  return self.active_map is not None
@@ -309,7 +313,8 @@ class RefineryCore:
         if halo_map is active_map:
             self.active_map_name = ""
 
-    def save_map(self, save_path=None, map_name=ACTIVE_INDEX, engine=ACTIVE_INDEX, **kw):
+    def save_map(self, save_path=None, map_name=ACTIVE_INDEX,
+                 engine=ACTIVE_INDEX, **kw):
         halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
 
         raw_data_expansion = kw.pop("raw_data_expansion", 0)
@@ -320,6 +325,9 @@ class RefineryCore:
         assert meta_data_expansion     >= 0
         assert vertex_data_expansion   >= 0
         assert triangle_data_expansion >= 0
+
+        fix_tag_index_offset = kw.pop(
+            "fix_tag_index_offset", self.fix_tag_index_offset)
 
         halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
         if halo_map is None:
@@ -401,7 +409,7 @@ class RefineryCore:
                 index_array[i].path_offset = off
 
             # move the tag_index array back to where it SHOULD be
-            if self.fix_tag_index_offset:
+            if fix_tag_index_offset:
                 tag_index.tag_index_offset = index_magic + tag_index.get_size()
 
             # update the map_data and expand the map's sections if necessary
@@ -1158,7 +1166,7 @@ class RefineryCore:
         elif op == "spoof_map_crc":
             halo_map.map_header.crc32 = item.new_crc & 0xFFffFFff
             halo_map.force_checksum = True
-        elif op == "set_default":
+        elif op == "set":
             if not hasattr(self, item.name):
                 raise ValueError('%s has no attribute "%s"' %
                                  (type(self), item.name))
@@ -1291,6 +1299,16 @@ class RefineryCore:
 
         do_printout = kw.pop("do_printout", self.do_printout)
         overwrite = kw.pop("overwrite", self.overwrite)
+        force_lower_case_paths = kw.pop(
+            "force_lower_case_paths", self.force_lower_case_paths)
+        use_scenario_names_for_script_names = kw.pop(
+            "use_scenario_names_for_script_names",
+            self.use_scenario_names_for_script_names)
+        use_tag_index_for_script_names = kw.pop(
+            "use_tag_index_for_script_names",
+            self.use_tag_index_for_script_names)
+
+    
         dependency_ids = kw.pop("dependency_ids", None)
 
         get_dependencies = isinstance(dependency_ids, set)
@@ -1315,7 +1333,7 @@ class RefineryCore:
 
         full_tag_class = tag_index_ref.class_1.enum_name
         tag_path += "." + full_tag_class
-        if self.force_lower_case_paths:
+        if force_lower_case_paths:
             tag_path = tag_path.lower()
 
         tag_cls = fourcc(tag_index_ref.class_1.data)
@@ -1349,21 +1367,24 @@ class RefineryCore:
             bitmap_ext=kw.pop("bitmap_extract_format", self.bitmap_extract_format),
             bitmap_keep_alpha=kw.pop("bitmap_extract_keep_alpha", self.bitmap_extract_keep_alpha),
             decode_adpcm=kw.pop("decode_adpcm", self.decode_adpcm),
+            rename_scnr_dups=kw.pop("rename_scnr_dups", self.rename_scnr_dups),
+            generate_uncomp_verts=kw.pop("generate_uncomp_verts", self.generate_uncomp_verts),
+            generate_comp_verts=kw.pop("generate_comp_verts", self.generate_comp_verts),
             )
 
         if is_gen1 and full_tag_class == "scenario" and extract_mode == "data":
-            if self.use_scenario_names_for_script_names:
+            if use_scenario_names_for_script_names:
                 extract_kw["hsc_node_strings_by_type"].update(
                     get_h1_scenario_script_object_type_strings(meta))
 
-            if self.use_tag_index_for_script_names:
+            if use_tag_index_for_script_names:
                 bipeds = meta.bipeds_palette.STEPTREE
                 actors = {i: bipeds[i].name.filepath.split("/")[-1].split("\\")[-1]
                           for i in range(len(bipeds))}
                 strings = {i: tag_index_array[i].path.lower()
                            for i in range(len(tag_index_array))}
 
-                if self.force_lower_case_paths:
+                if force_lower_case_paths:
                     actors  = {k: v.lower() for k, v in actors.items()}
                     strings = {k: v.lower() for k, v in strings.items()}
 
@@ -1374,10 +1395,10 @@ class RefineryCore:
                 for i in range(24, 32):
                     extract_kw["hsc_node_strings_by_type"][i] = strings
 
-        tag_refs = () if not (get_dependencies or self.force_lower_case_paths) else\
+        tag_refs = () if not (get_dependencies or force_lower_case_paths) else\
                    halo_map.get_dependencies(meta, tag_id, tag_cls)
 
-        if self.force_lower_case_paths:
+        if force_lower_case_paths:
             # force all tag references to lowercase
             for ref in tag_refs:
                 ref.filepath = ref.filepath.lower()
@@ -1391,7 +1412,8 @@ class RefineryCore:
             if not do_extract:
                 return False
 
-        meta = halo_map.meta_to_tag_data(meta, tag_cls, tag_index_ref, **extract_kw)
+        meta = halo_map.meta_to_tag_data(
+            meta, tag_cls, tag_index_ref, **extract_kw)
         if not meta:
             raise MetaConversionError("Failed to convert meta to tag")
 

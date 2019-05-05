@@ -27,7 +27,7 @@ class RefineryQueueItem:
         elif op == "switch_map":  required = ("map_name", )
         elif op == "switch_engine": required = ("engine", )
         elif op == "spoof_map_crc": required = ("new_crc", )
-        elif op == "set_default": required = ("name", "value")
+        elif op == "set": required = ("name", "value")
         elif op == "rename_map": required = ("new_name", )
         elif op == "rename_tag_by_id": required = ("tag_id", "new_path")
         elif op == "rename_tag": required = ("tag_path", "new_path")
