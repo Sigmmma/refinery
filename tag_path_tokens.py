@@ -117,6 +117,5 @@ XBOX_SOUL_TAG_PATHS = (
     )
 
 _ = locals()
-ALL_TOKENS = {n: _[n] for n in _ if n.startswith("TOKEN_")}
-ALL_EXTRACT_OPTIONS = {n: _[n] for n in _ if n.startswith("EXTRACT_")}
+ALL_TOKENS = {_[n] for n in _ if n.startswith("TOKEN_")}
 del _
