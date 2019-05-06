@@ -15,19 +15,24 @@ class RefineryQueueItem:
                 kwargs["filepath"] = os.path.join(
                     self.out_dir, self.map_name + "_cheape.map")
 
-        elif op in ("load_map", "deprotect", "save_map"):
+        elif op == "load_map":
             required = ("filepath", )
 
         elif op in ("extract_tags", "extract_data"):
             required = ("tag_ids", )
 
-        elif op == "print_dir": pass
-        elif op == "unload_map": pass
+        elif op in ("deprotect_map", "save_map",
+                    "print_dir", "print_files", "print_map_info", "unload_map",
+                    "print_dir_ct", "print_dir_names", "print_total_dir_ct",
+                    "print_file_ct", "print_file_names", "print_total_file_ct"):
+            required = ()
+
         elif op == "extract_tag": required = ("tag_id", )
         elif op == "switch_map":  required = ("map_name", )
         elif op == "switch_engine": required = ("engine", )
-        elif op == "spoof_map_crc": required = ("new_crc", )
-        elif op == "set": required = ("name", "value")
+        elif op == "spoof_crc": required = ("new_crc", )
+        elif op == "set_bool": required = ("name", "value")
+        elif op == "set_str": required = ("name", "value")
         elif op == "rename_map": required = ("new_name", )
         elif op == "rename_tag_by_id": required = ("tag_id", "new_path")
         elif op == "rename_tag": required = ("tag_path", "new_path")
@@ -40,8 +45,8 @@ class RefineryQueueItem:
         if missing_kwargs:
             raise KeyError(
                 'The following keyword arguments are required for '
-                'the "%s" operation, but were not supplied:\n%s' %
-                (op, tuple(sorted(missing_kwargs))))
+                'the "%s" operation, but were not supplied:  %s' %
+                (op, ", ".join(sorted(missing_kwargs))))
 
         assert isinstance(kwargs.get("filepath", ""), str)
         assert isinstance(kwargs.get("out_dir", ""), str)
