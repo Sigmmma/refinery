@@ -31,10 +31,10 @@ _ops["rename_dir"].add_argument(
     'dir-path')
 
 _ops["prompt"].add_argument(
-    'full', default=False, type=int)
+    'level', default=False, choices=(0, 1, 2), type=int)
 
 _ops["verbose"].add_argument(
-    'full', default=False, type=int)
+    'level', default=False, type=int)
 
 _ops["rename_map"].add_argument(
     'new-name')
@@ -63,8 +63,7 @@ _ops["set_bool"].add_argument(
     'value', type=int)
 
 _ops["set_str"].add_argument('name', choices=(
-    "tags-dir", "data-dir", "tagslist-path",
-    "bitmap-extract-format",
+    "tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format",
     ))
 _ops["set_str"].add_argument(
     'value')
