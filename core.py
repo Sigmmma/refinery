@@ -1147,7 +1147,7 @@ class RefineryCore:
         filepath = sanitize_path(kw.pop("filepath", ""))
 
         halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
-        if not halo_map and op not in ("load_map", "set"):
+        if not halo_map and op not in ("load_map", "set_vars"):
             return
 
         if op in ("extract_tags", "extract_data"):
@@ -1190,16 +1190,14 @@ class RefineryCore:
         elif op == "spoof_crc":
             halo_map.map_header.crc32 = queue_item.new_crc & 0xFFffFFff
             halo_map.force_checksum = True
-        elif op == "set_bool":
-            if not hasattr(self, queue_item.name):
-                raise ValueError('%s has no attribute "%s"' %
-                                 (type(self), queue_item.name))
-            setattr(self, queue_item.name, bool(queue_item.value))
-        elif op == "set_str":
-            if not hasattr(self, queue_item.name):
-                raise ValueError('%s has no attribute "%s"' %
-                                 (type(self), queue_item.name))
-            setattr(self, queue_item.name, str(queue_item.value))
+        elif op == "set_vars":
+            for i in range(len(queue_item.names)):
+                name = queue_item.names[i]
+                value = queue_item.values[i]
+                if not hasattr(self, name):
+                    raise ValueError(
+                        '%s has no attribute "%s"' % (type(self), name))
+                setattr(self, name, value)
         elif op == "rename_tag_by_id":
             tag_ids = TagIndexCrawler((tag_id,)).get_filtered_tag_ids(halo_map)
             if len(tag_ids) == 0:
