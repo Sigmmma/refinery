@@ -118,4 +118,6 @@ XBOX_SOUL_TAG_PATHS = (
 
 _ = locals()
 ALL_TOKENS = {_[n] for n in _ if n.startswith("TOKEN_")}
+ALL_TOKEN_MACROS = {n.split("EXTRACT_")[-1]:_[n] for n in _
+                    if n.startswith("EXTRACT_")}
 del _

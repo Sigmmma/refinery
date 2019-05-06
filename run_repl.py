@@ -1,39 +1,63 @@
+import argparse
 import os
 
 from time import time
 from traceback import format_exc
 from refinery import core
 
-from refinery.arg_parsers import repl_parser, operation_parsers
+from refinery.arg_parsers import repl_parser
 
 
 def execute_action(refinery, unparsed_command):
     unparsed_command = unparsed_command.strip()
     if not unparsed_command:
-        return
+        return None, None
 
     try:
-        repl_args, remainder = repl_parser.parse_known_args(
+        args = repl_parser.parse_args(
             convert_arg_line_to_args(unparsed_command))
-        op = repl_args.operation.replace("-", "_")
+        op = args.operation.replace("-", "_")
     except SystemExit:
-        op = None
+        op = args = None
 
-    print(op)
-    if op in ("quit", "prompt_simple", "prompt_full"):
-        return op
-    elif op == "map_info":
-        print(refinery.generate_map_info_string())
-        return
-    elif op not in operation_parsers:
-        return
+    if op in ("quit", "maps", "engines", "prompt", "get_val", "verbose",
+              None):
+        return op, args
 
-    args = operation_parsers[op].parse_args(
-        convert_arg_line_to_args(unparsed_command))
+    kw = {k.replace("-", "_"): v for k, v in
+          vars(args).items() if v is not None}
+    if op in ("dir", "files", "map_info", "dir_ct", "file_ct",
+              "dir_names", "file_names"):
+        op = "print_" + op
+        kw["do_printout"] = True
+    elif op in ("set_bool", "set_str"):
+        kw["name"] = kw["name"].replace("-", "_")
+
+    kw.pop("operation", None)
+    try: kw["tag_id"] = int(kw["tag_id"])
+    except: pass
+
+    if kw.get("tag_ids"):
+        tag_ids = [None] * len(kw["tag_ids"])
+        i = 0
+        for val in kw["tag_ids"]:
+            try:
+                tag_ids[i] = int(val)
+            except ValueError:
+                tag_ids[i] = val
+            i += 1
+
+        kw["tag_ids"] = tag_ids
+
+    # load-map "C:\Users\Moses\Desktop\halo\maps\[H3] Imposing V2.map"
+    refinery.enqueue(op, **kw)
+    refinery.process_queue()
+    return None, None
 
 
 def main_loop(refinery):
     prompt_full = False
+    verbose = False
     while True:
         if not refinery.active_map_name:
             prompt = "Refinery: "
@@ -44,15 +68,32 @@ def main_loop(refinery):
             prompt = "%s%s: " % (prompt, refinery.active_map_name)
 
         try:
-            result = execute_action(refinery, input(prompt))
-            if result == "quit":
+            op, args = execute_action(refinery, input(prompt))
+            if op == "quit":
                 break
-            elif result in ("prompt_simple", "prompt_full"):
-                prompt_full = result == "prompt_full"
+            elif op == "prompt":
+                prompt_full = args.full
+            elif op == "verbose":
+                verbose = args.full
+            elif op in ("engines", "maps"):
+                if op == "engines":
+                    keys = set(refinery.maps_by_engine)
+                else:
+                    keys = set(refinery.active_maps)
+
+                try: keys.remove(core.ACTIVE_INDEX)
+                except Exception: pass
+
+                print(list(sorted(keys)))
+            elif op == "get_val":
+                print("%s=%s" % (args.name, getattr(
+                    refinery, args.name.replace("-", "_"))))
+                
         except Exception:
-            print(format_exc())
-            input()
-            break
+            if verbose:
+                print(format_exc())
+            else:
+                print(format_exc(0))
 
 
 def convert_arg_line_to_args(arg_line):
@@ -62,7 +103,7 @@ def convert_arg_line_to_args(arg_line):
     while i < len(arg_line):
         # find the next non-whitespace character
         while i < len(arg_line):
-            if arg_line[i] != " ":
+            if arg_line[i] not in " \t":
                 break
             i += 1
 
@@ -72,13 +113,11 @@ def convert_arg_line_to_args(arg_line):
             i += 1  # jump past the first "
             arg_end_i = arg_line.find('"', i)
         else:
-            next_space_i = arg_line.find(' ', i)
-            next_quote_i = arg_line.find('"', i)
-            if next_space_i < 0 or (next_quote_i >= 0 and
-                                    next_quote_i < next_space_i):
-                arg_end_i = next_quote_i
-            else:
-                arg_end_i = next_space_i
+            arg_end_i = -1
+            for char in '" \t':
+                char_i = arg_line.find(char, i)
+                if arg_end_i < 0 or (char_i < arg_end_i and char_i >= 0):
+                    arg_end_i = char_i
 
         if arg_end_i < 0: arg_end_i = len(arg_line)
 
@@ -87,17 +126,16 @@ def convert_arg_line_to_args(arg_line):
 
         if i < len(arg_line) and arg_line[arg_end_i] == '"':
             i += 1  # jump past the last "
-
     return args
 
 
 if __name__ == '__main__':
-    init_arg_parser = argparse.ArgumentParser(description="This is Refinery!")
+    init_arg_parser = argparse.ArgumentParser(
+        description="This is Refinery!")
 
     init_arg_parser.add_argument(
         'batch_filepath', action='store', nargs='?',
-        help='Path to a text file where each line is an action to execute. '
-        'Blank lines are ignored and ')
+        help='Path to a text file where each line is an action to execute.')
 
     args = init_arg_parser.parse_args()
     try:
