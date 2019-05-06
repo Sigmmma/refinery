@@ -31,8 +31,7 @@ class RefineryQueueItem:
         elif op == "switch_map":  required = ("map_name", )
         elif op == "switch_engine": required = ("engine", )
         elif op == "spoof_crc": required = ("new_crc", )
-        elif op == "set_bool": required = ("name", "value")
-        elif op == "set_str": required = ("name", "value")
+        elif op == "set_vars": required = ("names", "values")
         elif op == "rename_map": required = ("new_name", )
         elif op == "rename_tag_by_id": required = ("tag_id", "new_path")
         elif op == "rename_tag": required = ("tag_path", "new_path")
@@ -62,8 +61,11 @@ class RefineryQueueItem:
         assert isinstance(kwargs.get("dir_path", ""), str)
         assert isinstance(kwargs.get("new_path", ""), str)
 
+        assert len(kwargs.get("names", ())) == len(kwargs.get("values", ()))
+        for name in kwargs.get("names", ()):
+            assert name[0] != "_" # disallow setting private variables
+
         assert kwargs.get("new_crc", 0) in range(0, 0x100000000)
-        assert kwargs.get("name", " ")[0] != "_" # disallow setting private variables
 
         self._op = op
         self._op_kwargs = kwargs

@@ -1,5 +1,7 @@
 import argparse
 
+from refinery import tag_path_tokens
+
 __all__ = ("repl_parser", "repl_subparser",)
 
 
@@ -15,9 +17,9 @@ for name in sorted((
         "extract_tags", "extract_data", "extract_tag", "extract_cheape",
         "deprotect_map", "load_map", "unload_map", "save_map", "rename_map",
         "spoof_crc", "rename_tag_by_id", "rename_tag", "rename_dir",
-        "set_bool", "set_str", "map_info", "switch_map", "switch_engine",
+        "set_vars", "get_vars", "map_info", "switch_map", "switch_engine",
         "dir", "files", "dir_ct", "file_ct", "dir_names", "file_names",
-        "get_val", "quit", "maps", "engines", "verbose", "prompt")):
+        "quit", "maps", "engines", "verbose", "prompt", "tag_id_macros")):
     _ops[name] = repl_subparser.add_parser(name.replace("_", "-"))
 
 
@@ -48,40 +50,8 @@ _ops["switch_engine"].add_argument(
 _ops["spoof_crc"].add_argument(
     'new-crc', type=int)
 
-_ops["set_bool"].add_argument('name', choices=(
-    "autoload-resources", "do-printout", "print-errors",
-    "force-lower-case-paths", "rename-scnr-dups", "overwrite",
-    "recursive", "decode-adpcm", "generate-uncomp-verts",
-    "generate-comp-verts", "use-tag-index-for-script-names",
-    "use-scenario-names-for-script-names", "bitmap-extract-keep-alpha",
-    "fix-tag-classes", "fix-tag-index-offset", "use-minimum-priorities",
-    "valid-tag-paths-are-accurate", "scrape-tag-paths-from-scripts",
-    "limit-tag-path-lengths", "print-heuristic-name-changes",
-    "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags",
-    ))
-_ops["set_bool"].add_argument(
-    'value', type=int)
-
-_ops["set_str"].add_argument('name', choices=(
-    "tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format",
-    ))
-_ops["set_str"].add_argument(
-    'value')
-
-_ops["get_val"].add_argument('name', choices=(
-    "autoload-resources", "do-printout", "print-errors",
-    "force-lower-case-paths", "rename-scnr-dups", "overwrite",
-    "recursive", "decode-adpcm", "generate-uncomp-verts",
-    "generate-comp-verts", "use-tag-index-for-script-names",
-    "use-scenario-names-for-script-names", "bitmap-extract-keep-alpha",
-    "fix-tag-classes", "fix-tag-index-offset", "use-minimum-priorities",
-    "valid-tag-paths-are-accurate", "scrape-tag-paths-from-scripts",
-    "limit-tag-path-lengths", "print-heuristic-name-changes",
-    "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags",
-    "tags-dir", "data-dir", "tagslist-path",
-    "bitmap-extract-format",
-    ))
-
+_ops["tag_id_macros"].add_argument(
+    'macro-prefix', default="", nargs="?")
 
 for name in ("load_map", "extract_cheape"):
     _ops[name].add_argument(
@@ -175,6 +145,43 @@ for name in ("extract_tag", "extract_tags", "extract_data"):
         '--rename-scnr-dups', default=None, type=int)
     _ops[name].add_argument(
         '--tagslist-path', default=None)
+
+for name in ("extract_tags", "extract_data"):
+    _ops[name].add_argument(
+        '--tokens', default=True, type=int)
+    _ops[name].add_argument(
+        '--macros', default=True, type=int)
+
+for name in (
+        "autoload-resources", "do-printout", "print-errors",
+        "force-lower-case-paths", "rename-scnr-dups", "overwrite",
+        "recursive", "decode-adpcm", "generate-uncomp-verts",
+        "generate-comp-verts", "use-tag-index-for-script-names",
+        "use-scenario-names-for-script-names", "bitmap-extract-keep-alpha",
+        "fix-tag-classes", "fix-tag-index-offset", "use-minimum-priorities",
+        "valid-tag-paths-are-accurate", "scrape-tag-paths-from-scripts",
+        "limit-tag-path-lengths", "print-heuristic-name-changes",
+        "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags"):
+    _ops["set_vars"].add_argument(
+        '--%s' % name, default=None, type=int)
+
+for name in ("tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format"):
+    _ops["set_vars"].add_argument(
+        '--%s' % name, default=None)
+    
+for name in (
+        "autoload-resources", "do-printout", "print-errors",
+        "force-lower-case-paths", "rename-scnr-dups", "overwrite",
+        "recursive", "decode-adpcm", "generate-uncomp-verts",
+        "generate-comp-verts", "use-tag-index-for-script-names",
+        "use-scenario-names-for-script-names", "bitmap-extract-keep-alpha",
+        "fix-tag-classes", "fix-tag-index-offset", "use-minimum-priorities",
+        "valid-tag-paths-are-accurate", "scrape-tag-paths-from-scripts",
+        "limit-tag-path-lengths", "print-heuristic-name-changes",
+        "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags",
+        "tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format"):
+    _ops["get_vars"].add_argument(
+        '--%s' % name, const=True, default=False, action="store_const")
 
 _ops["extract_tag"].add_argument(
     '--filepath', default=None)
