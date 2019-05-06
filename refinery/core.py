@@ -218,7 +218,7 @@ class RefineryCore:
     @property
     def map_loaded(self):  return self.active_map is not None
     @property
-    def active_maps(self): return self._maps_by_engine.get(ACTIVE_INDEX, {})
+    def active_maps(self): return self.maps_by_engine.get(ACTIVE_INDEX, {})
     @property
     def active_map(self):  return self.active_maps.get(ACTIVE_INDEX)
 
@@ -227,12 +227,12 @@ class RefineryCore:
             return
 
         engine = None
-        if name is None and self._maps_by_engine:
-            engine = iter(self._maps_by_engine).__next__()
-        elif name in self._maps_by_engine:
+        if name is None and self.maps_by_engine:
+            engine = iter(self.maps_by_engine).__next__()
+        elif name in self.maps_by_engine:
             engine = name
 
-        next_maps = self._maps_by_engine.get(engine)
+        next_maps = self.maps_by_engine.get(engine)
         if not next_maps:
             next_map_name = None
         elif map_name in next_maps:
@@ -244,9 +244,9 @@ class RefineryCore:
 
         # unset any currently active engine and only set
         # it if we have a valid map name to make active
-        self._maps_by_engine.pop(ACTIVE_INDEX, None)
+        self.maps_by_engine.pop(ACTIVE_INDEX, None)
         if next_map_name:
-            self._maps_by_engine[ACTIVE_INDEX] = next_maps
+            self.maps_by_engine[ACTIVE_INDEX] = next_maps
             next_maps.pop(ACTIVE_INDEX, None)
 
         self.active_engine_name = engine if next_maps else ""
@@ -274,10 +274,10 @@ class RefineryCore:
                     engines_to_unload=(ACTIVE_INDEX, ),
                     maps_to_unload=(ACTIVE_INDEX, )):
         if engines_to_unload is None:
-            engines_to_unload = tuple(self._maps_by_engine.keys())
+            engines_to_unload = tuple(self.maps_by_engine.keys())
 
         for engine in engines_to_unload:
-            maps = self._maps_by_engine.get(engine, {})
+            maps = self.maps_by_engine.get(engine, {})
             map_names = maps_to_unload
             if map_names is None:
                 map_names = tuple(maps.keys())
@@ -294,10 +294,10 @@ class RefineryCore:
                     (map_type == MAP_TYPE_REGULAR and not is_rsrc)):
                     self.unload_map(map_name, engine)
 
-        for engine in tuple(self._maps_by_engine):
+        for engine in tuple(self.maps_by_engine):
             # remove any engine maps without loaded maps.
-            if not self._maps_by_engine[engine]:
-                self._maps_by_engine.pop(engine, None)
+            if not self.maps_by_engine[engine]:
+                self.maps_by_engine.pop(engine, None)
 
         if not self.active_maps:
             self.set_active_engine()
@@ -305,7 +305,7 @@ class RefineryCore:
             self.set_active_map()
 
     def unload_map(self, map_name=ACTIVE_INDEX, engine=ACTIVE_INDEX, **kw):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if halo_map is None:
             return
 
@@ -315,7 +315,7 @@ class RefineryCore:
 
     def save_map(self, save_path=None, map_name=ACTIVE_INDEX,
                  engine=ACTIVE_INDEX, **kw):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
 
         raw_data_expansion = kw.pop("raw_data_expansion", 0)
         meta_data_expansion = kw.pop("meta_data_expansion", 0)
@@ -329,7 +329,7 @@ class RefineryCore:
         fix_tag_index_offset = kw.pop(
             "fix_tag_index_offset", self.fix_tag_index_offset)
 
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if halo_map is None:
             raise KeyError("No map loaded and none provided.")
         elif halo_map.is_resource:
@@ -412,11 +412,16 @@ class RefineryCore:
             if fix_tag_index_offset:
                 tag_index.tag_index_offset = index_magic + tag_index.get_size()
 
-            # update the map_data and expand the map's sections if necessary
-            halo_map.map_data = out_file
+            # update the map_data
+            if isinstance(out_file, PeekableMmap):
+                halo_map.map_data = out_file
+            else:
+                halo_map.map_data = PeekableMmap(out_file.fileno(), 0)
+
             if map_file is not out_file and hasattr(map_file, "close"):
                 map_file.close()
 
+            # expand the map's sections if necessary
             expansions = (raw_data_expansion, meta_data_expansion,
                           vertex_data_expansion, triangle_data_expansion)
             section_ends = get_halo_map_section_ends(halo_map)
@@ -467,8 +472,12 @@ class RefineryCore:
             out_file.flush()
             if hasattr(out_file, "fileno"):
                 os.fsync(out_file.fileno())
+
+            halo_map.filepath = save_path
+            if halo_map.map_data is not out_file:
+                out_file.close()
         except Exception:
-            if map_file is not out_file:
+            if halo_map.map_data is not out_file:
                 out_file.close()
             raise
 
@@ -478,6 +487,10 @@ class RefineryCore:
         make_active        = kw.pop("make_active", None)
         do_printout        = kw.get("do_printout", self.do_printout)
         autoload_resources = kw.pop("autoload_resources", self.autoload_resources)
+
+        if do_printout:
+            print("Loading %s..." % os.path.basename(map_path))
+
         with open(map_path, 'r+b') as f:
             comp_data  = PeekableMmap(f.fileno(), 0)
             head_sig   = unpack("<I", comp_data.peek(4))[0]
@@ -498,15 +511,17 @@ class RefineryCore:
             raise EngineDetectionError(
                 'Could not determine map engine for "%s"' % map_path)
 
-        maps = self._maps_by_engine.setdefault(engine, {})
+        maps = self.maps_by_engine.setdefault(engine, {})
         if not(maps.get(map_name) is None or replace_if_same_name):
             raise MapAlreadyLoadedError(
                 ('A map with the name "%s" is already loaded '
                  'under the "%s" engine.' ) % (map_name, engine))
 
         if make_active is None and (
-                maps.get(map_name) is None or
+                maps.get(ACTIVE_INDEX) is None or
                 maps.get(ACTIVE_INDEX, object()) is maps.get(map_name)):
+            # only make active if unspecified and no map currently active
+            # or the active map is being replaced when this one is loaded
             make_active = True
 
         if maps.get(map_name) is not None:
@@ -521,6 +536,12 @@ class RefineryCore:
 
         if make_active:
             maps[ACTIVE_INDEX] = new_map
+            self.active_map_name = map_name
+            self.active_map_path = new_map.filepath
+
+        if not self.maps_by_engine.get(ACTIVE_INDEX):
+            self.maps_by_engine[ACTIVE_INDEX] = maps
+            self.active_engine_name = engine
 
         if autoload_resources:
             self.load_resource_maps(new_map)
@@ -537,11 +558,11 @@ class RefineryCore:
         return halo_map.load_resource_maps(maps_dir, map_paths, **kw)
 
     def deprotect_all(self, **kw):
-        for engine in self._maps_by_engine:
+        for engine in self.maps_by_engine:
             if engine not in ("halo1ce", "halo1yelo", "halo1pc", "halo1vap"):
                 continue
 
-            maps = self._maps_by_engine[engine]
+            maps = self.maps_by_engine[engine]
             for map_name in sorted(maps):
                 try:
                     if map_name != ACTIVE_INDEX and not maps[map_name].is_resource:
@@ -551,7 +572,7 @@ class RefineryCore:
 
     def deprotect(self, save_path=None, map_name=ACTIVE_INDEX,
                   engine=ACTIVE_INDEX, **kw):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
 
         if not self.map_loaded:
             raise KeyError("No map loaded.")
@@ -669,7 +690,7 @@ class RefineryCore:
         halo_map.cache_original_tag_paths()
 
     def detect_tag_collection_names(self, map_name=ACTIVE_INDEX, engine=ACTIVE_INDEX):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         tag_type_names = {}
         if not halo_map:
             return tag_type_names
@@ -747,7 +768,7 @@ class RefineryCore:
         return tag_type_names
 
     def repair_tag_classes(self, map_name=ACTIVE_INDEX, engine=ACTIVE_INDEX):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         repaired = {}
         if not halo_map:
             return repaired
@@ -859,11 +880,11 @@ class RefineryCore:
         return repaired
 
     def sanitize_resource_tag_paths(self, map_name=ACTIVE_INDEX, engine=ACTIVE_INDEX):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if not halo_map:
             return
 
-        engine_maps = self._maps_by_engine.get(halo_map.engine, {})
+        engine_maps = self.maps_by_engine.get(halo_map.engine, {})
         for b in halo_map.tag_index.tag_index:
             tag_id = b.id & 0xFFff
             rsrc_tag_id = b.meta_offset
@@ -886,7 +907,7 @@ class RefineryCore:
 
     def _script_scrape_deprotect(self, path_handler, map_name=ACTIVE_INDEX,
                                  engine=ACTIVE_INDEX, **kw):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if not halo_map:
             return
 
@@ -921,7 +942,7 @@ class RefineryCore:
 
     def _heuristics_deprotect(self, path_handler, map_name=ACTIVE_INDEX,
                               engine=ACTIVE_INDEX, **kw):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if not halo_map:
             return
 
@@ -1034,7 +1055,7 @@ class RefineryCore:
 
     def extract_cheape(self, filepath="", map_name=ACTIVE_INDEX,
                        engine=ACTIVE_INDEX):
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if not halo_map or halo_map.engine != "halo1yelo":
             return ""
 
@@ -1079,7 +1100,7 @@ class RefineryCore:
                 engine = getattr(item, "engine", None)
                 map_name = getattr(item, "map_name", None)
                 
-                halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+                halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
                 print("\n%s: " % item.operation, end="")
                 if halo_map:
                     print("%s: %s" % (halo_map.engine, halo_map.map_name))
@@ -1090,6 +1111,8 @@ class RefineryCore:
 
             try:
                 self.process_queue_item(item, **extract_kw)
+            except RefineryError:
+                print(format_exc(0)) # only last line for RefineryErrors
             except Exception:
                 print(format_exc())
 
@@ -1120,10 +1143,11 @@ class RefineryCore:
         map_name = kw.pop("map_name", ACTIVE_INDEX)
         tag_ids = kw.pop("tag_ids", ())
         tag_id = kw.pop("tag_id", 0xFFff)
+        dir_path = kw.get("dir_path", "")
         filepath = sanitize_path(kw.pop("filepath", ""))
 
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
-        if not halo_map:
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
+        if not halo_map and op not in ("load_map", "set"):
             return
 
         if op in ("extract_tags", "extract_data"):
@@ -1162,26 +1186,51 @@ class RefineryCore:
         elif op == "save_map":
             self.save_map(filepath, map_name, engine, **kw)
         elif op == "rename_map":
-            halo_map.map_header.map_name = item.new_name
-        elif op == "spoof_map_crc":
-            halo_map.map_header.crc32 = item.new_crc & 0xFFffFFff
+            halo_map.map_header.map_name = queue_item.new_name
+        elif op == "spoof_crc":
+            halo_map.map_header.crc32 = queue_item.new_crc & 0xFFffFFff
             halo_map.force_checksum = True
-        elif op == "set":
-            if not hasattr(self, item.name):
+        elif op == "set_bool":
+            if not hasattr(self, queue_item.name):
                 raise ValueError('%s has no attribute "%s"' %
-                                 (type(self), item.name))
-            setattr(self, item.name, item.value)
+                                 (type(self), queue_item.name))
+            setattr(self, queue_item.name, bool(queue_item.value))
+        elif op == "set_str":
+            if not hasattr(self, queue_item.name):
+                raise ValueError('%s has no attribute "%s"' %
+                                 (type(self), queue_item.name))
+            setattr(self, queue_item.name, str(queue_item.value))
         elif op == "rename_tag_by_id":
             tag_ids = TagIndexCrawler((tag_id,)).get_filtered_tag_ids(halo_map)
             if len(tag_ids) == 0:
                 return
-            halo_map.rename_tag_by_id(tag_ids[0], item.new_path)
+            halo_map.rename_tag_by_id(tag_ids[0], queue_item.new_path)
         elif op == "print_dir":
+            kw.setdefault("do_printout", True)
             halo_map.print_tag_index(**kw)
+        elif op == "print_files":
+            kw.setdefault("do_printout", True)
+            halo_map.print_tag_index_files(**kw) 
+        elif op == "print_dir_ct":
+            if kw.get("total"):
+                print(halo_map.get_total_dir_count(dir_path))
+            else:
+                print(halo_map.get_dir_count(dir_path))
+        elif op == "print_file_ct":
+            if kw.get("total"):
+                print(halo_map.get_total_file_count(dir_path))
+            else:
+                print(halo_map.get_file_count(dir_path))
+        elif op == "print_dir_names":
+            print(halo_map.get_dir_names(dir_path))
+        elif op == "print_file_names":
+            print(halo_map.get_file_names(dir_path))
+        elif op == "print_map_info":
+            print(halo_map.generate_map_info_string())
         elif op == "rename_tag":
-            halo_map.rename_tag(item.tag_path, item.new_path)
+            halo_map.rename_tag(queue_item.tag_path, queue_item.new_path)
         elif op == "rename_dir":
-            halo_map.rename_dir(item.dir_path, item.new_path)
+            halo_map.rename_dir(queue_item.dir_path, queue_item.new_path)
         elif op == "switch_map":
             self.set_active_map(map_name)
         elif op == "switch_engine":
@@ -1202,8 +1251,6 @@ class RefineryCore:
         recursive     = kw.pop("recursive", self.recursive)
         tagslist_path = kw.pop("tagslist_path", self.tagslist_path)
 
-        print_errors  = kw.get("print_errors", self.print_errors)
-
         if isinstance(tag_ids, int):
             tag_ids = (tag_ids, )
 
@@ -1215,23 +1262,13 @@ class RefineryCore:
         extracted = set()
         tagslist = ""
 
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
-        try:
-            if halo_map is None:
-                raise MapNotLoadedError(
-                    '"%s" is not loaded under engine "%s".' % (map_name, engine))
-            elif halo_map.is_resource and halo_map.engine == "halo1pc":
-                raise RefineryError(
-                    "Cannot extract tags directly from Halo PC resource maps")
-        except Exception as e:
-            if not print_errors:
-                raise
-
-            if isinstance(e, RefineryError):
-                print(format_exc(0)) # only last line for RefineryErrors
-            else:
-                print(format_exc())
-            return extracted
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
+        if halo_map is None:
+            raise MapNotLoadedError(
+                '"%s" is not loaded under engine "%s".' % (map_name, engine))
+        elif halo_map.is_resource and halo_map.engine == "halo1pc":
+            raise RefineryError(
+                "Cannot extract tags directly from Halo PC resource maps")
 
         is_gen1 = ("halo1" in halo_map.engine or
                    "stubbs" in halo_map.engine or
@@ -1258,13 +1295,10 @@ class RefineryCore:
                         tagpath = "%s.%s" % (sanitize_path(tag_index_ref.path),
                                              tag_index_ref.class_1.enum_name)
                         tagslist += "%s: %s\n" % (extract_mode, tagpath)
-                except Exception as e:
-                    if not print_errors:
-                        raise
-                    if isinstance(e, RefineryError):
-                        print(format_exc(0)) # only last line for RefineryErrors
-                    else:
-                        print(format_exc())
+                except RefineryError:
+                    print(format_exc(0)) # only last line for RefineryErrors
+                except Exception:
+                    print(format_exc())
 
             tags_to_ignore.update(curr_tag_ids)
             curr_tag_ids = next_tag_ids
@@ -1313,7 +1347,7 @@ class RefineryCore:
 
         get_dependencies = isinstance(dependency_ids, set)
 
-        halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
+        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if halo_map is None:
             raise MapNotLoadedError(
                 '"%s" is not loaded under engine "%s".' % (map_name, engine))

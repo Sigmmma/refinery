@@ -784,7 +784,6 @@ class Refinery(tk.Tk, RefineryCore):
         autoload_resources = kw.pop("autoload_resources", self.autoload_resources)
         new_map = prev_active_engine = prev_active_map = None
         try:
-            print("Loading %s..." % os.path.basename(map_path))
             new_map = RefineryCore.load_map(
                 self, map_path, not ask_close_open, make_active=False,
                 autoload_resources=False, decompress_overwrite=True)
@@ -825,7 +824,6 @@ class Refinery(tk.Tk, RefineryCore):
             self.set_active_engine(
                 new_map.engine, new_map.map_name, force_reload=True)
 
-        print("    Finished loading %s" % os.path.basename(map_path))
         return new_map
 
     def load_maps(self, map_paths, make_active=False, ask_close_open=False, **kw):
