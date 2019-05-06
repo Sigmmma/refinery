@@ -51,19 +51,19 @@ def execute_action(refinery, unparsed_command):
 
     # load-map "C:\Users\Moses\Desktop\halo\maps\[H3] Imposing V2.map"
     refinery.enqueue(op, **kw)
-    refinery.process_queue()
+    refinery.process_queue_item(refinery.dequeue(0))
     return None, None
 
 
 def main_loop(refinery):
-    prompt_full = False
-    verbose = False
+    prompt_level = 1
+    verbose_level = 10
     while True:
-        if not refinery.active_map_name:
+        if prompt_level == 0 or not refinery.active_map_name:
             prompt = "Refinery: "
         elif refinery.maps_by_engine:
             prompt = ""
-            if prompt_full and refinery.active_engine_name:
+            if prompt_level == 2 and refinery.active_engine_name:
                 prompt = "%s: " % refinery.active_engine_name
             prompt = "%s%s: " % (prompt, refinery.active_map_name)
 
@@ -72,9 +72,9 @@ def main_loop(refinery):
             if op == "quit":
                 break
             elif op == "prompt":
-                prompt_full = args.full
+                prompt_level = args.level
             elif op == "verbose":
-                verbose = args.full
+                verbose_level = args.level
             elif op in ("engines", "maps"):
                 if op == "engines":
                     keys = set(refinery.maps_by_engine)
@@ -90,10 +90,7 @@ def main_loop(refinery):
                     refinery, args.name.replace("-", "_"))))
                 
         except Exception:
-            if verbose:
-                print(format_exc())
-            else:
-                print(format_exc(0))
+            print(format_exc(verbose_level))
 
 
 def convert_arg_line_to_args(arg_line):
