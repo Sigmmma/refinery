@@ -2625,10 +2625,10 @@ def rename_unhi(tag_id, halo_map, tag_path_handler,
 
     min_prio.val = recursive_rename(
         get_tag_id(meta.health_panel_meter.meter_bitmap),
-        name=name + "health meter", **kw)
+        name=name + " health meter", **kw)
     min_prio.val = recursive_rename(
         get_tag_id(meta.shield_panel_meter.meter_bitmap),
-        name=name + "shield meter", **kw)
+        name=name + " shield meter", **kw)
 
     for b in meta.auxilary_overlays.STEPTREE:
         rename_hud_background(b.background, name, "flashlight overlay", **kw)

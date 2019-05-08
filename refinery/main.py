@@ -379,6 +379,13 @@ class Refinery(tk.Tk, RefineryCore):
             pass
         object.__setattr__(self, attr_name, new_val)
 
+    def enqueue(self, operation="extract_tags", **kwargs):
+        if operation in ("extract_tags", "extract_cheape"):
+            kwargs.setdefault("out_dir", self.tags_dir)
+        elif operation == "extract_data":
+            kwargs.setdefault("out_dir", self.data_dir)
+        RefineryCore.enqueue(self, operation, **kwargs)
+
     @property
     def running(self):
         return self._running

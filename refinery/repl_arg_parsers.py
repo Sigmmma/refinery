@@ -17,7 +17,8 @@ for name in sorted((
         "extract_tags", "extract_data", "extract_tag", "extract_cheape",
         "deprotect_map", "load_map", "unload_map", "save_map", "rename_map",
         "spoof_crc", "rename_tag_by_id", "rename_tag", "rename_dir",
-        "set_vars", "get_vars", "map_info", "switch_map", "switch_engine",
+        "set_vars", "get_vars", "map_info",
+        "switch_map", "switch_map_by_filepath", "switch_engine",
         "dir", "files", "dir_ct", "file_ct", "dir_names", "file_names",
         "quit", "maps", "engines", "verbose", "prompt", "tag_id_macros")):
     _ops[name] = repl_subparser.add_parser(name.replace("_", "-"))
@@ -53,9 +54,9 @@ _ops["spoof_crc"].add_argument(
 _ops["tag_id_macros"].add_argument(
     'macro-prefix', default="", nargs="?")
 
-for name in ("load_map", "extract_cheape"):
+for name in ("load_map", "extract_cheape", "switch_map_by_filepath"):
     _ops[name].add_argument(
-        'filepath', default=None)
+        'filepath')
 
 for name in ("deprotect_map", "save_map"):
     _ops[name].add_argument(
@@ -183,6 +184,10 @@ for name in (
     _ops["get_vars"].add_argument(
         '--%s' % name, const=True, default=False, action="store_const")
 
+for name in ("extract_tags", "extract_data"):
+    _ops[name].add_argument(
+        '--tag-ids', nargs="*", default=(tag_path_tokens.TOKEN_ALL, ))
+
 _ops["extract_tag"].add_argument(
     '--filepath', default=None)
 
@@ -231,11 +236,3 @@ _ops["deprotect_map"].add_argument(
     '--use-tag-index-for-script-names', default=None, type=int)
 _ops["deprotect_map"].add_argument(
     '--valid-tag-paths-are-accurate', default=None, type=int)
-
-
-#########################################################################
-# add the REQUIRED "optional" arguments
-#########################################################################
-for name in ("extract_tags", "extract_data"):
-    _ops[name].add_argument(
-        '--tag-ids', required=True, nargs="*")

@@ -15,7 +15,7 @@ class RefineryQueueItem:
                 kwargs["filepath"] = os.path.join(
                     self.out_dir, self.map_name + "_cheape.map")
 
-        elif op == "load_map":
+        elif op in ("load_map", "switch_map_by_filepath"):
             required = ("filepath", )
 
         elif op in ("extract_tags", "extract_data"):

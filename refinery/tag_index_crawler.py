@@ -1,5 +1,7 @@
 __all__ = ("get_filtered_tag_index_ids", "TagIndexCrawler", )
 
+import os
+
 from refinery.tag_path_tokens import *
 
 
@@ -33,7 +35,7 @@ class TagIndexCrawler(list):
                 continue
 
             tag_path_pieces = tag_id.replace("\\", "/").lower().split("/")
-            tag_path, tag_class = splitext(tag_path_pieces[-1])
+            tag_path, tag_class = os.path.splitext(tag_path_pieces[-1])
             if len(tag_path_pieces) > 1:
                 tag_path = "\\".join(
                     tuple(tag_path_pieces[: -1]) + (tag_path, ))
@@ -53,13 +55,13 @@ class TagIndexCrawler(list):
         return tag_index_ids
 
     def detokenize_tag_ids(self, halo_map):
-        if TOKEN_ALL_TAGS in self:
+        if TOKEN_ALL in self:
             return list(range(len(halo_map.tag_index.STEPTREE)))
 
         new_tag_ids = [None]*len(self)
         i = 0
         for token in self:
-            if isinstance(token, int) or not token not in ALL_TOKENS:
+            if isinstance(token, int) or token not in ALL_TOKENS:
                 tag_id = token
             elif token in tokens_to_tag_paths:
                 tag_id = tokens_to_tag_paths[token]
@@ -70,7 +72,7 @@ class TagIndexCrawler(list):
                 new_tag_ids[i] = tag_id
                 i += 1
 
-        if i > len(new_tag_ids):
+        if i < len(new_tag_ids):
             del new_tag_ids[i: ]
 
         return new_tag_ids
@@ -78,15 +80,13 @@ class TagIndexCrawler(list):
     def detokenize_special_token(self, token, halo_map):
         tag_index = halo_map.tag_index
         map_type = halo_map.map_header.map_type.data
-        if token == TOKEN_ALL:
-            pass
-        elif token in (TOKEN_SCNR, TOKEN_MATG):
+        if token in (TOKEN_SCNR, TOKEN_MATG):
             tag_class = "scenario" if token == TOKEN_SCNR else "globals"
             if hasattr(tag_index, tag_class + "_tag_id"):
                 return getattr(tag_index, tag_class + "_tag_id") & 0xFFff
-            i = 0
-            for tag_ref in tag_index.STEPTREE:
-                if tag_ref.class_1.enum_name == tag_class:
+
+            for i in range(len(tag_index.STEPTREE)):
+                if tag_index.STEPTREE[i].class_1.enum_name == tag_class:
                     return i
 
         elif token == TOKEN_PC_SCNR_MAP_TYPE_TAGC:
@@ -96,3 +96,5 @@ class TagIndexCrawler(list):
         elif token == TOKEN_XBOX_SOUL:
             if map_type in range(len(XBOX_SOUL_TAG_PATHS)):
                 return XBOX_SOUL_TAG_PATHS[map_type]
+
+        return token
