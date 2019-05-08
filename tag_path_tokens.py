@@ -1,4 +1,4 @@
-TOKEN_ALL_TAGS = "<all_tags>"
+TOKEN_ALL = "<all_tags>"
 
 TOKEN_SCNR = "<scenario>"
 TOKEN_MATG = "<globals>"
