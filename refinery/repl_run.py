@@ -30,6 +30,8 @@ def queue_action(unparsed_command):
     elif op in ("engines", "maps"):
         if op == "engines":
             keys = set(refinery_instance.maps_by_engine)
+        elif args.engine:
+            keys = set(refinery_instance.maps_by_engine.get(args.engine, {}))
         else:
             keys = set(refinery_instance.active_maps)
 
@@ -56,6 +58,9 @@ def queue_action(unparsed_command):
                 print('%s %s' % (name, int(val)))
             else:
                 print('%s %s' % (name, val))
+        return None, None
+    elif op == "cls":
+        os.system('cls')
         return None, None
 
     kw = {k.replace("-", "_"): v for k, v in
@@ -95,9 +100,6 @@ def queue_action(unparsed_command):
             for tag_id in tag_ids:
                 if allow_tokens:
                     token = tag_id
-                    if token in tag_path_tokens.ALL_TOKENS_BY_NAMES:
-                        token = tag_path_tokens.ALL_TOKENS_BY_NAMES[token]
-
                     if token in tag_path_tokens.tokens_to_tag_paths:
                         token = tag_path_tokens.tokens_to_tag_paths[token]
 
@@ -129,15 +131,15 @@ def main_loop():
 
         try:
             op, args = queue_action(input(prompt))
+            queue_item = refinery_instance.dequeue(0)
             if op == "quit":
                 break
             elif op == "prompt":
                 prompt_level = args.level
             elif op == "verbose":
                 verbose_level = args.level
-            elif refinery_instance.extract_queue:
-                refinery_instance.process_queue_item(
-                    refinery_instance.dequeue(0))
+            elif queue_item is not None:
+                refinery_instance.process_queue_item(queue_item)
         except Exception:
             print(format_exc(verbose_level))
 

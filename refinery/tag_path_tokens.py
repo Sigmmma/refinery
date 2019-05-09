@@ -39,11 +39,6 @@ TOKEN_XBOX_UI_TITLE_LSND = "<xbox_title>"
 # their shaders, bitmaps, fog, background sounds, lens flares, etc
 
 
-EXTRACT_SCNR = (TOKEN_SCNR, )
-EXTRACT_MATG = (TOKEN_MATG, )
-EXTRACT_PC_SCNR_ALL_TYPE_TAGC = (TOKEN_PC_SCNR_ALL_TYPE_TAGC, )
-EXTRACT_PC_SCNR_MAP_TYPE_TAGC = (TOKEN_PC_SCNR_MAP_TYPE_TAGC, )
-
 # NOTE: These tokens are specified in the order those tags will
 # appear in a compiled map. I'm unsure if they need to be in this
 # order, but regardless this is the order you should find them.
@@ -66,13 +61,13 @@ EXTRACT_XBOX_UI_MAGICALLY_INCLUDED = EXTRACT_XBOX_MAGICALLY_INCLUDED + (
     TOKEN_XBOX_UI_FLAG_FAILURE_SND, TOKEN_XBOX_UI_TITLE_LSND
     )
 
-EXTRACT_PC_SPECIFIC_TAGS = EXTRACT_PC_SCNR_ALL_TYPE_TAGC +\
+EXTRACT_PC_SPECIFIC_TAGS = (TOKEN_PC_SCNR_ALL_TYPE_TAGC, ) +\
                            EXTRACT_PC_MAGICALLY_INCLUDED +\
-                           EXTRACT_PC_SCNR_MAP_TYPE_TAGC
+                           (TOKEN_PC_SCNR_MAP_TYPE_TAGC, )
 
-EXTRACT_ALL_PC_TAGS = (TOKEN_SCNR, TOKEN_MATG) + EXTRACT_PC_SPECIFIC_TAGS
+EXTRACT_PC_ALL_TAGS = (TOKEN_SCNR, TOKEN_MATG) + EXTRACT_PC_SPECIFIC_TAGS
 
-EXTRACT_ALL_XBOX_TAGS = (TOKEN_SCNR, TOKEN_MATG) + EXTRACT_PC_SPECIFIC_TAGS
+EXTRACT_XBOX_ALL_TAGS = (TOKEN_SCNR, TOKEN_MATG) + EXTRACT_XBOX_UI_MAGICALLY_INCLUDED
 
 
 tokens_to_tag_paths = {
