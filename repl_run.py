@@ -135,9 +135,15 @@ def main_loop():
             if op == "quit":
                 break
             elif op == "prompt":
-                prompt_level = args.level
+                if args.level is None:
+                    print(prompt_level)
+                else:
+                    prompt_level = args.level
             elif op == "verbose":
-                verbose_level = args.level
+                if args.level is None:
+                    print(verbose_level)
+                else:
+                    verbose_level = args.level
             elif queue_item is not None:
                 refinery_instance.process_queue_item(queue_item)
         except Exception:
