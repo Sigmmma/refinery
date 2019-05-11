@@ -109,12 +109,12 @@ for name in (
 #########################################################################
 for name in ("deprotect_map", "load_map"):
     _ops[name].add_argument(
-        '--do-printout', default=None, choices=(0, 1), type=int,
+        '-p', '--do-printout', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['do-printout'])
 
 for name in ("deprotect_map", "save_map"):
     _ops[name].add_argument(
-        '--fix-tag-index-offset', default=None, choices=(0, 1), type=int,
+        '-o', '--fix-tag-index-offset', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['fix-tag-index-offset'])
     _ops[name].add_argument(
         '--meta-data-expansion', default=None, type=int,
@@ -136,52 +136,55 @@ for name in ("dir_ct", "file_ct"):
 
 for name in ("extract_tags", "extract_data", "deprotect_map"):
     _ops[name].add_argument(
-        '--print-errors', default=None, choices=(0, 1), type=int,
+        '-e', '--print-errors', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['print-errors'])
 
 for name in ("dir", "files"):
     _ops[name].add_argument(
-        '--guides', default=None, choices=(0, 1), type=int,
+        '-g', '--guides', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['guides'])
     _ops[name].add_argument(
-        '--header', default=None, choices=(0, 1), type=int,
+        '-r', '--header', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['header'])
     _ops[name].add_argument(
-        '--indexed', default=None, choices=(0, 1), type=int,
+        '-i', '--indexed', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['indexed'])
     _ops[name].add_argument(
-        '--tag-ids', default=None, choices=(0, 1), type=int,
+        '-t', '--tag-ids', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['tag-ids'])
+    _ops[name].add_argument(
+        '-n', '--indent', default=None, choices=(0, 1), type=int,
+        help=command_arg_strings[name]['indent'])
 
 for name in ("extract_tag", "extract_tags", "extract_data"):
     _ops[name].add_argument(
-        '--force-lower-case-paths', default=None, choices=(0, 1), type=int,
+        '-l', '--force-lower-case-paths', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['force-lower-case-paths'])
     _ops[name].add_argument(
-        '--generate-comp-verts', default=None, choices=(0, 1), type=int,
+        '-c', '--generate-comp-verts', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['generate-comp-verts'])
     _ops[name].add_argument(
-        '--generate-uncomp-verts', default=None, choices=(0, 1), type=int,
+        '-u', '--generate-uncomp-verts', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['generate-uncomp-verts'])
     _ops[name].add_argument(
-        '--out-dir', default=None,
+        '-d', '--out-dir', default=None,
         help=command_arg_strings[name]['out-dir'])
     _ops[name].add_argument(
-        '--overwrite', default=None, choices=(0, 1), type=int,
+        '-o', '--overwrite', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['overwrite'])
     _ops[name].add_argument(
-        '--recursive', default=None, choices=(0, 1), type=int,
+        '-r', '--recursive', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['recursive'])
     _ops[name].add_argument(
-        '--rename-scnr-dups', default=None, choices=(0, 1), type=int,
+        '-s', '--rename-scnr-dups', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['rename-scnr-dups'])
     _ops[name].add_argument(
-        '--tagslist-path', default=None,
+        '-t', '--tagslist-path', default=None,
         help=command_arg_strings[name]['tagslist-path'])
 
 for name in ("extract_tags", "extract_data"):
     _ops[name].add_argument(
-        '--macros', default=True, choices=(0, 1), type=int,
+        '-m', '--macros', default=True, choices=(0, 1), type=int,
         help=command_arg_strings[name]['macros'])
 
 for name in (
@@ -197,26 +200,14 @@ for name in (
     _ops["set_vars"].add_argument(
         '--%s' % name, default=None, choices=(0, 1), type=int,
         help=command_arg_strings["set_vars"][name])
+    _ops["get_vars"].add_argument(
+        '--%s' % name, const=True, default=False, action="store_const",
+        help=command_arg_strings["get_vars"][name])
 
 for name in ("tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format"):
     _ops["set_vars"].add_argument(
         '--%s' % name, default=None,
         help=command_arg_strings["set_vars"][name])
-    
-for name in (
-        "autoload-resources", "do-printout", "print-errors",
-        "force-lower-case-paths", "rename-scnr-dups", "overwrite",
-        "recursive", "decode-adpcm", "generate-uncomp-verts",
-        "generate-comp-verts", "use-tag-index-for-script-names",
-        "use-scenario-names-for-script-names", "bitmap-extract-keep-alpha",
-        "fix-tag-classes", "fix-tag-index-offset", "use-minimum-priorities",
-        "valid-tag-paths-are-accurate", "scrape-tag-paths-from-scripts",
-        "limit-tag-path-lengths", "print-heuristic-name-changes",
-        "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags",
-        "tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format"):
-    _ops["get_vars"].add_argument(
-        '--%s' % name, const=True, default=False, action="store_const",
-        help=command_arg_strings["get_vars"][name])
 
 for name in ("extract_tags", "extract_data"):
     _ops[name].add_argument(
@@ -224,75 +215,72 @@ for name in ("extract_tags", "extract_data"):
         help=command_arg_strings[name]['tag-ids'])
 
 _ops["extract_tag"].add_argument(
-    '--filepath', default=None,
+    '-f', '--filepath', default=None,
     help=command_arg_strings["extract_tag"]['filepath'])
 
 _ops["extract_data"].add_argument(
-    '--decode-adpcm', default=None, choices=(0, 1), type=int,
+    '-a', '--decode-adpcm', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["extract_data"]['decode-adpcm'])
 _ops["extract_data"].add_argument(
-    '--bitmap-extract-format', default=None, choices=["dds", "tga", "png"],
+    '-b', '--bitmap-extract-format', default=None, choices=["dds", "tga", "png"],
     help=command_arg_strings["extract_data"]['bitmap-extract-format'])
 _ops["extract_data"].add_argument(
-    '--bitmap-extract-keep-alpha', default=None, choices=(0, 1), type=int,
+    '-k', '--bitmap-extract-keep-alpha', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["extract_data"]['bitmap-extract-keep-alpha'])
 
 _ops["load_map"].add_argument(
-    '--autoload-resources', default=None, choices=(0, 1), type=int,
+    '-a', '--autoload-resources', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["load_map"]['autoload-resources'])
 _ops["load_map"].add_argument(
-    '--make-active', default=None, choices=(0, 1), type=int,
+    '-m', '--make-active', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["load_map"]['make-active'])
 _ops["load_map"].add_argument(
-    '--replace-if-same-name', default=None, choices=(0, 1), type=int,
+    '-r', '--replace-if-same-name', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["load_map"]['replace-if-same-name'])
 
 _ops["dir"].add_argument(
     '--depth', default=None, type=int,
     help=command_arg_strings["dir"]['depth'])
 _ops["dir"].add_argument(
-    '--dirs-first', default=None, choices=(0, 1), type=int,
+    '-d', '--dirs-first', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["dir"]['dirs-first'])
 _ops["dir"].add_argument(
-    '--extra-dir-spacing', default=None, choices=(0, 1), type=int,
+    '-e', '--extra-dir-spacing', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["dir"]['extra-dir-spacing'])
 _ops["dir"].add_argument(
-    '--files', default=None, choices=(0, 1), type=int,
+    '-f', '--files', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["dir"]['files'])
-_ops["dir"].add_argument(
-    '--indent', default=None, choices=(0, 1), type=int,
-    help=command_arg_strings["dir"]['indent'])
 
 _ops["deprotect_map"].add_argument(
-    '--fix-tag-classes', default=None, choices=(0, 1), type=int,
+    '-f', '--fix-tag-classes', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['fix-tag-classes'])
 _ops["deprotect_map"].add_argument(
-    '--limit-tag-path-lengths', default=None, choices=(0, 1), type=int,
+    '-l', '--limit-tag-path-lengths', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['limit-tag-path-lengths'])
 _ops["deprotect_map"].add_argument(
-    '--print-heuristic-name-changes', default=None, choices=(0, 1), type=int,
+    '-c', '--print-heuristic-name-changes', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['print-heuristic-name-changes'])
 _ops["deprotect_map"].add_argument(
-    '--rename-cached-tags', default=None, choices=(0, 1), type=int,
+    '-r', '--rename-cached-tags', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['rename-cached-tags'])
 _ops["deprotect_map"].add_argument(
-    '--scrape-tag-paths-from-scripts', default=None, choices=(0, 1), type=int,
+    '-s', '--scrape-tag-paths-from-scripts', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['scrape-tag-paths-from-scripts'])
 _ops["deprotect_map"].add_argument(
-    '--shallow-ui-widget-nesting', default=None, choices=(0, 1), type=int,
+    '-w', '--shallow-ui-widget-nesting', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['shallow-ui-widget-nesting'])
 _ops["deprotect_map"].add_argument(
-    '--use-heuristics', default=None, choices=(0, 1), type=int,
+    '-u', '--use-heuristics', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['use-heuristics'])
 _ops["deprotect_map"].add_argument(
-    '--use-minimum-priorities', default=None, choices=(0, 1), type=int,
+    '-m', '--use-minimum-priorities', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['use-minimum-priorities'])
 _ops["deprotect_map"].add_argument(
-    '--use-scenario-names-for-script-names', default=None, choices=(0, 1), type=int,
+    '-n', '--use-scenario-names-for-script-names', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['use-scenario-names-for-script-names'])
 _ops["deprotect_map"].add_argument(
-    '--use-tag-index-for-script-names', default=None, choices=(0, 1), type=int,
+    '-t', '--use-tag-index-for-script-names', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['use-tag-index-for-script-names'])
 _ops["deprotect_map"].add_argument(
-    '--valid-tag-paths-are-accurate', default=None, choices=(0, 1), type=int,
+    '-v', '--valid-tag-paths-are-accurate', default=None, choices=(0, 1), type=int,
     help=command_arg_strings["deprotect_map"]['valid-tag-paths-are-accurate'])
