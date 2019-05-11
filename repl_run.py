@@ -8,6 +8,7 @@ from traceback import format_exc
 from refinery import core
 from refinery import tag_path_tokens
 from refinery import repl_arg_parsers
+from refinery import repl_help_strs
 from refinery import repl_util
 
 
@@ -73,6 +74,58 @@ def queue_action(unparsed_command):
         kw["do_printout"] = True
     elif op in ("set_bool", "set_str"):
         kw["name"] = kw["name"].replace("-", "_")
+    elif op in ("tag_id_tokens", "tag_id_macros"):
+        if op == "tag_id_tokens":
+            prefix = args.prefix.lower()
+            help_strs = repl_help_strs.token_help_strings
+        else:
+            prefix = args.prefix.upper()
+            help_strs = repl_help_strs.macro_help_strings
+
+        for name in sorted(help_strs):
+            # print the tag-id macro and token help strings with the same
+            # formatting as the help strings in the rest of the program.
+            if not name.strip("<>").startswith(prefix.strip("<>")):
+                continue
+
+            print("    %s" % name, end=("\n" if len(name) > 18 else ""))
+            if len(name) < 19:
+                print(" " * (20 - len(name)), end="")
+            else:
+                print(" " * 24, end="")
+
+            help_str = help_strs[name].replace("\r", "\n").replace("\t", "    ").\
+                       replace("\f", " ").replace("\v", " ")
+            while help_str:
+                curr_line = help_str[: 55]
+                help_str = help_str[55: ]
+
+                lines = curr_line.split("\n", 1)
+                if len(lines) == 2:
+                    curr_line = lines[0]
+                    help_str = lines[1] + help_str
+
+                if (help_str and curr_line) and curr_line[-1] != " ":
+                    curr_line_pieces = curr_line.split(" ")
+                    new_curr_line = ""
+                    while curr_line_pieces:
+                        line_piece = curr_line_pieces.pop(0)
+                        if new_curr_line and (len(line_piece) +
+                                              len(new_curr_line) >= 53):
+                            curr_line_pieces.insert(0, line_piece)
+                            break
+
+                        if new_curr_line: new_curr_line += " "
+                        new_curr_line += line_piece
+
+                    curr_line = new_curr_line
+                    help_str = "".join(curr_line_pieces + [help_str])
+
+                print(curr_line)
+                if help_str:
+                    print(" " * 24, end="")
+
+        return None, None
     elif op == "set_vars":
         names = []
         values = []
@@ -88,7 +141,6 @@ def queue_action(unparsed_command):
 
     if kw.get("tag_ids"):
         allow_macros = kw.pop("macros", False)
-        allow_tokens = kw.pop("tokens", False) or allow_macros
         all_tag_ids = []
         for val in kw["tag_ids"]:
             macro = tag_path_tokens.ALL_TOKEN_MACROS_BY_NAMES.get(val.upper())
@@ -98,13 +150,12 @@ def queue_action(unparsed_command):
                 tag_ids = (val, )
 
             for tag_id in tag_ids:
-                if allow_tokens:
-                    token = tag_id
-                    if token in tag_path_tokens.tokens_to_tag_paths:
-                        token = tag_path_tokens.tokens_to_tag_paths[token]
+                token = tag_id
+                if token in tag_path_tokens.tokens_to_tag_paths:
+                    token = tag_path_tokens.tokens_to_tag_paths[token]
 
-                    if token:
-                        tag_id = token
+                if token:
+                    tag_id = token
 
                 try:
                     all_tag_ids.append(int(tag_id))
@@ -153,17 +204,17 @@ def main_loop():
 if __name__ == '__main__':
     start = time()
     init_arg_parser = argparse.ArgumentParser(
-        description="This is Refinery!")
+        description="Remind Moses to replace this fucking garbage help text.")
 
     if not hasattr(sys, "orig_stdout"):
         sys.orig_stdout = sys.stdout
 
     init_arg_parser.add_argument(
         'filepath', nargs='?',
-        help='Path to a text file where each line is an action to execute.')
+        help='Path to a text file of operations to batch process.')
     init_arg_parser.add_argument(
         '-b', '--batch-mode', default=False, action="store_const", const=True,
-        dest="batch_mode")
+        help='Whether to skip going into read-eval-print-loop after batch processing.')
 
 
     args = init_arg_parser.parse_args()
