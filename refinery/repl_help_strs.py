@@ -6,21 +6,21 @@ __all__ = ("macro_help_strings", "token_help_strings",
 
 macro_help_strings = dict(
     PC_ALL_TAGS="All tags required to build a Halo PC map:\n\
-\t<scenario> <globals> PC_SPECIFIC_TAGS",
+<scenario> <globals> PC_SPECIFIC_TAGS",
     PC_SPECIFIC_TAGS="All tags specific to Halo PC maps:\n\
-\t<pc_tagc_all_type> PC_MAGICALLY_INCLUDED <pc_tagc_map_type>",
-    PC_MAGICALLY_INCLUDED="Misc tags explicitly seeked out when building a PC map.\n\
-\t<pc_background> <pc_loading> <pc_mp_map_list> <pc_trouble> <pc_cursor> <pc_forward> \
+<pc_tagc_all_type> PC_MAGICALLY_INCLUDED <pc_tagc_map_type>",
+    PC_MAGICALLY_INCLUDED="Misc tags explicitly seeked out when building a PC map:\n\
+<pc_background> <pc_loading> <pc_mp_map_list> <pc_trouble> <pc_cursor> <pc_forward> \
 <pc_back> <pc_flag_failure>",
     XBOX_ALL_TAGS="All tags required to build a Halo Xbox map:\n\
-\t<scenario> <globals> XBOX_UI_MAGICALLY_INCLUDED",
+<scenario> <globals> XBOX_UI_MAGICALLY_INCLUDED",
     XBOX_UI_MAGICALLY_INCLUDED="Misc tags explicitly seeked out when building a Xbox ui.map:\n\
-\tXBOX_MAGICALLY_INCLUDED <xbox_ui_keyboard> <xbox_ui_random_names> <xbox_ui_multiplayer_desc> \
+XBOX_MAGICALLY_INCLUDED <xbox_ui_keyboard> <xbox_ui_random_names> <xbox_ui_multiplayer_desc> \
 <xbox_ui_saved_games> <xbox_ui_default_gametype_names> <xbox_ui_gametype_descs> \
 <xbox_ui_default_players> <xbox_ui_button_long_desc> <xbox_ui_button_short_desc> \
 <xbox_ui_joystick_short_desc> <xbox_cursor> <xbox_flag_failure> <xbox_title>",
     XBOX_MAGICALLY_INCLUDED="Misc tags explicitly seeked out when building a Xbox map:\n\
-\t<xb_mp_game_text> <xb_shell_white> <xb_soul>",
+<xb_mp_game_text> <xb_shell_white> <xb_soul>",
     )
 
 token_help_strings = dict(tokens_to_tag_paths)
@@ -62,8 +62,10 @@ Unprovided arguments are set to the current default variables any time a command
 If no variable names are provided, all variables are printed.",
     map_info="Displays map header and tag index information.",
     tag_id_tokens="Displays the available tag-id tokens and what they represent. \
+Tokens may be used whenever a tag-id is needed. \
 Any provided prefix string will be used to filter which tokens are displayed.",
     tag_id_macros="Displays the available tag-id token macros and what tokens they contain. \
+Macros may be used whenever multiple tag-ids are needed. \
 Any provided prefix string will be used to filter which macros are displayed.",
     switch_map="Switches which map is active by the maps name.",
     switch_map_by_filepath="Switches which map is active by the maps filepath.",
@@ -83,59 +85,97 @@ If a map is currently active under that engine, it will become the active map.",
     prompt="Displays/sets the information displayed in the prompt.",
     )
 
+default_var_help_strs = {
+    "autoload-resources": "Whether to automatically find and load all required shared/resource maps.",
+    "bitmap-extract-format": "The image format to extract bitmaps to when extracting as data.",
+    "bitmap-extract-keep-alpha": "Whether to keep the alpha channel when extracting bitmaps to png.",
+    "data-dir": "The default directory to extract data to.",
+    "decode-adpcm": "Whether to decode ADPCM sounds to 16bit PCM when extracting as data.",
+    "do-printout": "Whether to display debug information about the operation progress as it occurs.",
+    "fix-tag-classes": "Whether to repair tag classes.",
+    "fix-tag-index-offset": "Whether to move the tag index back to where most programs require it to be. \
+WARNING: This can break certain maps, so don't do this unless you are sure you can.",
+    "force-lower-case-paths": "Whether to lowercase all tag paths in extracted tags, and \
+to lowercase the path they are extracted to.",
+    "generate-comp-verts": "Whether to generate compressed lightmap vertices when extracting bsps.",
+    "generate-uncomp-verts": "Whether to generate uncompressed lightmap vertices when extracting bsps.",
+    "limit-tag-path-lengths": "Whether to shorten tag paths to the Win32 limit of 254 characters.",
+    "overwrite": "Whether to overwrite existing files when extracting.",
+    "print-errors": "Whether to print exceptions as they occur, rather than letting them stop the operation.",
+    "print-heuristic-name-changes": "Whether to print a tags name each time it changes during heuristic deprotection",
+    "recursive": "Whether to extract ALL tags needed by each tag being extracted.",
+    "rename-cached-tags": "Whether to rename indexed tags using names taken from the loaded resource maps.",
+    "rename-scnr-dups": "Whether to rename scenario names to remove unused duplicates. \
+Duplicates can prevent scripts from being recompiled.",
+    "scrape-tag-paths-from-scripts": "Whether to try extracting original tag paths from compiled scripts.",
+    "shallow-ui-widget-nesting": "Whether to use shallow nesting for ui_widget_definition tags \
+and their children. If set, ui_widget_definition tags will be flatly stored in ui\\shell\\",
+    "tags-dir": "The default directory to extract tags to.",
+    "tagslist-path": "Filepath to a text file to record tag and data extractions.",
+    "use-heuristics": "Whether to use heuristics based deprotection. \
+Heuristics assumes most tag paths are protecetd, and generates new ones based on how tags are used. \
+Use this when deprotecting the most heavily protected maps.",
+    "use-minimum-priorities": "Whether to use an experimental method for lowering heuristic \
+deprotection. Keep this on unless you experience bugs with heuristics.",
+    "use-scenario-names-for-script-names": "Whether to use the scenarios current object names \
+rather than those in the script_string_data when extracting scripts.",
+    "use-tag-index-for-script-names": "Whether to use the maps current tag paths rather than \
+those in the script_string_data when extracting scripts.",
+    "valid-tag-paths-are-accurate": "Whether to assume tag-paths NOT beginning with 'protected' \
+are valid, and thus not needing deprotection.",
+    }
+
 
 command_arg_strings = dict(
     extract_tags={
         "map-name": "Name of the map to extract from. Defaults to <active>",
         "engine": "Engine of the map to extract from. Defaults to <active>",
 
-        "print-errors": "",
-        "force-lower-case-paths": "",
-        "generate-comp-verts": "",
-        "generate-uncomp-verts": "",
-        "out-dir": "",
-        "overwrite": "",
-        "recursive": "",
-        "rename-scnr-dups": "",
-        "tagslist-path": "",
-        "tokens": "",
-        "macros": "",
-        "tag-ids": "",
+        "print-errors": default_var_help_strs["print-errors"],
+        "force-lower-case-paths": default_var_help_strs["force-lower-case-paths"],
+        "generate-comp-verts": default_var_help_strs["generate-comp-verts"],
+        "generate-uncomp-verts": default_var_help_strs["generate-uncomp-verts"],
+        "overwrite": default_var_help_strs["overwrite"],
+        "recursive": default_var_help_strs["recursive"],
+        "rename-scnr-dups": default_var_help_strs["rename-scnr-dups"],
+        "tagslist-path": default_var_help_strs["tagslist-path"],
+        "out-dir": "The directory to extract tags to.",
+        "macros": "Whether to check for macros in the tag-ids.",
+        "tag-ids": "The tag-ids of the tags to extract. May also include tag-id macros.",
         },
     extract_data={
         "map-name": "Name of the map to extract from. Defaults to <active>",
         "engine": "Engine of the map to extract from. Defaults to <active>",
 
-        "print-errors": "",
-        "force-lower-case-paths": "",
-        "generate-comp-verts": "",
-        "generate-uncomp-verts": "",
-        "out-dir": "",
-        "overwrite": "",
-        "recursive": "",
-        "rename-scnr-dups": "",
-        "tagslist-path": "",
-        "tokens": "",
-        "macros": "",
-        "tag-ids": "",
-        "decode-adpcm": "",
-        "bitmap-extract-format": "",
-        "bitmap-extract-keep-alpha": "",
+        "print-errors": default_var_help_strs["print-errors"],
+        "force-lower-case-paths": default_var_help_strs["force-lower-case-paths"],
+        "generate-comp-verts": default_var_help_strs["generate-comp-verts"],
+        "generate-uncomp-verts": default_var_help_strs["generate-uncomp-verts"],
+        "overwrite": default_var_help_strs["overwrite"],
+        "recursive": default_var_help_strs["recursive"],
+        "rename-scnr-dups": default_var_help_strs["rename-scnr-dups"],
+        "tagslist-path": default_var_help_strs["tagslist-path"],
+        "decode-adpcm": default_var_help_strs["decode-adpcm"],
+        "bitmap-extract-format": default_var_help_strs["bitmap-extract-format"],
+        "bitmap-extract-keep-alpha": default_var_help_strs["bitmap-extract-keep-alpha"],
+        "out-dir": "The directory to extract data to.",
+        "macros": "Whether to check for macros in the tag-ids.",
+        "tag-ids": "The tag-ids of the data to extract. May also include tag-id macros.",
         },
     extract_tag={
-        "tag-id": "",
+        "tag-id": "The tag-id of the tag to extract.",
         "map-name": "Name of the map to extract from. Defaults to <active>",
         "engine": "Engine of the map to extract from. Defaults to <active>",
 
-        "force-lower-case-paths": "",
-        "generate-comp-verts": "",
-        "generate-uncomp-verts": "",
-        "out-dir": "",
-        "overwrite": "",
-        "recursive": "",
-        "rename-scnr-dups": "",
-        "tagslist-path": "",
-        "filepath": "",
+        "force-lower-case-paths": default_var_help_strs["force-lower-case-paths"],
+        "generate-comp-verts": default_var_help_strs["generate-comp-verts"],
+        "generate-uncomp-verts": default_var_help_strs["generate-uncomp-verts"],
+        "overwrite": default_var_help_strs["overwrite"],
+        "recursive": default_var_help_strs["recursive"],
+        "rename-scnr-dups": default_var_help_strs["rename-scnr-dups"],
+        "tagslist-path": default_var_help_strs["tagslist-path"],
+        "out-dir": "The directory to extract the tag to.",
+        "filepath": "The filepath to extract the tag to.",
         },
     extract_cheape={
         "filepath": "The filepath to extract the cheape.map to.",
@@ -147,32 +187,32 @@ command_arg_strings = dict(
         "map-name": "Name of the map to deprotect. Defaults to <active>",
         "engine": "Engine of the map to deprotect. Defaults to <active>",
 
-        "do-printout": "",
-        "fix-tag-index-offset": "",
-        "meta-data-expansion": "",
-        "raw-data-expansion": "",
-        "triangle-data-expansion": "",
-        "vertex-data-expansion": "",
-        "print-errors": "",
-        "fix-tag-classes": "",
-        "limit-tag-path-lengths": "",
-        "print-heuristic-name-changes": "",
-        "rename-cached-tags": "",
-        "scrape-tag-paths-from-scripts": "",
-        "shallow-ui-widget-nesting": "",
-        "use-heuristics": "",
-        "use-minimum-priorities": "",
-        "use-scenario-names-for-script-names": "",
-        "use-tag-index-for-script-names": "",
-        "valid-tag-paths-are-accurate": "",
+        "do-printout": default_var_help_strs["do-printout"],
+        "fix-tag-index-offset": default_var_help_strs["fix-tag-index-offset"],
+        "print-errors": default_var_help_strs["print-errors"],
+        "fix-tag-classes": default_var_help_strs["fix-tag-classes"],
+        "limit-tag-path-lengths": default_var_help_strs["limit-tag-path-lengths"],
+        "print-heuristic-name-changes": default_var_help_strs["print-heuristic-name-changes"],
+        "rename-cached-tags": default_var_help_strs["rename-cached-tags"],
+        "scrape-tag-paths-from-scripts": default_var_help_strs["scrape-tag-paths-from-scripts"],
+        "shallow-ui-widget-nesting": default_var_help_strs["shallow-ui-widget-nesting"],
+        "use-heuristics": default_var_help_strs["use-heuristics"],
+        "use-minimum-priorities": default_var_help_strs["use-minimum-priorities"],
+        "use-scenario-names-for-script-names": default_var_help_strs["use-scenario-names-for-script-names"],
+        "use-tag-index-for-script-names": default_var_help_strs["use-tag-index-for-script-names"],
+        "valid-tag-paths-are-accurate": default_var_help_strs["valid-tag-paths-are-accurate"],
+        "meta-data-expansion": "The number of bytes to expand the tag data section by.",
+        "raw-data-expansion": "The number of bytes to expand the raw data section by.",
+        "triangle-data-expansion": "The number of bytes to expand the indices section by.",
+        "vertex-data-expansion": "The number of bytes to expand the vertices section by.",
         },
     load_map={
         "filepath": "The filepath of the map to load.",
 
-        "do-printout": "",
-        "autoload-resources": "",
-        "make-active": "",
-        "replace-if-same-name": "",
+        "do-printout": default_var_help_strs["do-printout"],
+        "autoload-resources": default_var_help_strs["autoload-resources"],
+        "make-active": "Whether to set this map as the active map.",
+        "replace-if-same-name": "Whether to unload any map using the same engine and map-name as this one.",
         },
     unload_map={
         "map-name": "Name of the map to unload. Defaults to <active>",
@@ -183,11 +223,11 @@ command_arg_strings = dict(
         "map-name": "Name of the map to save. Defaults to <active>",
         "engine": "Engine of the map to save. Defaults to <active>",
 
-        "fix-tag-index-offset": "",
-        "meta-data-expansion": "",
-        "raw-data-expansion": "",
-        "triangle-data-expansion": "",
-        "vertex-data-expansion": "",
+        "fix-tag-index-offset": default_var_help_strs["fix-tag-index-offset"],
+        "meta-data-expansion": "The number of bytes to expand the tag data section by.",
+        "raw-data-expansion": "The number of bytes to expand the raw data section by.",
+        "triangle-data-expansion": "The number of bytes to expand the indices section by.",
+        "vertex-data-expansion": "The number of bytes to expand the vertices section by.",
         },
     rename_map={
         "new-name": "The name to rename the map to. Must be under 32 characters.",
@@ -218,44 +258,19 @@ Contents of dir-path are merged into any existing directory.",
         "map-name": "Name of the map to rename the directory in. Defaults to <active>",
         "engine": "Engine of the map to rename the directory in. Defaults to <active>",
         },
-    get_vars={
-        "autoload-resources": "",
-        "do-printout": "",
-        "print-errors": "",
-        "force-lower-case-paths": "",
-        "rename-scnr-dups": "",
-        "overwrite": "",
-        "recursive": "",
-        "decode-adpcm": "",
-        "generate-uncomp-verts": "",
-        "generate-comp-verts": "",
-        "use-tag-index-for-script-names": "",
-        "use-scenario-names-for-script-names": "",
-        "bitmap-extract-keep-alpha": "",
-        "fix-tag-classes": "",
-        "fix-tag-index-offset": "",
-        "use-minimum-priorities": "",
-        "valid-tag-paths-are-accurate": "",
-        "scrape-tag-paths-from-scripts": "",
-        "limit-tag-path-lengths": "",
-        "print-heuristic-name-changes": "",
-        "use-heuristics": "",
-        "shallow-ui-widget-nesting": "",
-        "rename-cached-tags": "",
-        "tags-dir": "",
-        "data-dir": "",
-        "tagslist-path": "",
-        "bitmap-extract-format": "",
-        },
+    set_vars=default_var_help_strs,
+    get_vars=default_var_help_strs,
     map_info={
         "map-name": "Name of the map to display. Defaults to <active>",
         "engine": "Engine of the map to display. Defaults to <active>",
         },
     tag_id_tokens={
-        "token-prefix": "",
+        "prefix": "The prefix used to filter what tokens to display. \
+It is not necessary to include '<' or '>'.",
         },
     tag_id_macros={
-        "macro-prefix": "",
+        "prefix": "The prefix used to filter what macros to display. \
+It is not necessary to include '<' or '>'.",
         },
     switch_map={
         "map-name": "Name of the map to switch to.",
@@ -271,26 +286,27 @@ Contents of dir-path are merged into any existing directory.",
         "map-name": "Name of the map whose directory to display. Defaults to <active>",
         "engine": "Engine of the map whose directory to display. Defaults to <active>",
 
-        "depth": "",
-        "guides": "",
-        "header": "",
-        "indexed": "",
-        "tag-ids": "",
-        "dirs-first": "",
-        "extra-dir-spacing": "",
-        "files": "",
-        "indent": "",
+        "guides": "Whether to display guide-lines to help in understanding the hierarchy.",
+        "header": "Whether to display the names of each column as the first row.",
+        "indexed": "Whether to display if the tag is indexed.",
+        "tag-ids": "Whether to display the tag-id of each tag.",
+        "indent": "The number of spaces to indent each sub-directory.",
+
+        "depth": "The number of sub-directories to display. 0 displays only the current directory.",
+        "dirs-first": "Whether to display directories before files.",
+        "extra-dir-spacing": "The number of rows to separate the end of a directory from the next.",
+        "files": "Whether to also display tags. If 0, only directories will be displayed.",
         },
     files={
         "dir": "The directory whose files to display.",
         "map-name": "Name of the map whose files to display. Defaults to <active>",
         "engine": "Engine of the map whose files to display. Defaults to <active>",
 
-        "guides": "",
-        "header": "",
-        "indexed": "",
-        "tag-ids": "",
-        "indent": "",
+        "guides": "Whether to display guide-lines to help in understanding the hierarchy.",
+        "header": "Whether to display the names of each column as the first row.",
+        "indexed": "Whether to display if the tag is indexed.",
+        "tag-ids": "Whether to display the tag-id of each tag.",
+        "indent": "The number of spaces to indent each sub-directory.",
         },
     dir_ct={
         "dir": "The directory whose directory count to display.",
@@ -329,5 +345,3 @@ Contents of dir-path are merged into any existing directory.",
 0 == nothing  1 == active map name  2 == active engine and active map name",
         },
     )
-
-command_arg_strings["set_vars"] = command_arg_strings["get_vars"]
