@@ -301,9 +301,10 @@ class RefineryCore:
         if halo_map is None:
             return
 
-        halo_map.unload_map()
-        if halo_map is active_map:
+        if halo_map is self.active_map:
             self.active_map_name = ""
+
+        halo_map.unload_map()
 
     def save_map(self, save_path=None, map_name=ACTIVE_INDEX,
                  engine=ACTIVE_INDEX, **kw):
