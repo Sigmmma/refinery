@@ -186,8 +186,11 @@ for name in ("extract_tags", "extract_data"):
     _ops[name].add_argument(
         '-m', '--macros', default=True, choices=(0, 1), type=int,
         help=command_arg_strings[name]['macros'])
+    _ops[name].add_argument(
+        '--tag-ids', nargs="*", default=(tag_path_tokens.TOKEN_ALL, ),
+        help=command_arg_strings[name]['tag-ids'])
 
-for name in (
+for op_name in (
         "autoload-resources", "do-printout", "print-errors",
         "force-lower-case-paths", "rename-scnr-dups", "overwrite",
         "recursive", "decode-adpcm", "generate-uncomp-verts",
@@ -197,22 +200,18 @@ for name in (
         "valid-tag-paths-are-accurate", "scrape-tag-paths-from-scripts",
         "limit-tag-path-lengths", "print-heuristic-name-changes",
         "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags"):
+    # these dont get shorthand settings because there are too damn many of them
     _ops["set_vars"].add_argument(
         '--%s' % name, default=None, choices=(0, 1), type=int,
-        help=command_arg_strings["set_vars"][name])
+        help=command_arg_strings["set_vars"][op_name])
     _ops["get_vars"].add_argument(
         '--%s' % name, const=True, default=False, action="store_const",
-        help=command_arg_strings["get_vars"][name])
+        help=command_arg_strings["get_vars"][op_name])
 
-for name in ("tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format"):
+for op_name in ("tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format"):
     _ops["set_vars"].add_argument(
         '--%s' % name, default=None,
-        help=command_arg_strings["set_vars"][name])
-
-for name in ("extract_tags", "extract_data"):
-    _ops[name].add_argument(
-        '--tag-ids', nargs="*", default=(tag_path_tokens.TOKEN_ALL, ),
-        help=command_arg_strings[name]['tag-ids'])
+        help=command_arg_strings["set_vars"][op_name])
 
 _ops["extract_tag"].add_argument(
     '-f', '--filepath', default=None,
