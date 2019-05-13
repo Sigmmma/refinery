@@ -8,20 +8,13 @@ class RefineryQueueItem:
         op = str(operation)
         provided_kwargs = set(kwargs)
 
-        if op == "extract_cheape":
-            required = ("filepath", )
-            if "filepath" not in kwargs and ("out_dir" in kwargs and
-                                             "map_name" in kwargs):
-                kwargs["filepath"] = os.path.join(
-                    self.out_dir, self.map_name + "_cheape.map")
-
-        elif op in ("load_map", "switch_map_by_filepath"):
+        if op in ("load_map", "switch_map_by_filepath"):
             required = ("filepath", )
 
         elif op in ("extract_tags", "extract_data"):
             required = ("tag_ids", )
 
-        elif op in ("deprotect_map", "save_map",
+        elif op in ("deprotect_map", "save_map", "extract_cheape",
                     "print_dir", "print_files", "print_map_info", "unload_map",
                     "print_dir_ct", "print_dir_names", "print_total_dir_ct",
                     "print_file_ct", "print_file_names", "print_total_file_ct"):
@@ -48,7 +41,6 @@ class RefineryQueueItem:
                 (op, ", ".join(sorted(missing_kwargs))))
 
         assert isinstance(kwargs.get("filepath", ""), str)
-        assert isinstance(kwargs.get("out_dir", ""), str)
         assert isinstance(kwargs.get("new_name", ""), str)
         assert isinstance(kwargs.get("map_name", ""), str)
         assert isinstance(kwargs.get("engine_name", ""), str)

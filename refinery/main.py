@@ -228,6 +228,7 @@ class Refinery(tk.Tk, RefineryCore):
         self.file_menu.add_command(label="Exit", command=self.destroy)
 
         self.bind('<Control-o>', lambda *a, s=self: s.browse_for_maps())
+        self.bind('<Control-s>', lambda *a, s=self: s.save_map_as())
 
         self.edit_menu.add_command(
             label="Rename map", command=self.show_rename)
@@ -1177,7 +1178,8 @@ class Refinery(tk.Tk, RefineryCore):
         del self._extract_queue[:]
         cheapes = set()
 
-        for queue_item_iid, settings in self.queue_tree.queue_info.items():
+        for queue_item_iid in self.queue_tree.get_item_names():
+            settings = self.queue_tree.get_item(queue_item_iid)
             op_kw = {k: v.get() for k, v in
                      settings.items() if k in self.tk_vars}
             tag_ids = list(b.id & 0xFFff for b in settings["tag_index_refs"])
@@ -1185,27 +1187,23 @@ class Refinery(tk.Tk, RefineryCore):
             engine = settings['halo_map'].engine
             map_name = settings['halo_map'].map_name
 
-            self.enqueue("extract_tags"
-                         if op_kw["extract_mode"] == "tags" else
-                         "extract_data",
-                         queue_item_iid=queue_item_iid, tag_ids=tag_ids,
-                         **op_kw)
-
             engine_map_key = (engine, map_name)
             if (op_kw.get("extract_yelo_cheape", self.extract_yelo_cheape)
                 and engine_map_key not in cheapes):
                 self.enqueue("extract_cheape", **op_kw)
                 cheapes.add(engine_map_key)
 
+            self.enqueue("extract_tags"
+                         if op_kw["extract_mode"] == "tags" else
+                         "extract_data",
+                         queue_item_iid=queue_item_iid, tag_ids=tag_ids,
+                         **op_kw)
+
         tags_by_map, data_by_map = RefineryCore.process_queue(self, **kw)
-        tags_extracted = data_extracted = 0
-        for tag_ids in tags_by_map.values():
-            tags_extracted += len(tag_ids)
+        items_extracted = sum(len(item) for item in tags_by_map.values()) +\
+                          sum(len(item) for item in data_by_map.values())
 
-        for tag_ids in data_by_map.values():
-            data_extracted += len(tag_ids)
-
-        if not tags_extracted and not data_extracted:
+        if not items_extracted:
             print("Nothing was extracted. This might be a permissions issue.\n"
                   "Close Refinery and run it as admin to potentially fix this.")
 

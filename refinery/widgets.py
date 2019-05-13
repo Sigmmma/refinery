@@ -254,8 +254,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if settings['accept_settings'].get():
             settings['tag_index_refs'] = self._compile_list_of_selected("")
             settings['title'] = item_name
-            self.queue_tree.add_to_queue("%s: map: %s" % (
-                settings['extract_mode'].get(), item_name), settings)
+            self.queue_tree.add_to_queue("%s: %s: %s" % (
+                settings['extract_mode'].get(), self.active_map.engine,
+                item_name), settings)
 
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
@@ -745,6 +746,12 @@ class QueueTree(ExplorerHierarchyTree):
 
         self.tags_tree.bind('<BackSpace>', self.remove_curr_selection)
         self.tags_tree.bind('<Delete>', self.remove_curr_selection)
+
+    def get_item(self, item_name):
+        return self.queue_info.get(item_name)
+
+    def get_item_names(self):
+        return self.tags_tree.get_children()
 
     def setup_columns(self):
         pass

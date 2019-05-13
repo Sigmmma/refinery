@@ -1132,7 +1132,7 @@ class RefineryCore:
     def process_queue_item(self, queue_item, **kw):
         tags_by_map = kw.pop("tags_extracted_by_map", {})
         data_by_map = kw.pop("data_extracted_by_map", {})
-        cheapes = kw.pop("cheapes_extracted", set())
+        cheapes_extracted = kw.pop("cheapes_extracted", set())
 
         op = queue_item.operation
         kw.update(queue_item.operation_kwargs)
@@ -1147,6 +1147,9 @@ class RefineryCore:
         halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if not halo_map and op not in ("load_map", "set_vars"):
             return
+
+        engine = halo_map.engine
+        map_name = halo_map.map_name
 
         if op in ("extract_tags", "extract_data"):
             if op == "extract_tags":
@@ -1172,7 +1175,12 @@ class RefineryCore:
             if tag_ids[0] not in ignore:
                 self.extract_tag(tag_ids[0], map_name, engine, **kw)
                 ignore.add(tag_ids[0])
-        elif op == "extract_cheape" and map_name not in cheapes:
+        elif op == "extract_cheape" and map_name not in cheapes_extracted:
+            if not filepath:
+                filepath = os.path.join(
+                    sanitize_path(kw.pop("out_dir", self.tags_dir)),
+                    map_name + "_cheape.map")
+
             cheapes_extracted.add(map_name)
             self.extract_cheape(filepath, map_name, engine)
         elif op == "deprotect_map":
