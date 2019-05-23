@@ -1145,11 +1145,10 @@ class RefineryCore:
         filepath = sanitize_path(kw.pop("filepath", ""))
 
         halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
+        engine = getattr(halo_map, "engine", None)
+        map_name = getattr(halo_map, "map_name", None)
         if not halo_map and op not in ("load_map", "set_vars"):
             return
-
-        engine = halo_map.engine
-        map_name = halo_map.map_name
 
         if op in ("extract_tags", "extract_data"):
             if op == "extract_tags":
