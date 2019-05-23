@@ -1,7 +1,33 @@
 from refinery.tag_path_tokens import *
 
 __all__ = ("macro_help_strings", "token_help_strings",
-           "command_help_strings", "command_arg_strings",)
+           "command_help_strings", "command_arg_strings",
+           "refinery_help_string")
+
+refinery_desc_string = """
+Welcome to Refinery! This program is designed to extract
+tags and data from map files used by various Halo engines.
+Currently supports extracting from Halo 1 Xbox/PC/CE/
+Anniversary/PC Demo/Xbox demo, Stubbs the Zombie Xbox/PC,
+Halo 2 Vista, and Halo 3.
+
+
+To use Refinery, load a map(s), set your default tags and
+data extraction directories, and extract whatever you need.
+If this script is given a filepath to a text file, it will
+be parsed, and Refinery will execute each line. Passing the
+-b parameter will close Refinery once it finishes processing.
+"""
+
+refinery_epilog_string = """
+Usage example:
+
+Refinery: set-vars --tags-dir "C:/map_test/tags/" --tagslist-path "C:/map_test/tagslist.txt"
+Refinery: load-map "C:/lockout_test/maps/bloodgulch.map"
+    Loading definitions in 'reclaimer.os_v4_hek.defs'
+    Loading definitions in 'reclaimer.hek.defs'
+bloodgulch: extract-tags --tag-ids PC_ALL_TAGS
+"""
 
 
 macro_help_strings = dict(
