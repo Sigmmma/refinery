@@ -12,9 +12,6 @@ from refinery import repl_help_strs
 from refinery import repl_util
 
 
-# TODO: Fill out the tag-id-macros function
-
-
 def queue_action(unparsed_command):
     command_args = repl_util.convert_arg_line_to_args(unparsed_command.strip())
     if not command_args:
@@ -204,7 +201,9 @@ def main_loop():
 if __name__ == '__main__':
     start = time()
     init_arg_parser = argparse.ArgumentParser(
-        description="Remind Moses to replace this fucking garbage help text.")
+        description=repl_help_strs.refinery_desc_string,
+        epilog=repl_help_strs.refinery_epilog_string,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
 
     if not hasattr(sys, "orig_stdout"):
         sys.orig_stdout = sys.stdout

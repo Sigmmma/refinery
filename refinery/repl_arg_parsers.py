@@ -2,13 +2,15 @@ import argparse
 
 from refinery import tag_path_tokens
 from refinery.repl_help_strs import command_help_strings,\
-     command_arg_strings
+     command_arg_strings, refinery_desc_string, refinery_epilog_string
 
 __all__ = ("repl_parser", "repl_subparser",)
 
 
 repl_parser = argparse.ArgumentParser(
-    description="This is Refinery!"
+    description=refinery_desc_string,
+    epilog=refinery_epilog_string,
+    formatter_class=argparse.RawDescriptionHelpFormatter
     )
 # make an argument to specify whether commands are to be queued or executed
 repl_subparser = repl_parser.add_subparsers(dest="operation")
@@ -202,15 +204,15 @@ for op_name in (
         "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags"):
     # these dont get shorthand settings because there are too damn many of them
     _ops["set_vars"].add_argument(
-        '--%s' % name, default=None, choices=(0, 1), type=int,
+        '--%s' % op_name, default=None, choices=(0, 1), type=int,
         help=command_arg_strings["set_vars"][op_name])
     _ops["get_vars"].add_argument(
-        '--%s' % name, const=True, default=False, action="store_const",
+        '--%s' % op_name, const=True, default=False, action="store_const",
         help=command_arg_strings["get_vars"][op_name])
 
 for op_name in ("tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format"):
     _ops["set_vars"].add_argument(
-        '--%s' % name, default=None,
+        '--%s' % op_name, default=None,
         help=command_arg_strings["set_vars"][op_name])
 
 _ops["extract_tag"].add_argument(
