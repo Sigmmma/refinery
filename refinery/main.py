@@ -134,6 +134,8 @@ class Refinery(tk.Tk, RefineryCore):
         self._use_tag_index_for_script_names = tk.IntVar(self)
         self._use_scenario_names_for_script_names = tk.IntVar(self)
         self._bitmap_extract_keep_alpha = tk.IntVar(self, 1)
+        self._disable_safe_mode = tk.IntVar(self, 0)
+        self._disable_reflexive_cleaning = tk.IntVar(self, 0)
         self._bitmap_extract_format = tk.StringVar(self)
 
         self._fix_tag_classes = tk.IntVar(self, 1)
@@ -171,6 +173,8 @@ class Refinery(tk.Tk, RefineryCore):
             use_tag_index_for_script_names=self._use_tag_index_for_script_names,
             use_scenario_names_for_script_names=self._use_scenario_names_for_script_names,
             bitmap_extract_keep_alpha=self._bitmap_extract_keep_alpha,
+            disable_safe_mode=self._disable_safe_mode,
+            disable_reflexive_cleaning=self._disable_reflexive_cleaning,
             bitmap_extract_format=self._bitmap_extract_format,
 
             fix_tag_classes=self._fix_tag_classes,

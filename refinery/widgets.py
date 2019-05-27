@@ -82,6 +82,8 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
         tagslist_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
+        disable_safe_mode=tk.StringVar(parent),
+        disable_tag_cleaning=tk.StringVar(parent),
         )
 
     settings_vars['rename_string'].set(def_vars.pop('rename_string', ''))
@@ -855,7 +857,8 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
                      "fix_tag_index_offset", "use_tag_index_for_script_names",
                      "do_printout", "print_heuristic_name_changes",
-                     "use_scenario_names_for_script_names",):
+                     "use_scenario_names_for_script_names",
+                     "disable_safe_mode", "disable_tag_cleaning",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("bitmap_extract_format",
@@ -898,6 +901,12 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.generate_uncomp_verts_cbtn = tk.Checkbutton(
             self.tag_fixup_frame, text="Generate uncompressed lightmap vertices",
             variable=self.generate_uncomp_verts)
+        self.disable_safe_mode_cbtn = tk.Checkbutton(
+            self.tag_fixup_frame, variable=self.disable_safe_mode,
+            text="Disable safe-mode\n(DO NOT SET THIS UNLESS YOU KNOW WHAT YOU ARE DOING)")
+        self.disable_tag_cleaning_cbtn = tk.Checkbutton(
+            self.tag_fixup_frame, variable=self.disable_tag_cleaning,
+            text="Disable tag data cleaning\n(DO NOT SET THIS UNLESS YOU KNOW WHAT YOU ARE DOING)")
 
 
         self.overwrite_cbtn = tk.Checkbutton(
@@ -1022,8 +1031,8 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, anchor='w')
 
         for w in (self.rename_duplicates_in_scnr_cbtn,
-                  self.generate_uncomp_verts_cbtn,
-                  self.generate_comp_verts_cbtn):
+                  self.generate_uncomp_verts_cbtn, self.generate_comp_verts_cbtn,
+                  self.disable_safe_mode_cbtn, self.disable_tag_cleaning,):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.use_heuristics_cbtn,
@@ -1042,7 +1051,8 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         for w in (self.autoload_resources_cbtn, self.extract_yelo_cheape_cbtn,
                   self.show_all_fields_cbtn, self.edit_all_fields_cbtn,
-                  self.allow_corrupt_cbtn):
+                  self.allow_corrupt_cbtn,
+                  ):
             w.pack(padx=4, anchor='w')
 
         for w1, w2 in ((self.tags_dir_entry, self.tags_dir_browse_button),
