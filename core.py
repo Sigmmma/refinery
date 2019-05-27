@@ -166,6 +166,8 @@ class RefineryCore:
     use_scenario_names_for_script_names = True
     bitmap_extract_keep_alpha = True
     bitmap_extract_format = "dds"
+    disable_safe_mode = False
+    disable_tag_cleaning = False
 
     # deprotection settings
     fix_tag_classes = True
@@ -810,22 +812,25 @@ class RefineryCore:
                         tag_index_array[tag_id].indexed):
                     continue
 
-                if tag_cls != "sbsp":
-                    class_repair_functions[tag_cls](
-                        tag_id, tag_index_array, halo_map.map_data,
-                        halo_map.map_magic, next_repair, halo_map.engine)
+                try:
+                    if tag_cls != "sbsp":
+                        class_repair_functions[tag_cls](
+                            tag_id, tag_index_array, halo_map.map_data,
+                            halo_map.map_magic, next_repair, halo_map.engine)
 
-                    # replace meta with the deprotected one
-                    if tag_cls == "matg":
-                        halo_map.matg_meta = halo_map.get_meta(tag_id)
-                    elif tag_cls == "scnr":
-                        halo_map.scnr_meta = halo_map.get_meta(tag_id)
-                elif tag_id in halo_map.bsp_headers:
-                    class_repair_functions[tag_cls](
-                        halo_map.bsp_headers[tag_id].meta_pointer,
-                        tag_index_array, halo_map.map_data,
-                        halo_map.bsp_magics[tag_id] - halo_map.bsp_header_offsets[tag_id],
-                        next_repair, halo_map.engine, halo_map.map_magic)
+                        # replace meta with the deprotected one
+                        if tag_cls == "matg":
+                            halo_map.matg_meta = halo_map.get_meta(tag_id)
+                        elif tag_cls == "scnr":
+                            halo_map.scnr_meta = halo_map.get_meta(tag_id)
+                    elif tag_id in halo_map.bsp_headers:
+                        class_repair_functions[tag_cls](
+                            halo_map.bsp_headers[tag_id].meta_pointer,
+                            tag_index_array, halo_map.map_data,
+                            halo_map.bsp_magics[tag_id] - halo_map.bsp_header_offsets[tag_id],
+                            next_repair, halo_map.engine, halo_map.map_magic)
+                except Exception:
+                    print(format_exc())
 
             # start repairing the newly accumulated tags
             repair = next_repair
@@ -978,6 +983,11 @@ class RefineryCore:
 
             if items_meta: path_handler.set_item_strings(items_meta)
             if icons_meta: path_handler.set_icon_strings(icons_meta)
+
+        path_handler.set_path_by_priority(
+            halo_map.tag_index.scenario_tag_id & 0xFFff,
+            "levels\\" + halo_map.map_header.map_name,
+            INF, True, kw.get("do_printout"))
 
         # reset the name of each tag with a default priority and that
         # currently resides in the tags directory root to "protected_XXXX"
@@ -1410,7 +1420,9 @@ class RefineryCore:
         if do_printout:
             print("%s: %s" % (extract_mode, tag_path))
 
-        meta = halo_map.get_meta(tag_id, True)
+        meta = halo_map.get_meta(
+            tag_id, True, disable_safe_mode=self.disable_safe_mode,
+            disable_tag_cleaning=self.disable_tag_cleaning,)
         if not meta:
             raise CouldNotGetMetaError('Could not get meta for "%s"' % tag_path)
 
