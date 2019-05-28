@@ -144,7 +144,7 @@ class TagPathHandler():
             new_path_no_ext += "protected %s" % index
 
         ext = "." + tag_ref.class_1.enum_name.lower()
-        new_path_no_ext = sanitize_win32_path(new_path_no_ext)
+        new_path_no_ext = sanitize_win32_path(new_path_no_ext).strip()
 
         if ensure_unique_name and self._path_map.get(new_path_no_ext + ext) not in (None, index):
             path_pieces = new_path_no_ext.split("\\")
@@ -172,7 +172,10 @@ class TagPathHandler():
         self._path_map[new_path] = index
         tag_ref.path = new_path_no_ext
         if do_printout:
-            print(index, new_path, sep="\t")
+            try:
+                print(index, self.get_priority(index), new_path, sep="\t")
+            except Exception:
+                print(index, self.get_priority(index), "<UNPRINTABLE>", sep="\t")
 
         return new_path
 

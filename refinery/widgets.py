@@ -901,12 +901,18 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.generate_uncomp_verts_cbtn = tk.Checkbutton(
             self.tag_fixup_frame, text="Generate uncompressed lightmap vertices",
             variable=self.generate_uncomp_verts)
+        
+        self.dont_touch_frame = tk.LabelFrame(
+            self.tag_fixup_frame,
+            text="ONLY CHECK THESE IF YOU ARE NOT DEALING WITH PROTECTED MAPS")
         self.disable_safe_mode_cbtn = tk.Checkbutton(
-            self.tag_fixup_frame, variable=self.disable_safe_mode,
-            text="Disable safe-mode\n(DO NOT SET THIS UNLESS YOU KNOW WHAT YOU ARE DOING)")
+            self.dont_touch_frame, variable=self.disable_safe_mode, justify="left",
+            text=("Disable safe-mode\n"
+                  "Disables limit on size of reflexives and rawdata in tags."))
         self.disable_tag_cleaning_cbtn = tk.Checkbutton(
-            self.tag_fixup_frame, variable=self.disable_tag_cleaning,
-            text="Disable tag data cleaning\n(DO NOT SET THIS UNLESS YOU KNOW WHAT YOU ARE DOING)")
+            self.dont_touch_frame, variable=self.disable_tag_cleaning, justify="left",
+            text=("Disable tag data cleaning\n"
+                  "Disables cleaning errors from tags when reading them."))
 
 
         self.overwrite_cbtn = tk.Checkbutton(
@@ -1031,8 +1037,11 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, anchor='w')
 
         for w in (self.rename_duplicates_in_scnr_cbtn,
-                  self.generate_uncomp_verts_cbtn, self.generate_comp_verts_cbtn,
-                  self.disable_safe_mode_cbtn, self.disable_tag_cleaning,):
+                  self.generate_uncomp_verts_cbtn, self.generate_comp_verts_cbtn):
+            w.pack(padx=4, anchor='w')
+
+        self.dont_touch_frame.pack(padx=4, anchor='w', expand=True, fill="both")
+        for w in (self.disable_safe_mode_cbtn, self.disable_tag_cleaning_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.use_heuristics_cbtn,
