@@ -54,6 +54,13 @@ class MetaWindow(TagWindow):
         except Exception:
             return False
 
+    @property
+    def use_scenario_names_for_script_names(self):
+        try:
+            return bool(self.app_root.use_scenario_names_for_script_names)
+        except Exception:
+            return False
+
     def populate(self):
         '''
         Destroys the FieldWidget attached to this TagWindow and remakes it.
