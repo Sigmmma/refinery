@@ -1386,9 +1386,14 @@ class RefineryActionsWindow(tk.Toplevel):
                 print("Could not get map.")
                 return
 
+            disable_safe_mode = getattr(self.app_root, "disable_safe_mode")
+            disable_tag_cleaning = getattr(self.app_root, "disable_tag_cleaning")
+
             meta = halo_map.get_meta(
                 index_ref.id & 0xFFff, True,
-                allow_corrupt=self.settings["allow_corrupt"].get())
+                allow_corrupt=self.settings["allow_corrupt"].get(),
+                disable_safe_mode=disable_safe_mode,
+                disable_tag_cleaning=disable_tag_cleaning)
             if meta is None:
                 print("Could not get meta.")
                 return

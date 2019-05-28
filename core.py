@@ -90,8 +90,8 @@ def get_halo_map_section_ends(halo_map):
     return raw_data_end, vertex_data_end, index_data_end, meta_data_end
 
 
-def expand_halo_map(halo_map, raw_data_expansion=0, meta_data_expansion=0,
-                    vertex_data_expansion=0, triangle_data_expansion=0):
+def expand_halo_map(halo_map, raw_data_expansion=0, vertex_data_expansion=0,
+                    triangle_data_expansion=0, meta_data_expansion=0):
     map_file   = halo_map.map_data
     map_header = halo_map.map_header
     tag_index  = halo_map.tag_index
@@ -100,7 +100,6 @@ def expand_halo_map(halo_map, raw_data_expansion=0, meta_data_expansion=0,
 
     raw_data_end, vertex_data_end, index_data_end, meta_data_end = \
                   get_halo_map_section_ends(halo_map)
-
 
     expansions = ((raw_data_end,    raw_data_expansion),
                   (vertex_data_end, vertex_data_expansion),
@@ -348,10 +347,20 @@ class RefineryCore:
                 # since it might be hidden. apparently on windows
                 # the w mode will fail to open hidden files.
                 if os.path.isfile(save_path):
-                    out_file = open(save_path, 'r+b')
-                    out_file.truncate(0)
+                    tmp_file = open(save_path, 'r+b')
+                    tmp_file.truncate(0)
                 else:
-                    out_file = open(save_path, 'w+b')
+                    tmp_file = open(save_path, 'w+b')
+
+                map_file.seek(0) # need to seek to 0 as shutil.copyfileobj uses
+                tmp_file.seek(0) # the current file offsets for copying to/from
+                shutil.copyfileobj(map_file, tmp_file)
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+                tmp_file.close()
+
+                with open(save_path, 'r+b') as f:
+                    out_file = PeekableMmap(f.fileno(), 0)
 
             map_header = halo_map.map_header
             index_off_diff = (raw_data_expansion +
@@ -369,12 +378,6 @@ class RefineryCore:
             index_offset   = tag_index.tag_index_offset
             index_array    = tag_index.tag_index
             index_header_offset = map_header.tag_index_header_offset
-
-            # copy the map to the new save location
-            map_file.seek(0) # need to seek to 0 as shutil.copyfileobj uses
-            out_file.seek(0) # the current file offsets for copying to/from
-            if map_file is not out_file:
-                shutil.copyfileobj(map_file, out_file)
 
             # recalculate pointers for the strings if they were changed
             # NOTE: Can't optimize this by writing changed paths back to
@@ -408,19 +411,14 @@ class RefineryCore:
                 tag_index.tag_index_offset = index_magic + tag_index.get_size()
 
             # update the map_data
-            if isinstance(out_file, PeekableMmap):
-                halo_map.map_data = out_file
-            else:
-                halo_map.map_data = PeekableMmap(out_file.fileno(), 0)
-
-            if map_file is not out_file and hasattr(map_file, "close"):
+            halo_map.map_data = out_file
+            if map_file is not out_file:
                 map_file.close()
 
             # expand the map's sections if necessary
-            expansions = (raw_data_expansion, meta_data_expansion,
-                          vertex_data_expansion, triangle_data_expansion)
+            expansions = (raw_data_expansion, vertex_data_expansion,
+                          triangle_data_expansion, meta_data_expansion)
             section_ends = get_halo_map_section_ends(halo_map)
-
             expand_halo_map(halo_map, *expansions)
 
             # move the cheape.map pointer
@@ -439,9 +437,6 @@ class RefineryCore:
             # serialize the tag_index_header, tag_index and all the tag_paths
             tag_index.serialize(buffer=out_file, calc_pointers=False,
                                 magic=map_magic, offset=index_header_offset)
-            out_file.flush()
-            if hasattr(out_file, "fileno"):
-                os.fsync(out_file.fileno())
 
             # set the size of the map in the header to 0 to fix a bug where
             # halo will leak file handles for very large maps. Also removes
@@ -465,12 +460,8 @@ class RefineryCore:
             out_file.seek(0)
             out_file.write(map_header.serialize(calc_pointers=False))
             out_file.flush()
-            if hasattr(out_file, "fileno"):
-                os.fsync(out_file.fileno())
 
             halo_map.filepath = save_path
-            if halo_map.map_data is not out_file:
-                out_file.close()
         except Exception:
             if halo_map.map_data is not out_file:
                 out_file.close()
@@ -634,7 +625,8 @@ class RefineryCore:
 
         tag_path_handler.set_path_by_priority(
             halo_map.tag_index.scenario_tag_id & 0xFFff,
-            "levels\\" + halo_map.map_header.map_name, INF, True)
+            "levels\\%s\\%s" % (halo_map.map_header.map_name,
+                                halo_map.map_header.map_name), INF, True)
 
         if valid_tag_paths_are_accurate:
             for tag_id in range(len(tag_index_array)):

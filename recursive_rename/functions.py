@@ -182,12 +182,16 @@ def recursive_rename(tag_id, halo_map, tag_path_handler,
     seen = kw.setdefault("seen", set())
     kw.setdefault("depth", INF)
     priority = kw.get("priority")
-    if tag_id is None or tag_id not in range(len(halo_map.tag_index.tag_index)):
+    if tag_id is None:
+        return INF
+
+    tag_index_id = tag_id & 0xFFff
+    if tag_index_id not in range(len(halo_map.tag_index.tag_index)):
         return INF
 
     min_priority = MinPriority()
-    curr_min_prio = tag_path_handler.get_priority_min(tag_id & 0xFFff)
-    if tag_id in seen or kw["depth"] < 0:
+    curr_min_prio = tag_path_handler.get_priority_min(tag_index_id)
+    if tag_index_id in seen or kw["depth"] < 0:
         # do nothing if tag already seen or already at max depth
         return curr_min_prio
     elif kw.get("use_minimum_priorities") and (priority is not None and
@@ -197,10 +201,10 @@ def recursive_rename(tag_id, halo_map, tag_path_handler,
         return curr_min_prio
 
     kw.update(depth=kw["depth"] - 1, min_priority=min_priority)
-    seen.add(tag_id)
+    seen.add(tag_index_id)
 
     rename_func = recursive_rename_functions.get(
-        halo_map.tag_index.tag_index[tag_id].class_1.enum_name)
+        halo_map.tag_index.tag_index[tag_index_id].class_1.enum_name)
     if rename_func:
         try:
             rename_func(tag_id, halo_map, tag_path_handler,
@@ -213,8 +217,8 @@ def recursive_rename(tag_id, halo_map, tag_path_handler,
             kw.get("override"), kw.get("do_printout"))
 
     # remove the tag_id so this tag can be revisited by higher up references
-    seen.remove(tag_id)
-    tag_path_handler.set_priority_min(tag_id & 0xFFff, min_priority.val)
+    seen.remove(tag_index_id)
+    tag_path_handler.set_priority_min(tag_index_id, min_priority.val)
     return min_priority.val
 
 
@@ -1079,20 +1083,27 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
 
     if shdr_type == "senv":
         senv_attrs = meta.senv_attrs
-        min_prio.val = recursive_rename(get_tag_id(senv_attrs.diffuse.base_map),
-                         name="senv %s diffuse" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(senv_attrs.diffuse.primary_detail_map),
-                         name="senv %s pri detail" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(senv_attrs.diffuse.secondary_detail_map),
-                         name="senv %s sec detail" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(senv_attrs.diffuse.micro_detail_map),
-                         name="senv %s micro detail" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(senv_attrs.bump_properties.map),
-                         name="senv %s bump" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(senv_attrs.self_illumination.map),
-                         name="senv %s self illum" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(senv_attrs.reflection.cube_map),
-                         name="senv %s reflection" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(senv_attrs.diffuse.base_map),
+            name="senv %s diffuse" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(senv_attrs.diffuse.primary_detail_map),
+            name="senv %s pri detail" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(senv_attrs.diffuse.secondary_detail_map),
+            name="senv %s sec detail" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(senv_attrs.diffuse.micro_detail_map),
+            name="senv %s micro detail" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(senv_attrs.bump_properties.map),
+            name="senv %s bump" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(senv_attrs.self_illumination.map),
+            name="senv %s self illum" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(senv_attrs.reflection.cube_map),
+            name="senv %s reflection" % name, **kw)
 
         senv_ext = getattr(getattr(senv_attrs, "os_shader_environment_ext", ()),
                            "STEPTREE", ())
@@ -1103,25 +1114,33 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
 
     elif shdr_type == "soso":
         soso_attrs = meta.soso_attrs
-        min_prio.val = recursive_rename(get_tag_id(soso_attrs.maps.diffuse_map),
-                         name="soso %s diffuse" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(soso_attrs.maps.multipurpose_map),
-                         name="soso %s multi" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(soso_attrs.maps.detail_map),
-                         name="soso %s detail" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(soso_attrs.reflection.cube_map),
-                         name="soso %s reflection" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(soso_attrs.maps.diffuse_map),
+            name="soso %s diffuse" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(soso_attrs.maps.multipurpose_map),
+            name="soso %s multi" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(soso_attrs.maps.detail_map),
+            name="soso %s detail" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(soso_attrs.reflection.cube_map),
+            name="soso %s reflection" % name, **kw)
         soso_ext = getattr(getattr(soso_attrs, "os_shader_model_ext", ()),
                            "STEPTREE", ())
         for b in soso_ext:
-            min_prio.val = recursive_rename(get_tag_id(b.specular_color_map),
-                             name="soso %s spec color" % name, **kw)
-            min_prio.val = recursive_rename(get_tag_id(b.base_normal_map),
-                             name="soso %s normal" % name, **kw)
-            min_prio.val = recursive_rename(get_tag_id(b.detail_normal_1_map),
-                             name="soso %s normal detail 1" % name, **kw)
-            min_prio.val = recursive_rename(get_tag_id(b.detail_normal_2_map),
-                             name="soso %s normal detail 2" % name, **kw)
+            min_prio.val = recursive_rename(
+                get_tag_id(b.specular_color_map),
+                name="soso %s spec color" % name, **kw)
+            min_prio.val = recursive_rename(
+                get_tag_id(b.base_normal_map),
+                name="soso %s normal" % name, **kw)
+            min_prio.val = recursive_rename(
+                get_tag_id(b.detail_normal_1_map),
+                name="soso %s normal detail 1" % name, **kw)
+            min_prio.val = recursive_rename(
+                get_tag_id(b.detail_normal_2_map),
+                name="soso %s normal detail 2" % name, **kw)
 
     elif shdr_type in ("sotr", "schi", "scex"):
         if shdr_type == "scex":
@@ -1154,12 +1173,15 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
 
     elif shdr_type == "swat":
         water_shader = meta.swat_attrs.water_shader
-        min_prio.val = recursive_rename(get_tag_id(water_shader.base_map),
-                         name="swat %s base" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(water_shader.reflection_map),
-                         name="swat %s reflection" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(water_shader.ripple_maps),
-                         name="swat %s ripples" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(water_shader.base_map),
+            name="swat %s base" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(water_shader.reflection_map),
+            name="swat %s reflection" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(water_shader.ripple_maps),
+            name="swat %s ripples" % name, **kw)
 
     elif shdr_type == "sgla":
         sgla_attrs = meta.sgla_attrs
@@ -1167,20 +1189,26 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
             get_tag_id(sgla_attrs.background_tint_properties.map),
             name="sgla %s background tint" % name, **kw)
 
-        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.reflection_properties.map),
-                         name="sgla %s reflection" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.reflection_properties.bump_map),
-                         name="sgla %s bump" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(sgla_attrs.reflection_properties.map),
+            name="sgla %s reflection" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(sgla_attrs.reflection_properties.bump_map),
+            name="sgla %s bump" % name, **kw)
 
-        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.diffuse_properties.map),
-                         name="sgla %s diffuse" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.diffuse_properties.detail_map),
-                         name="sgla %s diffuse detail" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(sgla_attrs.diffuse_properties.map),
+            name="sgla %s diffuse" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(sgla_attrs.diffuse_properties.detail_map),
+            name="sgla %s diffuse detail" % name, **kw)
 
-        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.specular_properties.map),
-                         name="sgla %s specular" % name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(sgla_attrs.specular_properties.detail_map),
-                         name="sgla %s specular detail" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(sgla_attrs.specular_properties.map),
+            name="sgla %s specular" % name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(sgla_attrs.specular_properties.detail_map),
+            name="sgla %s specular detail" % name, **kw)
 
     elif shdr_type == "smet":
         smet_attrs = meta.smet_attrs
@@ -1205,10 +1233,12 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
         if func_name:
             plasma_name = func_name
 
-        min_prio.val = recursive_rename(get_tag_id(spla_attrs.primary_noise_map.noise_map),
-                         name="spla %s noise" % plasma_name, **kw)
-        min_prio.val = recursive_rename(get_tag_id(spla_attrs.primary_noise_map.noise_map),
-                         name="spla %s noise sec" % plasma_name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(spla_attrs.primary_noise_map.noise_map),
+            name="spla %s noise" % plasma_name, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(spla_attrs.primary_noise_map.noise_map),
+            name="spla %s noise sec" % plasma_name, **kw)
 
 
 def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
