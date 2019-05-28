@@ -135,7 +135,7 @@ class Refinery(tk.Tk, RefineryCore):
         self._use_scenario_names_for_script_names = tk.IntVar(self)
         self._bitmap_extract_keep_alpha = tk.IntVar(self, 1)
         self._disable_safe_mode = tk.IntVar(self, 0)
-        self._disable_reflexive_cleaning = tk.IntVar(self, 0)
+        self._disable_tag_cleaning = tk.IntVar(self, 0)
         self._bitmap_extract_format = tk.StringVar(self)
 
         self._fix_tag_classes = tk.IntVar(self, 1)
@@ -174,7 +174,7 @@ class Refinery(tk.Tk, RefineryCore):
             use_scenario_names_for_script_names=self._use_scenario_names_for_script_names,
             bitmap_extract_keep_alpha=self._bitmap_extract_keep_alpha,
             disable_safe_mode=self._disable_safe_mode,
-            disable_reflexive_cleaning=self._disable_reflexive_cleaning,
+            disable_tag_cleaning=self._disable_tag_cleaning,
             bitmap_extract_format=self._bitmap_extract_format,
 
             fix_tag_classes=self._fix_tag_classes,
@@ -437,6 +437,10 @@ class Refinery(tk.Tk, RefineryCore):
         for name in ("do_printout", "autoload_resources"):
             setattr(self, name, bool(getattr(header.flags, name)))
 
+        for attr_name in header.preview_flags.NAME_MAP:
+            getattr(self, attr_name).set(
+                bool(getattr(header.preview_flags, attr_name)))
+
         for flags in (header.extraction_flags, header.deprotection_flags):
             for attr_name in flags.NAME_MAP:
                 setattr(self, attr_name, bool(getattr(flags, attr_name)))
@@ -475,7 +479,11 @@ class Refinery(tk.Tk, RefineryCore):
         for attr_name in ("do_printout", "autoload_resources"):
             setattr(header.flags, attr_name, getattr(self, attr_name))
 
-        for flags in (header.extraction_flags, header.deprotection_flags):
+        for attr_name in header.preview_flags.NAME_MAP:
+            setattr(header.preview_flags, attr_name, getattr(self, attr_name).get())
+
+        for flags in (header.extraction_flags, header.deprotection_flags,
+                      header.preview_flags):
             for attr_name in flags.NAME_MAP:
                 setattr(flags, attr_name, getattr(self, attr_name))
 

@@ -7,21 +7,26 @@ from reclaimer.util import *
 from binilla.util import get_cwd
 
 def inject_file_padding(file, *off_padsize_pairs, padchar=b'\xCA'):
+    file.flush()
     file.seek(0, 2)
     map_size = file.tell()
     dcbs = dstoff_cpysize_by_srcoff = dict(off_padsize_pairs)
     assert len(padchar) == 1
 
     off_diff = 0
+    # set up the src offset to dst offset/copysize/padsize mapping
     for srcoff in sorted(dcbs):
-        assert dcbs[srcoff] >= 0
-        off_diff += dcbs[srcoff]
-        dcbs[srcoff] = [srcoff + off_diff, 0, off_diff]
+        section_padsize = dcbs[srcoff]
+        assert section_padsize >= 0
+        #                     dstoff        cpysize     padsize
+        dcbs[srcoff] = [srcoff + off_diff,     0,       section_padsize]
+        off_diff += section_padsize
 
     last_end = map_size
     map_size += off_diff
+    # loop over the mapping in reverse to set up the copysize of each section
     for srcoff in sorted(dcbs)[::-1]:
-        dcbs[srcoff][1] = last_end - srcoff
+        dcbs[srcoff][1] = max(0, last_end - srcoff)
         last_end = srcoff
 
     close_mmap = False
@@ -56,24 +61,25 @@ def intra_file_move(file, dstoff_cpysize_by_srcoff, padchar=b'\xCA'):
         # data doesnt get overwritten if  dstoff < srcoff + cpysize
         dstoff, cpysize, padsize = dstoff_cpysize_by_srcoff[srcoff][:]
         copied = padded = 0
-        if not padsize or cpysize <= 0:
+        if not padsize or cpysize < 0 or dstoff == srcoff:
             continue
 
-        if is_mmap:
-            # mmap.move is much faster than our method below
-            file.move(dstoff, srcoff, cpysize)
-        else:
-            while copied < cpysize:
-                remainder = cpysize - copied
-                chunksize = min(4*1024**2, remainder)  # copy of 4MB chunks
+        if cpysize:
+            if is_mmap:
+                # mmap.move is much faster than our method below
+                file.move(dstoff, srcoff, cpysize)
+            else:
+                while copied < cpysize:
+                    remainder = cpysize - copied
+                    chunksize = min(4*1024**2, remainder)  # copy of 4MB chunks
 
-                file.seek(srcoff + remainder - chunksize)
-                chunk = file.read(chunksize)
-                file.seek(dstoff + remainder - chunksize)
-                file.write(chunk)
-                copied += chunksize
+                    file.seek(srcoff + remainder - chunksize)
+                    chunk = file.read(chunksize)
+                    file.seek(dstoff + remainder - chunksize)
+                    file.write(chunk)
+                    copied += chunksize
 
-            del chunk
+                del chunk
 
         file.seek(srcoff)
         if padsize >= 1024**2:

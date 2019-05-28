@@ -85,8 +85,9 @@ class TagPathHandler():
         self._icon_strings = new_strings
 
     def get_index_ref(self, index):
-        if index is None or index not in range(len(self._index_map)):
-            return
+        if index is None: return
+        index &= 0xFFff
+        if index not in range(len(self._index_map)): return
         return self._index_map[index]
 
     def get_path(self, index):
@@ -96,9 +97,13 @@ class TagPathHandler():
         return ""
 
     def get_priority(self, index, default=-INF):
+        if index is None: return default
+        index &= 0xFFff
         return self._priorities.get(index, default)
 
     def get_priority_min(self, index, default=INF):
+        if index is None: return default
+        index &= 0xFFff
         return self._priority_mins.get(index, default)
 
     def get_sub_dir(self, index, root=""):
@@ -137,6 +142,9 @@ class TagPathHandler():
         return True
 
     def set_path(self, index, new_path_no_ext, do_printout=False, ensure_unique_name=True):
+        if index is None: return
+        index &= 0xFFff
+
         tag_ref = self.get_index_ref(index)
         if tag_ref is None:
             return
@@ -172,18 +180,20 @@ class TagPathHandler():
         self._path_map[new_path] = index
         tag_ref.path = new_path_no_ext
         if do_printout:
+            print(index, self.get_priority(index), sep="\t", end="\t")
             try:
-                print(index, self.get_priority(index), new_path, sep="\t")
+                print(new_path)
             except Exception:
-                print(index, self.get_priority(index), "<UNPRINTABLE>", sep="\t")
+                print("<UNPRINTABLE>")
 
         return new_path
 
     def set_path_by_priority(self, index, new_path_no_ext, priority=None,
                              override=False, do_printout=False):
-        if index is None:
-            return -INF
-        elif priority is None:
+        if index is None: return -INF
+        index &= 0xFFff
+
+        if priority is None:
             priority = self._def_priority
         assert isinstance(new_path_no_ext, str)
 
@@ -198,10 +208,14 @@ class TagPathHandler():
         return priority
 
     def set_priority(self, index, priority):
+        if index is None: return
+        index &= 0xFFff
         if index in range(len(self._index_map)):
             self._priorities[index] = float(priority)
 
     def set_priority_min(self, index, priority):
+        if index is None: return
+        index &= 0xFFff
         if index in range(len(self._index_map)):
             self._priority_mins[index] = float(priority)
 
