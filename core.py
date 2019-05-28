@@ -632,6 +632,10 @@ class RefineryCore:
 
         tag_path_handler = TagPathHandler(tag_index_array)
 
+        tag_path_handler.set_path_by_priority(
+            halo_map.tag_index.scenario_tag_id & 0xFFff,
+            "levels\\" + halo_map.map_header.map_name, INF, True)
+
         if valid_tag_paths_are_accurate:
             for tag_id in range(len(tag_index_array)):
                 if not (tag_index_array[tag_id].path.lower().
@@ -640,7 +644,13 @@ class RefineryCore:
 
         try:
             tagc_names = self.detect_tag_collection_names(map_name, engine)
+            if do_printout:
+                print("Renaming tag collections\n"
+                      "tag_id\ttag_path\n")
+
             for tag_id, tag_path in tagc_names.items():
+                if do_printout:
+                    print(tag_id, tag_path, sep="\t")
                 tag_path_handler.set_path_by_priority(
                     tag_id, tag_path, INF, True, False)
 
@@ -711,7 +721,7 @@ class RefineryCore:
 
             reffed_tag_ids, reffed_tag_types = get_tagc_refs(
                 b.meta_offset, halo_map.map_data, halo_map.map_magic,
-                tag_classes_by_id)
+                tag_classes_by_id, tag_index_array)
 
             reffed_tag_types = set(reffed_tag_types)
             tag_path = None
@@ -847,7 +857,7 @@ class RefineryCore:
                     else:
                         _, reffed_tag_types = get_tagc_refs(
                             b.meta_offset, halo_map.map_data,
-                            halo_map.map_magic, repaired
+                            halo_map.map_magic, repaired, tag_index_array
                             )
                         if reffed_tag_types:
                             tag_cls = "tagc"
@@ -866,7 +876,7 @@ class RefineryCore:
             if b.class_1.enum_name in ("tag_collection", "ui_widget_collection"):
                 reffed_tag_ids, reffed_tag_types = get_tagc_refs(
                     b.meta_offset, halo_map.map_data,
-                    halo_map.map_magic, repaired)
+                    halo_map.map_magic, repaired, tag_index_array)
                 if set(reffed_tag_types) == set(["DeLa"]):
                     repaired[tag_id] = "Soul"
 
@@ -983,11 +993,6 @@ class RefineryCore:
 
             if items_meta: path_handler.set_item_strings(items_meta)
             if icons_meta: path_handler.set_icon_strings(icons_meta)
-
-        path_handler.set_path_by_priority(
-            halo_map.tag_index.scenario_tag_id & 0xFFff,
-            "levels\\" + halo_map.map_header.map_name,
-            INF, True, kw.get("do_printout"))
 
         # reset the name of each tag with a default priority and that
         # currently resides in the tags directory root to "protected_XXXX"
