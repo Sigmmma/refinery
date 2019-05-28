@@ -480,10 +480,10 @@ class Refinery(tk.Tk, RefineryCore):
             setattr(header.flags, attr_name, getattr(self, attr_name))
 
         for attr_name in header.preview_flags.NAME_MAP:
-            setattr(header.preview_flags, attr_name, getattr(self, attr_name).get())
+            setattr(header.preview_flags, attr_name,
+                    getattr(self, attr_name).get())
 
-        for flags in (header.extraction_flags, header.deprotection_flags,
-                      header.preview_flags):
+        for flags in (header.extraction_flags, header.deprotection_flags):
             for attr_name in flags.NAME_MAP:
                 setattr(flags, attr_name, getattr(self, attr_name))
 

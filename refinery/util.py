@@ -18,9 +18,10 @@ def inject_file_padding(file, *off_padsize_pairs, padchar=b'\xCA'):
     for srcoff in sorted(dcbs):
         section_padsize = dcbs[srcoff]
         assert section_padsize >= 0
-        #                     dstoff        cpysize     padsize
-        dcbs[srcoff] = [srcoff + off_diff,     0,       section_padsize]
-        off_diff += section_padsize
+        off_diff += section_padsize  # bump the dst_off by the length
+        #                              of the padding we are injecting
+        #                     dstoff        cpysize      padsize
+        dcbs[srcoff] = [srcoff + off_diff,     0,    section_padsize]
 
     last_end = map_size
     map_size += off_diff
