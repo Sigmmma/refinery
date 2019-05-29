@@ -149,6 +149,8 @@ rather than those in the script_string_data when extracting scripts.",
 those in the script_string_data when extracting scripts.",
     "valid-tag-paths-are-accurate": "Whether to assume tag-paths NOT beginning with 'protected' \
 are valid, and thus not needing deprotection.",
+    "disable-safe-mode": "Whether to disables limit on size of reflexives and rawdata in tags.",
+    "disable-tag-cleaning": "Whether to disable cleaning errors from tags when reading them.",
     }
 
 
@@ -157,6 +159,8 @@ command_arg_strings = dict(
         "map-name": "Name of the map to extract from. Defaults to <active>",
         "engine": "Engine of the map to extract from. Defaults to <active>",
 
+        "disable-safe-mode": default_var_help_strs["disable-safe-mode"],
+        "disable-tag-cleaning": default_var_help_strs["disable-tag-cleaning"],
         "print-errors": default_var_help_strs["print-errors"],
         "force-lower-case-paths": default_var_help_strs["force-lower-case-paths"],
         "generate-comp-verts": default_var_help_strs["generate-comp-verts"],
@@ -173,6 +177,8 @@ command_arg_strings = dict(
         "map-name": "Name of the map to extract from. Defaults to <active>",
         "engine": "Engine of the map to extract from. Defaults to <active>",
 
+        "disable-safe-mode": default_var_help_strs["disable-safe-mode"],
+        "disable-tag-cleaning": default_var_help_strs["disable-tag-cleaning"],
         "print-errors": default_var_help_strs["print-errors"],
         "force-lower-case-paths": default_var_help_strs["force-lower-case-paths"],
         "generate-comp-verts": default_var_help_strs["generate-comp-verts"],
@@ -193,6 +199,8 @@ command_arg_strings = dict(
         "map-name": "Name of the map to extract from. Defaults to <active>",
         "engine": "Engine of the map to extract from. Defaults to <active>",
 
+        "disable-safe-mode": default_var_help_strs["disable-safe-mode"],
+        "disable-tag-cleaning": default_var_help_strs["disable-tag-cleaning"],
         "force-lower-case-paths": default_var_help_strs["force-lower-case-paths"],
         "generate-comp-verts": default_var_help_strs["generate-comp-verts"],
         "generate-uncomp-verts": default_var_help_strs["generate-uncomp-verts"],
