@@ -160,6 +160,12 @@ for name in ("dir", "files"):
 
 for name in ("extract_tag", "extract_tags", "extract_data"):
     _ops[name].add_argument(
+        '-x', '--disable-safe-mode', default=None,
+        help=command_arg_strings[name]['disable-safe-mode'])
+    _ops[name].add_argument(
+        '-z', '--disable-tag-cleaning', default=None,
+        help=command_arg_strings[name]['disable-tag-cleaning'])
+    _ops[name].add_argument(
         '-l', '--force-lower-case-paths', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['force-lower-case-paths'])
     _ops[name].add_argument(
@@ -201,7 +207,8 @@ for op_name in (
         "fix-tag-classes", "fix-tag-index-offset", "use-minimum-priorities",
         "valid-tag-paths-are-accurate", "scrape-tag-paths-from-scripts",
         "limit-tag-path-lengths", "print-heuristic-name-changes",
-        "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags"):
+        "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags",
+        "disable-safe-mode", "disable-tag-cleaning"):
     # these dont get shorthand settings because there are too damn many of them
     _ops["set_vars"].add_argument(
         '--%s' % op_name, default=None, choices=(0, 1), type=int,
