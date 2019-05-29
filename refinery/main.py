@@ -1194,6 +1194,9 @@ class Refinery(tk.Tk, RefineryCore):
             settings = self.queue_tree.get_item(queue_item_iid)
             op_kw = {k: v.get() for k, v in
                      settings.items() if k in self.tk_vars}
+            if "out_dir" in settings:
+                op_kw["out_dir"] = settings["out_dir"].get()
+
             tag_ids = list(b.id & 0xFFff for b in settings["tag_index_refs"])
 
             engine = settings['halo_map'].engine

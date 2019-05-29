@@ -907,12 +907,10 @@ class RefinerySettingsWindow(tk.Toplevel):
             text="ONLY CHECK THESE IF YOU ARE NOT DEALING WITH PROTECTED MAPS")
         self.disable_safe_mode_cbtn = tk.Checkbutton(
             self.dont_touch_frame, variable=self.disable_safe_mode, justify="left",
-            text=("Disable safe-mode\n"
-                  "Disables limit on size of reflexives and rawdata in tags."))
+            text="Disable safe-mode")
         self.disable_tag_cleaning_cbtn = tk.Checkbutton(
             self.dont_touch_frame, variable=self.disable_tag_cleaning, justify="left",
-            text=("Disable tag data cleaning\n"
-                  "Disables cleaning errors from tags when reading them."))
+            text="Disable cleaning errors from tags when reading them.")
 
 
         self.overwrite_cbtn = tk.Checkbutton(

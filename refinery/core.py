@@ -1367,6 +1367,10 @@ class RefineryCore:
         use_tag_index_for_script_names = kw.pop(
             "use_tag_index_for_script_names",
             self.use_tag_index_for_script_names)
+        disable_safe_mode = kw.pop(
+            "disable_safe_mode", self.disable_safe_mode)
+        disable_tag_cleaning = kw.pop(
+            "disable_tag_cleaning", self.disable_tag_cleaning)
 
     
         dependency_ids = kw.pop("dependency_ids", None)
@@ -1418,8 +1422,8 @@ class RefineryCore:
             print("%s: %s" % (extract_mode, tag_path))
 
         meta = halo_map.get_meta(
-            tag_id, True, disable_safe_mode=self.disable_safe_mode,
-            disable_tag_cleaning=self.disable_tag_cleaning,)
+            tag_id, True, disable_safe_mode=disable_safe_mode,
+            disable_tag_cleaning=disable_tag_cleaning,)
         if not meta:
             raise CouldNotGetMetaError('Could not get meta for "%s"' % tag_path)
 
