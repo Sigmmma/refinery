@@ -160,10 +160,10 @@ for name in ("dir", "files"):
 
 for name in ("extract_tag", "extract_tags", "extract_data"):
     _ops[name].add_argument(
-        '-x', '--disable-safe-mode', default=None,
+        '-x', '--disable-safe-mode', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['disable-safe-mode'])
     _ops[name].add_argument(
-        '-z', '--disable-tag-cleaning', default=None,
+        '-z', '--disable-tag-cleaning', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['disable-tag-cleaning'])
     _ops[name].add_argument(
         '-l', '--force-lower-case-paths', default=None, choices=(0, 1), type=int,
@@ -181,9 +181,6 @@ for name in ("extract_tag", "extract_tags", "extract_data"):
         '-o', '--overwrite', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['overwrite'])
     _ops[name].add_argument(
-        '-r', '--recursive', default=None, choices=(0, 1), type=int,
-        help=command_arg_strings[name]['recursive'])
-    _ops[name].add_argument(
         '-s', '--rename-scnr-dups', default=None, choices=(0, 1), type=int,
         help=command_arg_strings[name]['rename-scnr-dups'])
     _ops[name].add_argument(
@@ -194,6 +191,9 @@ for name in ("extract_tags", "extract_data"):
     _ops[name].add_argument(
         '-m', '--macros', default=True, choices=(0, 1), type=int,
         help=command_arg_strings[name]['macros'])
+    _ops[name].add_argument(
+        '-r', '--recursive', default=None, choices=(0, 1), type=int,
+        help=command_arg_strings[name]['recursive'])
     _ops[name].add_argument(
         '--tag-ids', nargs="*", default=(tag_path_tokens.TOKEN_ALL, ),
         help=command_arg_strings[name]['tag-ids'])
@@ -217,10 +217,20 @@ for op_name in (
         '--%s' % op_name, const=True, default=False, action="store_const",
         help=command_arg_strings["get_vars"][op_name])
 
+_ops["set_vars"].add_argument(
+    '--globals-overwrite-mode', default=None, choices=tuple(range(5)), type=int,
+    help=command_arg_strings["set_vars"]["globals-overwrite-mode"])
+_ops["get_vars"].add_argument(
+    '--globals-overwrite-mode', const=True, default=False, action="store_const",
+    help=command_arg_strings["get_vars"]["globals-overwrite-mode"])
+
 for op_name in ("tags-dir", "data-dir", "tagslist-path", "bitmap-extract-format"):
     _ops["set_vars"].add_argument(
         '--%s' % op_name, default=None,
         help=command_arg_strings["set_vars"][op_name])
+    _ops["get_vars"].add_argument(
+        '--%s' % op_name, const=True, default=False, action="store_const",
+        help=command_arg_strings["get_vars"][op_name])
 
 _ops["extract_tag"].add_argument(
     '-f', '--filepath', default=None,

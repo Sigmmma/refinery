@@ -4,6 +4,20 @@ from supyr_struct.defs.constants import *
 from supyr_struct.field_types import *
 
 bitmap_file_formats = ("dds", "tga", "png")
+globals_overwrite_gui_names = (
+    "prompt user",
+    "always",
+    "never",
+    "always overwrite with MP globals(prompt for UI and SP maps)",
+    "always overwrite with MP globals(never for UI and SP maps)",
+    )
+globals_overwrite_modes = (
+    "prompt",
+    "always",
+    "never",
+    "mp_only_prompt_otherwise",
+    "mp_only_ignore_othewise",
+    )
 
 def get():
     return config_def
@@ -37,6 +51,9 @@ config_header = Struct("header",
         "use_tag_index_for_script_names",
         "use_scenario_names_for_script_names",
         "bitmap_extract_keep_alpha",
+        Pad(1), # this flag has never been used
+
+        # upper 16 bits
         "disable_safe_mode",
         "disable_tag_cleaning",
         ),
@@ -60,6 +77,11 @@ config_header = Struct("header",
     Pad(48 - 4*6),
 
     UEnum8("bitmap_extract_format", *bitmap_file_formats),
+    UEnum8("globals_overwrite_mode",
+        *({NAME: globals_overwrite_modes[i],
+           GUI_NAME: globals_overwrite_gui_names[i]}
+          for i in range(len(globals_overwrite_modes)))
+        ),
 
     Pad(128 - 48 - 2*1 - 4*2),
     Timestamp32("date_created", EDITABLE=False),

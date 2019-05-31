@@ -18,7 +18,7 @@ def get_filtered_tag_index_ids(tag_index_array, tag_path=None,
             if not tag_class or curr_tag_class == tag_class:
                 tag_index_ids.add(i)
 
-    return tag_index_ids
+    return list(tag_index_ids)
 
 
 class TagIndexCrawler(list):
@@ -52,7 +52,7 @@ class TagIndexCrawler(list):
             if i not in tag_id_range:
                 tag_index_ids.remove(i)
 
-        return tag_index_ids
+        return list(tag_index_ids)
 
     def detokenize_tag_ids(self, halo_map):
         if TOKEN_ALL in self:
