@@ -151,6 +151,12 @@ those in the script_string_data when extracting scripts.",
 are valid, and thus not needing deprotection.",
     "disable-safe-mode": "Whether to disables limit on size of reflexives and rawdata in tags.",
     "disable-tag-cleaning": "Whether to disable cleaning errors from tags when reading them.",
+    "globals-overwrite-mode": (
+        "How to handle overwriting globals tags.\n"
+        "0 == prompt every time. 1 == always overwrite. "
+        "2 == never overwrite. 3 == overwrite for MP maps(prompt otherwise). "
+        "4 == overwrite for MP maps(dont otherwise)."
+        )
     }
 
 
@@ -205,7 +211,6 @@ command_arg_strings = dict(
         "generate-comp-verts": default_var_help_strs["generate-comp-verts"],
         "generate-uncomp-verts": default_var_help_strs["generate-uncomp-verts"],
         "overwrite": default_var_help_strs["overwrite"],
-        "recursive": default_var_help_strs["recursive"],
         "rename-scnr-dups": default_var_help_strs["rename-scnr-dups"],
         "tagslist-path": default_var_help_strs["tagslist-path"],
         "out-dir": "The directory to extract the tag to.",

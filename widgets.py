@@ -8,7 +8,8 @@ from tkinter import messagebox
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
-from refinery.defs.config_def import bitmap_file_formats
+from refinery.defs.config_def import bitmap_file_formats, \
+     globals_overwrite_gui_names
 from refinery.hashcacher_window import sanitize_filename
 from refinery.meta_window import MetaWindow
 from refinery import crc_functions
@@ -75,15 +76,16 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
         do_printout=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
         autoload_resources=tk.IntVar(parent), decode_adpcm=tk.IntVar(parent),
-        bitmap_extract_format=tk.StringVar(parent),
         bitmap_extract_keep_alpha=tk.IntVar(parent),
         generate_comp_verts=tk.IntVar(parent), generate_uncomp_verts=tk.IntVar(parent),
         accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
         tagslist_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
-        disable_safe_mode=tk.StringVar(parent),
-        disable_tag_cleaning=tk.StringVar(parent),
+        disable_safe_mode=tk.IntVar(parent), disable_tag_cleaning=tk.IntVar(parent),
+
+        bitmap_extract_format=tk.StringVar(parent),
+        globals_overwrite_mode=tk.StringVar(parent),
         )
 
     settings_vars['rename_string'].set(def_vars.pop('rename_string', ''))
@@ -861,7 +863,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "disable_safe_mode", "disable_tag_cleaning",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
-        for attr in ("bitmap_extract_format",
+        for attr in ("bitmap_extract_format", "globals_overwrite_mode",
                      "tags_dir", "data_dir", "tagslist_path"):
             object.__setattr__(self, attr, settings.get(attr, tk.StringVar(self)))
 
@@ -925,6 +927,18 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.force_lower_case_paths_cbtn = tk.Checkbutton(
             self.extract_frame, text="Force all tag paths to lowercase",
             variable=self.force_lower_case_paths)
+        self.globals_overwrite_mode_frame = tk.LabelFrame(
+            self.extract_frame, relief="flat",
+            text="When to overwrite an existing globals.globals")
+
+        sel_index = self.globals_overwrite_mode.get()
+        if sel_index not in range(len(globals_overwrite_gui_names)):
+            sel_index = 0
+
+        self.globals_overwrite_mode_menu = ScrollMenu(
+            self.globals_overwrite_mode_frame, sel_index=sel_index,
+            variable=self.globals_overwrite_mode, menu_width=45,
+            options=globals_overwrite_gui_names)
 
 
         self.decode_adpcm_cbtn = tk.Checkbutton(
@@ -1022,11 +1036,12 @@ class RefinerySettingsWindow(tk.Toplevel):
             w.pack(padx=4, pady=2, fill="x")
 
         for w in (self.overwrite_cbtn, self.recursive_cbtn,
-                  self.do_printout_cbtn, self.force_lower_case_paths_cbtn):
+                  self.do_printout_cbtn, self.force_lower_case_paths_cbtn,
+                  self.globals_overwrite_mode_frame):
             w.pack(padx=4, anchor='w')
 
         for w in (self.bitmap_extract_keep_alpha_cbtn,
-                  self.bitmap_extract_format_menu,):
+                  self.bitmap_extract_format_menu, self.globals_overwrite_mode_menu):
             w.pack(padx=16, anchor='w')
 
         for w in (self.decode_adpcm_cbtn, self.bitmap_extract_frame,

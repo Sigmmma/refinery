@@ -136,6 +136,8 @@ class Refinery(tk.Tk, RefineryCore):
         self._bitmap_extract_keep_alpha = tk.IntVar(self, 1)
         self._disable_safe_mode = tk.IntVar(self, 0)
         self._disable_tag_cleaning = tk.IntVar(self, 0)
+        self._globals_overwrite_mode = tk.IntVar(self, 0)
+
         self._bitmap_extract_format = tk.StringVar(self)
 
         self._fix_tag_classes = tk.IntVar(self, 1)
@@ -175,6 +177,8 @@ class Refinery(tk.Tk, RefineryCore):
             bitmap_extract_keep_alpha=self._bitmap_extract_keep_alpha,
             disable_safe_mode=self._disable_safe_mode,
             disable_tag_cleaning=self._disable_tag_cleaning,
+            globals_overwrite_mode=self._globals_overwrite_mode,
+
             bitmap_extract_format=self._bitmap_extract_format,
 
             fix_tag_classes=self._fix_tag_classes,
@@ -445,10 +449,14 @@ class Refinery(tk.Tk, RefineryCore):
             for attr_name in flags.NAME_MAP:
                 setattr(self, attr_name, bool(getattr(flags, attr_name)))
 
+        self.bitmap_extract_format = bitmap_file_formats[0]
+        self.globals_overwrite_mode = header.globals_overwrite_mode.data
+
         if header.bitmap_extract_format.enum_name in bitmap_file_formats:
             self.bitmap_extract_format = header.bitmap_extract_format.enum_name
-        else:
-            self.bitmap_extract_format = bitmap_file_formats[0]
+
+        if header.globals_overwrite_mode.enum_name == "<INVALID>":
+            self.globals_overwrite_mode = 0
 
     def update_config(self, config_file=None):
         if config_file is None:
@@ -487,10 +495,14 @@ class Refinery(tk.Tk, RefineryCore):
             for attr_name in flags.NAME_MAP:
                 setattr(flags, attr_name, getattr(self, attr_name))
 
+        header.bitmap_extract_format.set_to(bitmap_file_formats[0])
+        header.globals_overwrite_mode.data = self.globals_overwrite_mode
+
         if self.bitmap_extract_format in bitmap_file_formats:
             header.bitmap_extract_format.set_to(self.bitmap_extract_format)
-        else:
-            header.bitmap_extract_format.set_to(bitmap_file_formats[0])
+
+        if header.globals_overwrite_mode.enum_name == "<INVALID>":
+            header.globals_overwrite_mode.data = 0
 
     def save_config(self, e=None):
         try:
@@ -1221,6 +1233,15 @@ class Refinery(tk.Tk, RefineryCore):
         if not items_extracted:
             print("Nothing was extracted. This might be a permissions issue.\n"
                   "Close Refinery and run it as admin to potentially fix this.")
+
+    def prompt_globals_overwrite(self, halo_map, tag_id):
+        map_name = halo_map.map_name
+        tag_name = halo_map.tag_index.tag_index[tag_id & 0xFFff].path
+        return messagebox.askyesno(
+            "Attempting to overwrite existing globals",
+            ('The tag "%s.globals" already exists in the extraction directory. '
+             'Do you want to overwrite it with the globals from the map "%s"?') %
+            (tag_name, map_name), icon='warning', parent=self)
 
     def process_queue_item(self, queue_item, **kw):
         self.update_idletasks()

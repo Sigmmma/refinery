@@ -6,7 +6,7 @@ import shutil
 import sys
 import zlib
 
-from os.path import dirname, basename, exists, join, isfile, splitext
+from os.path import dirname, basename, exists, join, splitext
 from struct import unpack
 from time import time
 from traceback import format_exc
@@ -165,6 +165,8 @@ class RefineryCore:
     use_scenario_names_for_script_names = True
     bitmap_extract_keep_alpha = True
     bitmap_extract_format = "dds"
+    globals_overwrite_mode = 0
+
     disable_safe_mode = False
     disable_tag_cleaning = False
 
@@ -1276,6 +1278,7 @@ class RefineryCore:
         tags_to_ignore = set(kw.pop("tags_to_ignore", ()))
         recursive     = kw.pop("recursive", self.recursive)
         tagslist_path = kw.pop("tagslist_path", self.tagslist_path)
+        do_printout = kw.get("do_printout", self.do_printout)
 
         if isinstance(tag_ids, int):
             tag_ids = (tag_ids, )
@@ -1418,18 +1421,37 @@ class RefineryCore:
             get_dependencies = False # it makes no sense to fill out
             #                          dependencies in data extraction
 
+
+        is_gen1 = ("halo1" in halo_map.engine or
+                   "stubbs" in halo_map.engine or
+                   "shadowrun" in halo_map.engine)
+
+        if tag_cls == "matg" and os.path.isfile(filepath) and is_gen1:
+            # determine if we should overwrite the globals tag
+            mode = self.globals_overwrite_mode
+            prompt = (mode == 0)
+            overwrite = (mode == 1)
+            map_type = halo_map.map_header.map_type.enum_name
+            if mode == 3 and map_type in ("sp", "ui"):
+                prompt = True
+            elif mode in (3, 4) and map_type == "mp":
+                overwrite = True
+                
+            if prompt:
+                overwrite = self.prompt_globals_overwrite(halo_map, tag_id)
+
+            if not overwrite:
+                return
+
         if do_printout:
             print("%s: %s" % (extract_mode, tag_path))
 
         meta = halo_map.get_meta(
             tag_id, True, disable_safe_mode=disable_safe_mode,
             disable_tag_cleaning=disable_tag_cleaning,)
+
         if not meta:
             raise CouldNotGetMetaError('Could not get meta for "%s"' % tag_path)
-
-        is_gen1 = ("halo1" in halo_map.engine or
-                   "stubbs" in halo_map.engine or
-                   "shadowrun" in halo_map.engine)
 
         extract_kw = dict(
             hsc_node_strings_by_type={}, out_dir=out_dir, overwrite=overwrite,
@@ -1514,6 +1536,17 @@ class RefineryCore:
             raise RefineryError("Filepath is over the Windows 260 character limit.")
 
         return True
+
+    def prompt_globals_overwrite(self, halo_map, tag_id):
+        map_name = halo_map.map_name
+        tag_name = halo_map.tag_index.tag_index[tag_id & 0xFFff].path
+        return input(
+            ('The tag "%s.globals" already exists in the extraction directory. '
+             'Do you want to overwrite it with the globals from the map "%s"?'
+             '\nType "y" for yes. Anything else means no: ') %
+            (tag_name, map_name)
+            ).lower().strip() == "y"
+        
 
     def write_tagslist(self, tagslist, tagslist_path):
         try:

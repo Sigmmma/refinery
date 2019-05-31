@@ -219,6 +219,9 @@ if __name__ == '__main__':
 
     args = init_arg_parser.parse_args()
     refinery_actions = []
+    if args.batch_mode:
+        refinery_actions.append("set-vars --globals-overwrite-mode 1")
+
     try:
         with open(args.filepath, "r") as f:
             refinery_actions.extend(line.strip() for line in f if line.strip())
