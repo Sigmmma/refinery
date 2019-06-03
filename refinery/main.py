@@ -807,6 +807,8 @@ class Refinery(tk.Tk, RefineryCore):
                     maps_to_unload=(ACTIVE_INDEX, )):
         RefineryCore.unload_maps(self, map_type, engines_to_unload,
                                  maps_to_unload)
+
+        self.reload_map_select_options()
         if not self.active_maps:
             self.set_active_engine(force_reload=True)
         elif not self.active_map:
@@ -848,10 +850,6 @@ class Refinery(tk.Tk, RefineryCore):
         if autoload_resources:
             self.load_resource_maps(new_map)
 
-        # TODO: Fix bug where reload_explorers is getting called WAY too often
-        # when loading maps outside of the load button, and where the active
-        # map is being changed incorrectly after reloading the same map.
-        # Fix wonkyness in general with set_active_engine and set_active_map
         if make_active:
             self.set_active_engine(
                 new_map.engine, new_map.map_name, force_reload=True)
@@ -1211,12 +1209,12 @@ class Refinery(tk.Tk, RefineryCore):
 
             tag_ids = list(b.id & 0xFFff for b in settings["tag_index_refs"])
 
-            engine = settings['halo_map'].engine
-            map_name = settings['halo_map'].map_name
+            engine = op_kw["engine"] = settings['halo_map'].engine
+            map_name = op_kw["map_name"] = settings['halo_map'].map_name
 
             engine_map_key = (engine, map_name)
             if (op_kw.get("extract_yelo_cheape", self.extract_yelo_cheape)
-                and engine_map_key not in cheapes):
+                and engine_map_key not in cheapes and engine == "halo1yelo"):
                 self.enqueue("extract_cheape", **op_kw)
                 cheapes.add(engine_map_key)
 
