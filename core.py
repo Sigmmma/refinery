@@ -1169,7 +1169,8 @@ class RefineryCore:
 
             kw.update(tags_to_ignore=ignore)
             ignore.update(self.extract_tags(
-                TagIndexCrawler(tag_ids).get_filtered_tag_ids(halo_map), **kw))
+                TagIndexCrawler(tag_ids).get_filtered_tag_ids(halo_map),
+                map_name, engine, **kw))
         elif op == "extract_tag":
             tag_ids = TagIndexCrawler((tag_id,)).get_filtered_tag_ids(halo_map)
             if len(tag_ids) == 0:
@@ -1183,14 +1184,15 @@ class RefineryCore:
             if tag_ids[0] not in ignore:
                 self.extract_tag(tag_ids[0], map_name, engine, **kw)
                 ignore.add(tag_ids[0])
-        elif op == "extract_cheape" and map_name not in cheapes_extracted:
-            if not filepath:
-                filepath = os.path.join(
-                    sanitize_path(kw.pop("out_dir", self.tags_dir)),
-                    map_name + "_cheape.map")
+        elif op == "extract_cheape":
+            if map_name not in cheapes_extracted:
+                if not filepath:
+                    filepath = os.path.join(
+                        sanitize_path(kw.pop("out_dir", self.tags_dir)),
+                        map_name + "_cheape.map")
 
-            cheapes_extracted.add(map_name)
-            self.extract_cheape(filepath, map_name, engine)
+                cheapes_extracted.add(map_name)
+                self.extract_cheape(filepath, map_name, engine)
         elif op == "deprotect_map":
             self.deprotect(filepath, map_name, engine, **kw)
         elif op == "load_map":
