@@ -167,6 +167,7 @@ class RefineryCore:
     bitmap_extract_format = "dds"
     globals_overwrite_mode = 0
 
+    skip_seen_tags_during_queue_processing = True
     disable_safe_mode = False
     disable_tag_cleaning = False
 
@@ -1103,7 +1104,7 @@ class RefineryCore:
             if kw.get("do_printout", self.do_printout):
                 engine = getattr(item, "engine", None)
                 map_name = getattr(item, "map_name", None)
-                
+
                 halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
                 print("%s: " % item.operation, end="")
                 if halo_map:
@@ -1159,6 +1160,9 @@ class RefineryCore:
         if not halo_map and op not in ("load_map", "set_vars"):
             return
 
+        skip_seen = kw.get("skip_seen_tags_during_queue_processing",
+                           self.skip_seen_tags_during_queue_processing)
+
         if op in ("extract_tags", "extract_data"):
             if op == "extract_tags":
                 kw["extract_mode"] = "tags"
@@ -1167,7 +1171,9 @@ class RefineryCore:
                 kw["extract_mode"] = "data"
                 ignore = data_by_map.setdefault((engine, map_name), set())
 
-            kw.update(tags_to_ignore=ignore)
+            if skip_seen:
+                kw.update(tags_to_ignore=ignore)
+
             ignore.update(self.extract_tags(
                 TagIndexCrawler(tag_ids).get_filtered_tag_ids(halo_map),
                 map_name, engine, **kw))
@@ -1224,7 +1230,7 @@ class RefineryCore:
             halo_map.print_tag_index(**kw)
         elif op == "print_files":
             kw.setdefault("do_printout", True)
-            halo_map.print_tag_index_files(**kw) 
+            halo_map.print_tag_index_files(**kw)
         elif op == "print_dir_ct":
             if kw.get("total"):
                 print(halo_map.get_total_dir_count(dir_path))
@@ -1377,7 +1383,7 @@ class RefineryCore:
         disable_tag_cleaning = kw.pop(
             "disable_tag_cleaning", self.disable_tag_cleaning)
 
-    
+
         dependency_ids = kw.pop("dependency_ids", None)
 
         get_dependencies = isinstance(dependency_ids, set)
@@ -1399,7 +1405,7 @@ class RefineryCore:
         if tag_index_ref.class_1.enum_name in ("<INVALID>", "NONE"):
             raise InvalidClassError(
                 'Unknown class for "%s". Run deprotection to fix.' % tag_path)
-        
+
         if extract_mode == "data" and not halo_map.is_data_extractable(tag_index_ref):
             return False
 
@@ -1438,7 +1444,7 @@ class RefineryCore:
                 prompt = True
             elif mode in (3, 4) and map_type == "mp":
                 overwrite = True
-                
+
             if prompt:
                 overwrite = self.prompt_globals_overwrite(halo_map, tag_id)
 
@@ -1548,7 +1554,6 @@ class RefineryCore:
              '\nType "y" for yes. Anything else means no: ') %
             (tag_name, map_name)
             ).lower().strip() == "y"
-        
 
     def write_tagslist(self, tagslist, tagslist_path):
         try:
