@@ -82,6 +82,7 @@ def ask_extract_settings(parent, def_vars=None, **kwargs):
         extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
         rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
         tagslist_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
+        skip_seen_tags_during_queue_processing=tk.IntVar(parent),
         disable_safe_mode=tk.IntVar(parent), disable_tag_cleaning=tk.IntVar(parent),
 
         bitmap_extract_format=tk.StringVar(parent),
@@ -860,6 +861,7 @@ class RefinerySettingsWindow(tk.Toplevel):
                      "fix_tag_index_offset", "use_tag_index_for_script_names",
                      "do_printout", "print_heuristic_name_changes",
                      "use_scenario_names_for_script_names",
+                     "skip_seen_tags_during_queue_processing",
                      "disable_safe_mode", "disable_tag_cleaning",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
@@ -927,6 +929,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.force_lower_case_paths_cbtn = tk.Checkbutton(
             self.extract_frame, text="Force all tag paths to lowercase",
             variable=self.force_lower_case_paths)
+        self.skip_seen_tags_during_queue_processing_cbtn = tk.Checkbutton(
+            self.extract_frame, text="During processing, skip any tags that were already extracted",
+            variable=self.skip_seen_tags_during_queue_processing)
         self.globals_overwrite_mode_frame = tk.LabelFrame(
             self.extract_frame, relief="flat",
             text="When to overwrite an existing globals.globals")
@@ -1037,6 +1042,7 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         for w in (self.overwrite_cbtn, self.recursive_cbtn,
                   self.do_printout_cbtn, self.force_lower_case_paths_cbtn,
+                  self.skip_seen_tags_during_queue_processing_cbtn,
                   self.globals_overwrite_mode_frame):
             w.pack(padx=4, anchor='w')
 

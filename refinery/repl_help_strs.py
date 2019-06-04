@@ -156,7 +156,9 @@ are valid, and thus not needing deprotection.",
         "0 == prompt every time. 1 == always overwrite. "
         "2 == never overwrite. 3 == overwrite for MP maps(prompt otherwise). "
         "4 == overwrite for MP maps(dont otherwise)."
-        )
+        ),
+    "skip-seen-tags-during-queue-processing": "Whether to skip extracting any tags that were \
+already extracted during a previous queued extraction."
     }
 
 

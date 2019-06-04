@@ -208,7 +208,8 @@ for op_name in (
         "valid-tag-paths-are-accurate", "scrape-tag-paths-from-scripts",
         "limit-tag-path-lengths", "print-heuristic-name-changes",
         "use-heuristics", "shallow-ui-widget-nesting", "rename-cached-tags",
-        "disable-safe-mode", "disable-tag-cleaning"):
+        "disable-safe-mode", "disable-tag-cleaning",
+        "skip-seen-tags-during-queue-processing"):
     # these dont get shorthand settings because there are too damn many of them
     _ops["set_vars"].add_argument(
         '--%s' % op_name, default=None, choices=(0, 1), type=int,

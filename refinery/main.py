@@ -134,6 +134,7 @@ class Refinery(tk.Tk, RefineryCore):
         self._use_tag_index_for_script_names = tk.IntVar(self)
         self._use_scenario_names_for_script_names = tk.IntVar(self)
         self._bitmap_extract_keep_alpha = tk.IntVar(self, 1)
+        self._skip_seen_tags_during_queue_processing = tk.IntVar(self, 1)
         self._disable_safe_mode = tk.IntVar(self, 0)
         self._disable_tag_cleaning = tk.IntVar(self, 0)
         self._globals_overwrite_mode = tk.IntVar(self, 0)
@@ -175,6 +176,7 @@ class Refinery(tk.Tk, RefineryCore):
             use_tag_index_for_script_names=self._use_tag_index_for_script_names,
             use_scenario_names_for_script_names=self._use_scenario_names_for_script_names,
             bitmap_extract_keep_alpha=self._bitmap_extract_keep_alpha,
+            skip_seen_tags_during_queue_processing=self._skip_seen_tags_during_queue_processing,
             disable_safe_mode=self._disable_safe_mode,
             disable_tag_cleaning=self._disable_tag_cleaning,
             globals_overwrite_mode=self._globals_overwrite_mode,
@@ -1235,11 +1237,12 @@ class Refinery(tk.Tk, RefineryCore):
     def prompt_globals_overwrite(self, halo_map, tag_id):
         map_name = halo_map.map_name
         tag_name = halo_map.tag_index.tag_index[tag_id & 0xFFff].path
-        return messagebox.askyesno(
+        ans = messagebox.askyesno(
             "Attempting to overwrite existing globals",
             ('The tag "%s.globals" already exists in the extraction directory. '
              'Do you want to overwrite it with the globals from the map "%s"?') %
             (tag_name, map_name), icon='warning', parent=self)
+        return bool(ans)
 
     def process_queue_item(self, queue_item, **kw):
         self.update_idletasks()
