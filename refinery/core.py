@@ -631,11 +631,34 @@ class RefineryCore:
             "levels\\%s\\%s" % (halo_map.map_header.map_name,
                                 halo_map.map_header.map_name), INF, True)
 
+        # never want to overwrite these as they are seekd out by name and class
+        for i in range(len(tag_index_array)):
+            tag_path = tag_path_handler.get_path(i).lower()
+            tag_class = tag_path_handler.get_ext(i).lower()
+            if tag_class == "bitmap" and tag_path in (
+                    r"ui\shell\bitmaps\background",
+                    r"ui\shell\bitmaps\trouble_brewing",
+                    r"ui\shell\bitmaps\team_background",
+                    r"ui\shell\bitmaps\team_icon_ctf",
+                    r"ui\shell\bitmaps\team_icon_king",
+                    r"ui\shell\bitmaps\team_icon_oddball",
+                    r"ui\shell\bitmaps\team_icon_race",
+                    r"ui\shell\bitmaps\team_icon_slayer"):
+                tag_path_handler.set_priority(i, INF)
+            elif tag_class == "sound" and tag_path in (
+                    r"sound\sfx\ui\cursor", r"sound\sfx\ui\forward",
+                    r"sound\sfx\ui\back", r"sound\sfx\ui\flag_failure"):
+                tag_path_handler.set_priority(i, INF)
+            elif tag_class == "unicode_string_list" and tag_path in (
+                    r"ui\shell\strings\loading",
+                    r"ui\shell\main_menu\mp_map_list"):
+                tag_path_handler.set_priority(i, INF)
+
         if valid_tag_paths_are_accurate:
-            for tag_id in range(len(tag_index_array)):
-                if not (tag_index_array[tag_id].path.lower().
+            for i in range(len(tag_index_array)):
+                if not (tag_index_array[i].path.lower().
                         startswith("protected")):
-                    tag_path_handler.set_priority(tag_id, INF)
+                    tag_path_handler.set_priority(i, INF)
 
         try:
             tagc_names = self.detect_tag_collection_names(map_name, engine)
@@ -866,6 +889,7 @@ class RefineryCore:
                     elif tag_cls in ("Soul", "tagc", "yelo", "gelo", "gelc"):
                         repair[tag_id] = tag_cls
 
+        # try to find the ui_widget_collection tag based on what tags it contains
         for b in tag_index_array:
             tag_id = b.id & 0xFFff
             if b.class_1.enum_name in ("tag_collection", "ui_widget_collection"):
@@ -1039,7 +1063,9 @@ class RefineryCore:
         for tag_id in ids_to_deprotect_by_class["actor_variant"]:
             if tag_id is None: continue
             try:
-                recursive_rename(tag_id, halo_map, path_handler, depth=1,
+                depth = INF if (path_handler.get_priority(tag_id) ==
+                                path_handler.def_priority) else 1
+                recursive_rename(tag_id, halo_map, path_handler, depth=depth,
                                  do_printout=print_name_changes)
             except Exception:
                 if not print_errors:
@@ -1054,7 +1080,9 @@ class RefineryCore:
         for tag_id in scen_ids:
             if tag_id is None: continue
             try:
-                recursive_rename(tag_id, halo_map, path_handler, depth=0,
+                depth = INF if (path_handler.get_priority(tag_id) ==
+                                path_handler.def_priority) else 0
+                recursive_rename(tag_id, halo_map, path_handler, depth=depth,
                                  do_printout=print_name_changes)
             except Exception:
                 if not print_errors:

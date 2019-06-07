@@ -982,13 +982,13 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
               obje_attrs.collision_model, obje_attrs.physics):
         min_prio.val = recursive_rename(get_tag_id(b), sub_dir=sub_dir, name=name, **kw)
 
-    min_prio.val = recursive_rename(get_tag_id(obje_attrs.creation_effect),
-                     sub_dir=sub_dir + effects_dir,
-                     name="creation effect", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(obje_attrs.creation_effect),
+        sub_dir=sub_dir + effects_dir, name="creation effect", **kw)
 
-    min_prio.val = recursive_rename(get_tag_id(obje_attrs.modifier_shader),
-                     sub_dir=sub_dir + shaders_dir,
-                     name="modifier shader", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(obje_attrs.modifier_shader),
+        sub_dir=sub_dir + shaders_dir, name="modifier shader", **kw)
 
     for b in obje_attrs.attachments.STEPTREE:
         a_name = kw.get("func_%s_name" % b.primary_scale.data, "")
@@ -998,33 +998,37 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
             if b.type.tag_class.enum_name not in a_name.lower():
                 a_name += b.type.tag_class.enum_name
 
-        min_prio.val = recursive_rename(get_tag_id(b.type), name=a_name,
-                         sub_dir=sub_dir + obje_effects_dir, **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.type), name=a_name,
+            sub_dir=sub_dir + obje_effects_dir, **kw)
 
     for b in obje_attrs.widgets.STEPTREE:
-        min_prio.val = recursive_rename(get_tag_id(b.reference),
-                         sub_dir=sub_dir + "widgets\\", **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.reference), sub_dir=sub_dir + "widgets\\", **kw)
 
     proj_attrs = getattr(meta, "proj_attrs", None)
     if obje_type != "proj" or not proj_attrs:
         return
 
-    min_prio.val = recursive_rename(get_tag_id(proj_attrs.super_detonation),
-                     sub_dir=sub_dir + effects_dir,
-                     name="super detonation", **kw)
-    min_prio.val = recursive_rename(get_tag_id(proj_attrs.detonation.effect),
-                     sub_dir=sub_dir + effects_dir,
-                     name="detonation", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(proj_attrs.super_detonation),
+        sub_dir=sub_dir + effects_dir, name="super detonation", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(proj_attrs.detonation.effect),
+        sub_dir=sub_dir + effects_dir, name="detonation", **kw)
 
-    min_prio.val = recursive_rename(get_tag_id(proj_attrs.physics.detonation_started),
-                     sub_dir=sub_dir + effects_dir,
-                     name="detonation started", **kw)
-    min_prio.val = recursive_rename(get_tag_id(proj_attrs.physics.flyby_sound),
-                     sub_dir=sub_dir + sound_dir, name="flyby sound", **kw)
-    min_prio.val = recursive_rename(get_tag_id(proj_attrs.physics.attached_detonation_damage),
-                     sub_dir=sub_dir, name="attached detonation", **kw)
-    min_prio.val = recursive_rename(get_tag_id(proj_attrs.physics.impact_damage),
-                     sub_dir=sub_dir, name="impact", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(proj_attrs.physics.detonation_started),
+        sub_dir=sub_dir + effects_dir, name="detonation started", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(proj_attrs.physics.flyby_sound),
+        sub_dir=sub_dir + sound_dir, name="flyby sound", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(proj_attrs.physics.attached_detonation_damage),
+        sub_dir=sub_dir, name="attached detonation", **kw)
+    min_prio.val = recursive_rename(
+        get_tag_id(proj_attrs.physics.impact_damage),
+        sub_dir=sub_dir, name="impact", **kw)
 
     i = 0
     for b in proj_attrs.material_responses.STEPTREE:

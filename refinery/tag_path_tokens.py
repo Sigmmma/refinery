@@ -5,7 +5,7 @@ TOKEN_MATG = "<globals>"
 
 TOKEN_PC_SCNR_ALL_TYPE_TAGC = "<pc_tagc_all_type>"
 TOKEN_PC_BACKGROUND_BITM = "<pc_background>"
-TOKEN_PC_LOADING_STR = "<pc_loading>"
+TOKEN_PC_LOADING_USTR = "<pc_loading>"
 TOKEN_PC_MP_MAP_LIST_USTR = "<pc_mp_map_list>"
 TOKEN_PC_TROUBLE_BITM = "<pc_trouble>"
 TOKEN_PC_CURSOR_SND = "<pc_cursor>"
@@ -43,7 +43,7 @@ TOKEN_XBOX_UI_TITLE_LSND = "<xbox_title>"
 # appear in a compiled map. I'm unsure if they need to be in this
 # order, but regardless this is the order you should find them.
 EXTRACT_PC_MAGICALLY_INCLUDED = (
-    TOKEN_PC_BACKGROUND_BITM, TOKEN_PC_LOADING_STR, TOKEN_PC_MP_MAP_LIST_USTR,
+    TOKEN_PC_BACKGROUND_BITM, TOKEN_PC_LOADING_USTR, TOKEN_PC_MP_MAP_LIST_USTR,
     TOKEN_PC_TROUBLE_BITM, TOKEN_PC_CURSOR_SND, TOKEN_PC_FORWARD_SND,
     TOKEN_PC_BACK_SND, TOKEN_PC_FLAG_FAILURE_SND
     )
@@ -73,7 +73,7 @@ EXTRACT_XBOX_ALL_TAGS = (TOKEN_SCNR, TOKEN_MATG) + EXTRACT_XBOX_UI_MAGICALLY_INC
 tokens_to_tag_paths = {
     TOKEN_PC_SCNR_ALL_TYPE_TAGC: "ui\\ui_tags_loaded_all_scenario_types.tag_collection",
     TOKEN_PC_BACKGROUND_BITM: "ui\\shell\\bitmaps\\background.bitmap",
-    TOKEN_PC_LOADING_STR: "ui\\shell\\strings\\loading.unicode_string_list",
+    TOKEN_PC_LOADING_USTR: "ui\\shell\\strings\\loading.unicode_string_list",
     TOKEN_PC_MP_MAP_LIST_USTR: "ui\\shell\\main_menu\\mp_map_list.unicode_string_list",
     TOKEN_PC_TROUBLE_BITM: "ui\\shell\\bitmaps\\trouble_brewing.bitmap",
     TOKEN_PC_CURSOR_SND: "sound\\sfx\\ui\\cursor.sound",
