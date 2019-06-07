@@ -96,6 +96,18 @@ class TagPathHandler():
             return tag_ref.path
         return ""
 
+    def get_ext(self, index):
+        tag_ref = self.get_index_ref(index)
+        if tag_ref:
+            return tag_ref.class_1.enum_name
+        return ""
+
+    def get_full_tag_path(self, index):
+        tag_path, tag_ext = self.get_path(index), self.get_ext(index)
+        if tag_path and tag_ext:
+            return "%s.%s" % (tag_path, tag_ext)
+        return ""
+
     def get_priority(self, index, default=-INF):
         if index is None: return default
         index &= 0xFFff
