@@ -2,21 +2,6 @@ from reclaimer.enums import materials_list, material_effect_types
 from refinery.recursive_rename.constants import *
 from traceback import format_exc
 
-VERY_HIGH_PRIORITY = 10.0
-VEHICLE_WEAP_PRIORITY = 5.0
-HIGH_PRIORITY = 4.0
-UNIT_WEAPON_PRIORITY = 3.0
-SCNR_BSPS_PRIORITY = 2.5
-MEDIUM_HIGH_PRIORITY = 2.0
-MEDIUM_PRIORITY = 1.5
-DEFAULT_PRIORITY = 1.0
-LOW_PRIORITY = 0.5
-
-
-INVALID_MODEL_NAMES = frozenset(
-    ("", "base", "unnamed", "blur", "unnamed base",
-     "def", "default", "damaged"))
-
 
 class MinPriority:
     _val = INF
@@ -271,8 +256,9 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
 
     # rename sky references
     for b in meta.skies.STEPTREE:
-        min_prio.val = recursive_rename(get_tag_id(b.sky), sub_dir=sky_dir + name + "\\",
-                         name=name + " sky", **kw)
+        min_prio.val = recursive_rename(
+            get_tag_id(b.sky), sub_dir=sky_dir + name + "\\",
+            name=name + " sky", **kw)
 
     palette_renames = (
         ("machines_palette", machines_dir),
