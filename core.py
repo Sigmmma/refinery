@@ -607,15 +607,6 @@ class RefineryCore:
 
         halo_map.force_checksum = spoof_checksum
 
-        # rename cached tags using tag paths found in resource maps
-        if rename_cached_tags:
-            try:
-                self.sanitize_resource_tag_paths(map_name, engine)
-            except Exception:
-                if not print_errors:
-                    raise
-                print(format_exc())
-
         if fix_tag_classes:
             try:
                 self.repair_tag_classes(map_name, engine)
@@ -631,12 +622,23 @@ class RefineryCore:
             "levels\\%s\\%s" % (halo_map.map_header.map_name,
                                 halo_map.map_header.map_name), INF, True)
 
+        # rename cached tags using tag paths found in resource maps
+        if rename_cached_tags:
+            try:
+                self.sanitize_resource_tag_paths(tag_path_handler,
+                                                 map_name, engine)
+            except Exception:
+                if not print_errors:
+                    raise
+                print(format_exc())
+
         # never want to overwrite these as they are seekd out by name and class
         for i in range(len(tag_index_array)):
             tag_path = tag_path_handler.get_path(i).lower()
             tag_class = tag_path_handler.get_ext(i).lower()
             if tag_class == "bitmap" and tag_path in (
                     r"ui\shell\bitmaps\background",
+                    r"ui\shell\bitmaps\cursor",
                     r"ui\shell\bitmaps\trouble_brewing",
                     r"ui\shell\bitmaps\team_background",
                     r"ui\shell\bitmaps\team_icon_ctf",
@@ -814,11 +816,10 @@ class RefineryCore:
             tag_id = b.id & 0xFFff
             if tag_id == halo_map.tag_index.scenario_tag_id & 0xFFff:
                 tag_cls = "scnr"
-            elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
-                tag_cls = fourcc(b.class_1.data)
-            else:
+            elif b.indexed or b.class_1.enum_name in ("<INVALID>", "NONE"):
                 continue
 
+            tag_cls = fourcc(b.class_1.data)
             if tag_cls in ("scnr", "DeLa"):
                 repair[tag_id] = tag_cls
             elif tag_cls == "matg" and b.path == "globals\\globals":
@@ -911,12 +912,13 @@ class RefineryCore:
 
         return repaired
 
-    def sanitize_resource_tag_paths(self, map_name=ACTIVE_INDEX, engine=ACTIVE_INDEX):
+    def sanitize_resource_tag_paths(self, path_handler, map_name=ACTIVE_INDEX,
+                                    engine=ACTIVE_INDEX):
         halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if not halo_map:
             return
 
-        engine_maps = self.maps_by_engine.get(halo_map.engine, {})
+        engine_maps = halo_map.maps
         for b in halo_map.tag_index.tag_index:
             tag_id = b.id & 0xFFff
             rsrc_tag_id = b.meta_offset
@@ -924,18 +926,19 @@ class RefineryCore:
             if not b.indexed:
                 continue
             elif b.class_1.enum_name == "bitmap":
-                rsrc_map = engine_maps.get("bitmaps")
+                rsrc_map = engine_maps.get("~bitmaps", engine_maps.get("bitmaps"))
             elif b.class_1.enum_name == "sound":
-                rsrc_map = engine_maps.get("sounds")
+                rsrc_map = engine_maps.get("~sounds", engine_maps.get("sounds"))
             elif b.class_1.enum_name in ("font", "hud_message_text",
                                          "unicode_string_list"):
-                rsrc_map = engine_maps.get("loc")
+                rsrc_map = engine_maps.get("~loc", engine_maps.get("loc"))
 
             rsrc_tag_index = getattr(rsrc_map, "orig_tag_index", ())
             if rsrc_tag_id not in range(len(rsrc_tag_index)):
                 continue
 
             tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
+            path_handler.set_path_by_priority(tag_id, tag_path, INF, True, False)
 
     def _script_scrape_deprotect(self, path_handler, map_name=ACTIVE_INDEX,
                                  engine=ACTIVE_INDEX, **kw):
