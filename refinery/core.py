@@ -47,6 +47,7 @@ from refinery import crc_functions
 from refinery.exceptions import *
 from refinery.queue_item import RefineryQueueItem
 from refinery.recursive_rename.tag_path_handler import TagPathHandler
+from refinery.recursive_rename.constants import VERY_HIGH_PRIORITY
 from refinery.recursive_rename.functions import recursive_rename
 from refinery.tag_index_crawler import TagIndexCrawler
 from refinery.util import *
@@ -646,21 +647,20 @@ class RefineryCore:
                     r"ui\shell\bitmaps\team_icon_oddball",
                     r"ui\shell\bitmaps\team_icon_race",
                     r"ui\shell\bitmaps\team_icon_slayer"):
-                tag_path_handler.set_priority(i, INF)
+                tag_path_handler.set_overwritable(i, False)
             elif tag_class == "sound" and tag_path in (
                     r"sound\sfx\ui\cursor", r"sound\sfx\ui\forward",
                     r"sound\sfx\ui\back", r"sound\sfx\ui\flag_failure"):
-                tag_path_handler.set_priority(i, INF)
+                tag_path_handler.set_overwritable(i, False)
             elif tag_class == "unicode_string_list" and tag_path in (
                     r"ui\shell\strings\loading",
                     r"ui\shell\main_menu\mp_map_list"):
-                tag_path_handler.set_priority(i, INF)
+                tag_path_handler.set_overwritable(i, False)
 
         if valid_tag_paths_are_accurate:
-            for i in range(len(tag_index_array)):
-                if not (tag_index_array[i].path.lower().
-                        startswith("protected")):
-                    tag_path_handler.set_priority(i, INF)
+            for b in tag_index_array:
+                if not b.path.lower().startswith("protected"):
+                    tag_path_handler.set_overwritable(b.id, False)
 
         try:
             tagc_names = self.detect_tag_collection_names(map_name, engine)
@@ -672,7 +672,7 @@ class RefineryCore:
                 if do_printout:
                     print(tag_id, tag_path, sep="\t")
                 tag_path_handler.set_path_by_priority(
-                    tag_id, tag_path, INF, True, False)
+                    tag_id, tag_path, VERY_HIGH_PRIORITY, True, False)
 
         except Exception:
             if not print_errors:
@@ -937,8 +937,8 @@ class RefineryCore:
             if rsrc_tag_id not in range(len(rsrc_tag_index)):
                 continue
 
-            tag_path = rsrc_tag_index[rsrc_tag_id].tag.path
-            path_handler.set_path_by_priority(tag_id, tag_path, INF, True, False)
+            path_handler.set_path(tag_id, rsrc_tag_index[rsrc_tag_id].tag.path)
+            path_handler.set_overwritable(tag_id, False)
 
     def _script_scrape_deprotect(self, path_handler, map_name=ACTIVE_INDEX,
                                  engine=ACTIVE_INDEX, **kw):

@@ -23,6 +23,7 @@ class TagPathHandler():
     _icon_strings = ()
     _item_strings = ()
     _def_priority = 0.0
+    _overwritables = ()
 
     max_object_str_len = 120  # arbitrary limit. Meant to keep tag paths short
 
@@ -32,6 +33,7 @@ class TagPathHandler():
         self._priorities = dict(kwargs.get('priorities', {}))
         self._priority_mins = dict(kwargs.get('priority_mins', {}))
         self._path_map = dict()
+        self._overwritables = dict()
 
         i = 0
         for ref in self._index_map:
@@ -39,6 +41,7 @@ class TagPathHandler():
             self._path_map[path] = i
             priority = INF if ref.indexed else self._def_priority
             self._priorities[i] = self._priority_mins[i] = priority
+            self._overwritables[i] = False if ref.indexed else True
             i += 1
 
     @property
@@ -116,6 +119,10 @@ class TagPathHandler():
         if index is None: return default
         return self._priority_mins.get(index & 0xFFff, default)
 
+    def get_overwritable(self, index):
+        if index is None: return False
+        return self._overwritables.get(index & 0xFFff, False)
+
     def get_sub_dir(self, index, root=""):
         tag_ref = self.get_index_ref(index)
         if not tag_ref:
@@ -142,6 +149,9 @@ class TagPathHandler():
             return False
         elif priority is None:
             priority = self._def_priority
+
+        if not self.get_overwritable(index):
+            return False
 
         tag_ref = self.get_index_ref(index)
         if self.get_priority(index) > priority:
@@ -226,6 +236,12 @@ class TagPathHandler():
         index &= 0xFFff
         if index in range(len(self._index_map)):
             self._priority_mins[index] = float(priority)
+
+    def set_overwritable(self, index, new_val=True):
+        if index is not None: return
+        index &= 0xFFff
+        if index in range(len(self._index_map)):
+            self._overwritables[index] = new_val
 
     def shorten_paths(self, max_len, **kw):
         paths = {}
