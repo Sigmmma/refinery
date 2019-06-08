@@ -110,13 +110,11 @@ class TagPathHandler():
 
     def get_priority(self, index, default=-INF):
         if index is None: return default
-        index &= 0xFFff
-        return self._priorities.get(index, default)
+        return self._priorities.get(index & 0xFFff, default)
 
     def get_priority_min(self, index, default=INF):
         if index is None: return default
-        index &= 0xFFff
-        return self._priority_mins.get(index, default)
+        return self._priority_mins.get(index & 0xFFff, default)
 
     def get_sub_dir(self, index, root=""):
         tag_ref = self.get_index_ref(index)
@@ -202,17 +200,15 @@ class TagPathHandler():
 
     def set_path_by_priority(self, index, new_path_no_ext, priority=None,
                              override=False, do_printout=False):
-        if index is None: return -INF
-        index &= 0xFFff
+        tag_ref = self.get_index_ref(index)
+        if tag_ref is None:
+            return -INF
 
         if priority is None:
             priority = self._def_priority
         assert isinstance(new_path_no_ext, str)
 
-        tag_ref = self.get_index_ref(index)
-        if tag_ref is None:
-            return -INF
-        elif not self.get_will_overwrite(index, priority, override):
+        if not self.get_will_overwrite(index, priority, override):
             return self.get_priority(index)
 
         self.set_path(index, new_path_no_ext, do_printout)
