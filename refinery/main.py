@@ -1061,10 +1061,11 @@ class Refinery(tk.Tk, RefineryCore):
 
         return repaired
 
-    def sanitize_resource_tag_paths(self, map_name=ACTIVE_INDEX,
+    def sanitize_resource_tag_paths(self, path_handler, map_name=ACTIVE_INDEX,
                                     engine=ACTIVE_INDEX):
         print("Renaming tags using resource map tag paths...")
-        RefineryCore.sanitize_resource_tag_paths(self, map_name, engine)
+        RefineryCore.sanitize_resource_tag_paths(self, path_handler,
+                                                 map_name, engine)
 
     def _script_scrape_deprotect(self, tag_path_handler, map_name=ACTIVE_INDEX,
                                  engine=ACTIVE_INDEX, **kw):
