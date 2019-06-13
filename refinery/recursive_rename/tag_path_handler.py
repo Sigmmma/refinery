@@ -7,7 +7,7 @@ from queue import LifoQueue, Empty as EmptyQueueException
 
 def get_unique_name(collection, name="", ext="", curr_value=object()):
     final_name = name
-    i = 2
+    i = 1
     while collection.get(final_name + ext) not in (None, curr_value):
         final_name = "%s #%s" % (name, i)
         i += 1
