@@ -357,7 +357,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     i = 0
     for b in meta.structure_bsps.STEPTREE:
         bsp_name = name
-        if len(meta.structure_bsps.STEPTREE) == 1:
+        if len(meta.structure_bsps.STEPTREE) > 1:
             bsp_name += " %s" % i
 
         min_prio.val = recursive_rename(
@@ -1347,7 +1347,7 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
             get_tag_id(trig.projectile.projectile), name="projectile",
             sub_dir=sub_dir + "%sprojectile\\" % trig_str, **kw)
 
-        for b in trig.misc.firing_effects.STEPTREE:
+        for b in trig.firing_effects.STEPTREE:
             min_prio.val = recursive_rename(
                 get_tag_id(b.firing_effect), name=trig_str + "fire",
                 sub_dir=sub_dir + obje_effects_dir, **kw)
