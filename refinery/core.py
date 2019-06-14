@@ -11,7 +11,8 @@ from struct import unpack
 from time import time
 from traceback import format_exc
 
-from supyr_struct.buffer import BytearrayBuffer, PeekableMmap
+from supyr_struct.buffer import get_rawdata_context,\
+     BytearrayBuffer, PeekableMmap
 from supyr_struct.defs.constants import *
 from supyr_struct.field_types import FieldType
 
@@ -93,7 +94,7 @@ def get_halo_map_section_ends(halo_map):
 
 def expand_halo_map(halo_map, raw_data_expansion=0, vertex_data_expansion=0,
                     triangle_data_expansion=0, meta_data_expansion=0):
-    map_file   = halo_map.map_data
+    map_file   = halo_map.get_writable_map_data()
     map_header = halo_map.map_header
     tag_index  = halo_map.tag_index
     tag_index_array = tag_index.tag_index
@@ -345,8 +346,10 @@ class RefineryCore:
         os.makedirs(save_dir, exist_ok=True)
 
         try:
-            out_file = map_file = halo_map.map_data
-            if save_path.lower() != sanitize_path(halo_map.filepath).lower():
+            map_file = halo_map.map_data
+            if save_path.lower() == sanitize_path(halo_map.filepath).lower():
+                out_file = map_file = halo_map.get_writable_map_data()
+            else:
                 # use r+ mode rather than w if the file os.path.exists
                 # since it might be hidden. apparently on windows
                 # the w mode will fail to open hidden files.
@@ -465,7 +468,7 @@ class RefineryCore:
             out_file.write(map_header.serialize(calc_pointers=False))
             out_file.flush()
 
-            halo_map.filepath = save_path
+            halo_map.filepath = halo_map.decomp_filepath = save_path
         except Exception:
             if halo_map.map_data is not out_file:
                 out_file.close()
@@ -481,12 +484,10 @@ class RefineryCore:
         if do_printout:
             print("Loading %s..." % os.path.basename(map_path))
 
-        with open(map_path, 'r+b') as f:
-            comp_data  = PeekableMmap(f.fileno(), 0)
-            head_sig   = unpack("<I", comp_data.peek(4))[0]
-            map_header = get_map_header(comp_data, True)
+        with get_rawdata_context(filepath=map_path, writable=False) as f:
+            head_sig   = unpack("<I", f.peek(4))[0]
+            map_header = get_map_header(f, True)
             engine     = get_map_version(map_header)
-            comp_data.close()
 
         is_halo1_rsrc = False
         if engine is None and head_sig in (1, 2, 3):
@@ -711,7 +712,7 @@ class RefineryCore:
         # calculate the maps new checksum
         if not halo_map.force_checksum:
             halo_map.map_header.crc32 = crc_functions.calculate_ce_checksum(
-                halo_map.map_data, halo_map.index_magic)
+                halo_map.get_writable_map_data(), halo_map.index_magic)
 
         self.save_map(save_path, map_name, engine,
                       prompt_strings_expand=False, prompt_internal_rename=False)
@@ -844,7 +845,7 @@ class RefineryCore:
                 try:
                     if tag_cls != "sbsp":
                         class_repair_functions[tag_cls](
-                            tag_id, tag_index_array, halo_map.map_data,
+                            tag_id, tag_index_array, halo_map.get_writable_map_data(),
                             halo_map.map_magic, next_repair, halo_map.engine)
 
                         # replace meta with the deprotected one
@@ -855,7 +856,7 @@ class RefineryCore:
                     elif tag_id in halo_map.bsp_headers:
                         class_repair_functions[tag_cls](
                             halo_map.bsp_headers[tag_id].meta_pointer,
-                            tag_index_array, halo_map.map_data,
+                            tag_index_array, halo_map.get_writable_map_data(),
                             halo_map.bsp_magics[tag_id] - halo_map.bsp_header_offsets[tag_id],
                             next_repair, halo_map.engine, halo_map.map_magic)
                 except Exception:
@@ -875,7 +876,7 @@ class RefineryCore:
                         tag_cls = fourcc(b.class_1.data)
                     else:
                         _, reffed_tag_types = get_tagc_refs(
-                            b.meta_offset, halo_map.map_data,
+                            b.meta_offset, halo_map.get_writable_map_data(),
                             halo_map.map_magic, repaired, tag_index_array
                             )
                         if reffed_tag_types:
@@ -895,7 +896,7 @@ class RefineryCore:
             tag_id = b.id & 0xFFff
             if b.class_1.enum_name in ("tag_collection", "ui_widget_collection"):
                 reffed_tag_ids, reffed_tag_types = get_tagc_refs(
-                    b.meta_offset, halo_map.map_data,
+                    b.meta_offset, halo_map.get_writable_map_data(),
                     halo_map.map_magic, repaired, tag_index_array)
                 if set(reffed_tag_types) == set(["DeLa"]):
                     repaired[tag_id] = "Soul"
