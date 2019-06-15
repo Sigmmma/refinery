@@ -20,8 +20,8 @@ from supyr_struct.field_types import FieldType
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
      h3_data_extractors
-from reclaimer.hsc import get_h1_scenario_script_object_type_strings,\
-     get_hsc_data_block, HSC_IS_GLOBAL
+from reclaimer.halo_script.hsc import get_hsc_data_block, HSC_IS_GLOBAL,\
+     get_h1_scenario_script_object_type_strings
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
