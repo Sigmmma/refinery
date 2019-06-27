@@ -1250,6 +1250,7 @@ class Refinery(tk.Tk, RefineryCore):
         try:
             del self.queue_tree.queue_info[queue_item.queue_item_iid]
             self.queue_tree.tags_tree.delete(queue_item.queue_item_iid)
+            self.update()
         except Exception:
             pass
 
