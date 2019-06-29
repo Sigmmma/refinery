@@ -21,6 +21,7 @@ from tkinter.filedialog import askopenfilename, askopenfilenames,\
 
 from binilla.about_window import AboutWindow
 from binilla.widgets import ScrollMenu
+from binilla import editor_constants as e_c
 
 from refinery.defs.config_def import config_def
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
@@ -257,10 +258,15 @@ class Refinery(tk.Tk, RefineryCore):
         self.config(menu=self.menubar)
 
         # fonts
-        self.fixed_font = Font(family="Courier", size=8)
+        self.default_font = Font(
+            family=e_c.DEFAULT_FONT_NAME, size=e_c.DEFAULT_FONT_SIZE)
+        self.fixed_font = Font(
+            family=e_c.FIXED_FONT_NAME, size=e_c.FIXED_FONT_SIZE)
         self.container_title_font = Font(
-            family="Courier", size=10, weight='bold')
-        self.comment_font = Font(family="Courier", size=9)
+            family=e_c.FIXED_FONT_SIZE, size=e_c.FIXED_FONT_SIZE + 2,
+            weight='bold')
+        self.comment_font = Font(
+            family=e_c.FIXED_FONT_NAME, size=e_c.FIXED_FONT_SIZE + 1)
 
         # make the window pane
         self.panes = tk.PanedWindow(self, sashwidth=6,
@@ -297,8 +303,8 @@ class Refinery(tk.Tk, RefineryCore):
 
         # make the entries
         self.fixed_font = Font(family="Courier", size=8)
-        self.map_info_text = tk.Text(self.map_info_frame, font=self.fixed_font,
-                                     state='disabled', height=8)
+        self.map_info_text = tk.Text(
+            self.map_info_frame, font=self.fixed_font, state='disabled', height=8)
         self.map_info_scrollbar = tk.Scrollbar(self.map_info_frame)
         self.map_info_text.config(yscrollcommand=self.map_info_scrollbar.set)
         self.map_info_scrollbar.config(command=self.map_info_text.yview)
@@ -368,6 +374,11 @@ class Refinery(tk.Tk, RefineryCore):
         self.set_display_mode()
         self.set_extract_mode()
 
+        app_window = self.config_file.data.app_window
+        self.geometry("%sx%s+%s+%s" %
+                      (app_window.app_width, app_window.app_height,
+                       app_window.app_offset_x, app_window.app_offset_y))
+
         self._initialized = True
 
     def __getattribute__(self, attr_name):
@@ -431,8 +442,6 @@ class Refinery(tk.Tk, RefineryCore):
         header     = self.config_file.data.header
         paths      = self.config_file.data.paths
         app_window = self.config_file.data.app_window
-
-        self.geometry("%sx%s+%s+%s" % tuple(app_window[:4]))
 
         self.tagslist_path = paths.tagslist.path
         self.tags_dir = paths.tags_dir.path
