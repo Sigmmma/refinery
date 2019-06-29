@@ -78,8 +78,8 @@ config_header = Struct("header",
 
     UEnum8("bitmap_extract_format", *bitmap_file_formats),
     UEnum8("globals_overwrite_mode",
-        *({NAME: globals_overwrite_modes[i],
-           GUI_NAME: globals_overwrite_gui_names[i]}
+        *(dict(NAME=globals_overwrite_modes[i],
+               GUI_NAME=globals_overwrite_gui_names[i])
           for i in range(len(globals_overwrite_modes)))
         ),
 
@@ -97,6 +97,7 @@ path = Container("path",
 
 array_sizes = Struct("array_sizes",
     UInt32("paths_count"),
+    UInt8("column_widths_count"),
     SIZE=64, VISIBLE=False,
     )
 
@@ -105,12 +106,18 @@ app_window = Struct("app_window",
     UInt16("app_height", DEFAULT=450),
     SInt16("app_offset_x"),
     SInt16("app_offset_y"),
+    SInt16("sash_position"),
     SIZE=64
     )
 
 paths = Array("paths",
     SUB_STRUCT=path, SIZE=".array_sizes.paths_count",
     NAME_MAP=("last_dir", "tagslist", "tags_dir", "data_dir"),
+    VISIBLE=False
+    )
+
+column_widths = SInt16Array("column_widths",
+    SIZE=".array_sizes.column_widths_count",
     VISIBLE=False
     )
 

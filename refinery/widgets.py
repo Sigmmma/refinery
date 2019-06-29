@@ -818,7 +818,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         except Exception:
             print("Could not load window icon.")
 
-        self.geometry("450x300")
+        self.geometry("550x300")
         self.minsize(width=450, height=300)
         self.resizable(1, 0)
         self.title("Settings")
@@ -942,7 +942,7 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         self.globals_overwrite_mode_menu = ScrollMenu(
             self.globals_overwrite_mode_frame, sel_index=sel_index,
-            variable=self.globals_overwrite_mode, menu_width=45,
+            variable=self.globals_overwrite_mode, menu_width=50,
             options=globals_overwrite_gui_names)
 
 
