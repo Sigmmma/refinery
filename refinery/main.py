@@ -20,7 +20,7 @@ from tkinter.filedialog import askopenfilename, askopenfilenames,\
 
 
 from binilla.about_window import AboutWindow
-from binilla.widgets import ScrollMenu
+from binilla.widgets import ScrollMenu, BinillaWidget
 from binilla import editor_constants as e_c
 
 from refinery.defs.config_def import config_def
@@ -36,7 +36,7 @@ VALID_EXTRACT_MODES = frozenset(("tags", "data"))
 
 
 
-class Refinery(tk.Tk, RefineryCore):
+class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     last_dir = curr_dir
 
     config_path = default_config_path
@@ -257,17 +257,6 @@ class Refinery(tk.Tk, RefineryCore):
             label="About", command=self.show_about_window)
         self.config(menu=self.menubar)
 
-        # fonts
-        self.default_font = Font(
-            family=e_c.DEFAULT_FONT_FAMILY, size=e_c.DEFAULT_FONT_SIZE)
-        self.fixed_font = Font(
-            family=e_c.FIXED_FONT_FAMILY, size=e_c.FIXED_FONT_SIZE)
-        self.container_title_font = Font(
-            family=e_c.FIXED_FONT_SIZE, size=e_c.FIXED_FONT_SIZE + 2,
-            weight='bold')
-        self.comment_font = Font(
-            family=e_c.FIXED_FONT_FAMILY, size=e_c.FIXED_FONT_SIZE + 1)
-
         # make the window pane
         self.panes = tk.PanedWindow(self, sashwidth=6,
                                     sashpad=2, sashrelief="raised")
@@ -302,9 +291,9 @@ class Refinery(tk.Tk, RefineryCore):
         self.panes.add(self.queue_frame)
 
         # make the entries
-        self.fixed_font = Font(family="Courier", size=8)
         self.map_info_text = tk.Text(
-            self.map_info_frame, font=self.fixed_font, state='disabled', height=8)
+            self.map_info_frame, font=self.get_font("fixed_small"),
+            state='disabled', height=8)
         self.map_info_scrollbar = tk.Scrollbar(self.map_info_frame)
         self.map_info_text.config(yscrollcommand=self.map_info_scrollbar.set)
         self.map_info_scrollbar.config(command=self.map_info_text.yview)
@@ -375,6 +364,7 @@ class Refinery(tk.Tk, RefineryCore):
         self.set_extract_mode()
 
         app_window = self.config_file.data.app_window
+        self.apply_style()
         self.geometry("%sx%s+%s+%s" %
                       (app_window.app_width, app_window.app_height,
                        app_window.app_offset_x, app_window.app_offset_y))
