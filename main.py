@@ -259,14 +259,14 @@ class Refinery(tk.Tk, RefineryCore):
 
         # fonts
         self.default_font = Font(
-            family=e_c.DEFAULT_FONT_NAME, size=e_c.DEFAULT_FONT_SIZE)
+            family=e_c.DEFAULT_FONT_FAMILY, size=e_c.DEFAULT_FONT_SIZE)
         self.fixed_font = Font(
-            family=e_c.FIXED_FONT_NAME, size=e_c.FIXED_FONT_SIZE)
+            family=e_c.FIXED_FONT_FAMILY, size=e_c.FIXED_FONT_SIZE)
         self.container_title_font = Font(
             family=e_c.FIXED_FONT_SIZE, size=e_c.FIXED_FONT_SIZE + 2,
             weight='bold')
         self.comment_font = Font(
-            family=e_c.FIXED_FONT_NAME, size=e_c.FIXED_FONT_SIZE + 1)
+            family=e_c.FIXED_FONT_FAMILY, size=e_c.FIXED_FONT_SIZE + 1)
 
         # make the window pane
         self.panes = tk.PanedWindow(self, sashwidth=6,
