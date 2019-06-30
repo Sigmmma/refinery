@@ -59,6 +59,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
     _running = False
     _initialized = False
+    _window_geometry_initialized = False
     _display_mode = "hierarchy"
 
     icon_filepath = ""
@@ -365,11 +366,24 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         app_window = self.config_file.data.app_window
         self.apply_style()
-        self.geometry("%sx%s+%s+%s" %
-                      (app_window.app_width, app_window.app_height,
-                       app_window.app_offset_x, app_window.app_offset_y))
 
         self._initialized = True
+
+    def apply_style(self, seen=None):
+        super(Refinery, self).apply_style(seen)
+        if not self._window_geometry_initialized:
+            app_window = self.config_file.data.app_window
+            self._window_geometry_initialized = True
+            self.geometry("%sx%s+%s+%s" %
+                          (app_window.app_width, app_window.app_height,
+                           app_window.app_offset_x, app_window.app_offset_y))
+
+        column_widths = self.config_file.data.column_widths
+        for tree_frame in self.tree_frames.values():
+            tree = tree_frame.tags_tree
+            column_names = ("#0", ) + tree['columns']
+            for name, width in zip(column_names, column_widths):
+                tree.column(name, width=width)
 
     def __getattribute__(self, attr_name):
         # it would have been a LOT of boilerplate for abstracting the
@@ -453,6 +467,11 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.bitmap_extract_format = bitmap_file_formats[0]
         self.globals_overwrite_mode = header.globals_overwrite_mode.data
 
+        try:
+            self.panes.sash_place(0, app_window.sash_position, 1)
+        except Exception:
+            pass
+
         if header.bitmap_extract_format.enum_name in bitmap_file_formats:
             self.bitmap_extract_format = header.bitmap_extract_format.enum_name
 
@@ -463,9 +482,10 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if config_file is None:
             config_file = self.config_file
 
-        header      = config_file.data.header
-        paths       = config_file.data.paths
-        app_window  = config_file.data.app_window
+        header        = config_file.data.header
+        paths         = config_file.data.paths
+        app_window    = config_file.data.app_window
+        column_widths = config_file.data.column_widths
 
         header.version = self.config_version
 
@@ -504,6 +524,25 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         if header.globals_overwrite_mode.enum_name == "<INVALID>":
             header.globals_overwrite_mode.data = 0
+
+        try:
+            active_tree = self.tree_frames[self._display_mode + "_tree"]
+        except Exception:
+            pass
+
+        tree = active_tree.tags_tree
+        column_names = ("#0", ) + tree['columns']
+        del column_widths[:]
+        for name in column_names:
+            column_widths.append(tree.column(name)["width"])
+
+        config_file.data.set_size(None, "column_widths")
+
+        try:
+            # idk if this value can ever be negative, so i'm using abs
+            app_window.sash_position = abs(self.panes.sash_coord(0)[0])
+        except Exception:
+            pass
 
     def save_config(self, e=None):
         try:

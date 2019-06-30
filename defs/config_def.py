@@ -97,7 +97,7 @@ path = Container("path",
 
 array_sizes = Struct("array_sizes",
     UInt32("paths_count"),
-    UInt8("column_widths_count"),
+    UInt16("column_widths_size"),
     SIZE=64, VISIBLE=False,
     )
 
@@ -116,8 +116,8 @@ paths = Array("paths",
     VISIBLE=False
     )
 
-column_widths = SInt16Array("column_widths",
-    SIZE=".array_sizes.column_widths_count",
+column_widths = UInt16Array("column_widths",
+    SIZE=".array_sizes.column_widths_size",
     VISIBLE=False
     )
 
@@ -126,5 +126,6 @@ config_def = TagDef("refinery_config",
     array_sizes,
     app_window,
     paths,
+    column_widths,
     ENDIAN='<', ext=".cfg",
     )
