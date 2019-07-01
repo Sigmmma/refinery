@@ -21,7 +21,7 @@ from tkinter.filedialog import askopenfilename, askopenfilenames,\
 
 from binilla.about_window import AboutWindow
 from binilla.widgets import ScrollMenu, BinillaWidget
-from binilla import editor_constants as e_c
+from mozzarilla import editor_constants as e_c
 
 from refinery.defs.config_def import config_def
 from refinery.widgets import QueueTree, RefinerySettingsWindow,\
@@ -62,6 +62,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     _window_geometry_initialized = False
     _display_mode = "hierarchy"
 
+    font_names = e_c.font_names
+
     icon_filepath = ""
 
     about_module_names = (
@@ -87,6 +89,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         RefineryCore.__init__(self, *args, **kwargs)
         tk.Tk.__init__(self, *args, **kwargs)
+        BinillaWidget.__init__(self, *args, **kwargs)
         try:
             with open(os.path.os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
                 setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
@@ -292,9 +295,11 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.panes.add(self.queue_frame)
 
         # make the entries
+        self.reload_fonts()
         self.map_info_text = tk.Text(
-            self.map_info_frame, font=self.get_font("fixed_small"),
+            self.map_info_frame, font=self.get_font("console"),
             state='disabled', height=8)
+        self.map_info_text.font_type = "console"
         self.map_info_scrollbar = tk.Scrollbar(self.map_info_frame)
         self.map_info_text.config(yscrollcommand=self.map_info_scrollbar.set)
         self.map_info_scrollbar.config(command=self.map_info_text.yview)
@@ -446,6 +451,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         header     = self.config_file.data.header
         paths      = self.config_file.data.paths
         app_window = self.config_file.data.app_window
+        fonts      = self.config_file.data.fonts
 
         self.tagslist_path = paths.tagslist.path
         self.tags_dir = paths.tags_dir.path
@@ -478,6 +484,16 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if header.globals_overwrite_mode.enum_name == "<INVALID>":
             self.globals_overwrite_mode = 0
 
+        for i in range(len(fonts)):
+            try:
+                self.set_font_config(
+                    self.font_names[i], family=fonts[i].family,
+                    size=fonts[i].size, weight=("bold" if fonts[i].flags.bold
+                                                else "normal"),
+                    )
+            except IndexError:
+                pass
+
     def update_config(self, config_file=None):
         if config_file is None:
             config_file = self.config_file
@@ -486,6 +502,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         paths         = config_file.data.paths
         app_window    = config_file.data.app_window
         column_widths = config_file.data.column_widths
+        fonts         = config_file.data.fonts
 
         header.version = self.config_version
 
@@ -543,6 +560,24 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             app_window.sash_position = abs(self.panes.sash_coord(0)[0])
         except Exception:
             pass
+
+        for i in range(len(self.font_names)):
+            try:
+                font_block = fonts[i]
+            except IndexError:
+                fonts.append()
+                try:
+                    font_block = fonts[i]
+                except IndexError:
+                    continue
+
+            try:
+                font_cfg = self.get_font_config(self.font_names[i])
+                font_block.family = font_cfg.family
+                font_block.size = font_cfg.size
+                font_block.flags.bold = font_cfg.weight == "bold"
+            except IndexError:
+                pass
 
     def save_config(self, e=None):
         try:

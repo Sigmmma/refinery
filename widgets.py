@@ -1,3 +1,4 @@
+import tkinter.font
 import tkinter as tk
 import refinery
 from tkinter import ttk
@@ -14,7 +15,7 @@ from refinery.hashcacher_window import sanitize_filename
 from refinery.meta_window import MetaWindow
 from refinery import crc_functions
 
-from binilla.widgets import ScrollMenu
+from binilla.widgets import ScrollMenu, BinillaWidget
 from reclaimer.common_descs import blam_header, QStruct
 from refinery.util import get_cwd, sanitize_path, is_protected_tag, fourcc,\
      is_reserved_tag
@@ -516,7 +517,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tags_tree.insert(
                     # NEED TO DO str OR ELSE THE SCENARIO TAG'S ID WILL
                     # BE INTERPRETED AS NOTHING AND BE CHANGED TO 'I001'
-                    dir_path, 'end', iid=str(tag_id), text=tag_name,
+                    dir_path, 'end', iid=str(tag_id), text=tag_name, tags=("item", ),
                     values=(cls1, cls2, cls3, b.meta_offset, pointer, tag_id))
                 tree_id_to_index_ref[tag_id] = b
             except Exception:
@@ -537,7 +538,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if not self.tags_tree.exists(abs_dir_path):
             # add the directory to the treeview
             self.tags_tree.insert(
-                parent_dir, 'end', iid=abs_dir_path, text=this_dir)
+                parent_dir, 'end', iid=abs_dir_path, tags=("item", ), text=this_dir)
 
         self.add_folder_path(dir_paths, abs_dir_path)
 
@@ -644,7 +645,8 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     cls3 = fourcc(b.class_3.data)
 
                 tags_tree.insert(
-                    tag_cls + PATHDIV, 'end', iid=str(tag_id), text=tag_path,
+                    tag_cls + PATHDIV, 'end', iid=str(tag_id),
+                    tags=("item", ), text=tag_path,
                     values=(cls1, cls2, cls3, b.meta_offset, pointer, tag_id))
 
                 tree_id_to_index_ref[tag_id] = b
@@ -781,7 +783,8 @@ class QueueTree(ExplorerHierarchyTree):
 
         if self.tags_tree.exists(item_name):
             self.tags_tree.delete(item_name)
-        self.tags_tree.insert('', 'end', iid=item_name, text=item_name)
+        self.tags_tree.insert('', 'end', iid=item_name,
+                              text=item_name, tags=("item", ))
 
     def remove_items(self, items=None):
         if items is None:
@@ -804,11 +807,12 @@ class QueueTree(ExplorerHierarchyTree):
         self.remove_items()
 
 
-class RefinerySettingsWindow(tk.Toplevel):
+class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
     settings = None
 
     def __init__(self, *args, **kwargs):
         self.settings = settings = kwargs.pop('settings', {})
+        BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
         try:
             try:
@@ -818,9 +822,9 @@ class RefinerySettingsWindow(tk.Toplevel):
         except Exception:
             print("Could not load window icon.")
 
-        self.geometry("550x300")
-        self.minsize(width=450, height=300)
-        self.resizable(1, 0)
+        self.geometry("550x350")
+        self.minsize(width=450, height=350)
+        self.resizable(1, 1)
         self.title("Settings")
 
         self.tabs = ttk.Notebook(self)
@@ -830,6 +834,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.tag_fixup_frame    = tk.Frame(self.tabs)
         self.deprotect_frame    = tk.Frame(self.tabs)
         self.heuristics_frame   = tk.Frame(self.tabs)
+        self.fonts_frame        = tk.Frame(self.tabs)
         self.other_frame        = tk.Frame(self.tabs)
 
         self.tabs.add(self.dirs_frame, text="Directories")
@@ -838,7 +843,10 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.tabs.add(self.tag_fixup_frame, text="Tag fixup")
         self.tabs.add(self.deprotect_frame, text="Deprotection")
         self.tabs.add(self.heuristics_frame, text="Heuristics")
+        self.tabs.add(self.fonts_frame, text="Fonts")
         self.tabs.add(self.other_frame, text="Other")
+
+        font_families = tuple(sorted(tkinter.font.families()))
 
         self.tags_dir_frame  = tk.LabelFrame(
             self.dirs_frame, text="Default tags extraction folder")
@@ -1014,6 +1022,55 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.print_heuristic_progress_cbtn = tk.Checkbutton(
             self.heuristics_frame, text=("Print heuristic tag path changes"),
             variable=self.print_heuristic_name_changes, justify='left')
+        
+
+        font_frame_widgets = {}
+        for font_type in sorted(self.font_settings):
+            if font_type in ("comment", "tooltip", "fixed", "fixed_small"):
+                continue
+
+            if font_type == "console":
+                font_type_name_text = "Map info"
+            elif font_type == "treeview":
+                font_type_name_text = "Map contents / Extraction queue"
+            else:
+                font_type_name_text = font_type.replace("_", " ").capitalize()
+
+            font_frame = tk.LabelFrame(
+                self.fonts_frame, text=font_type_name_text)
+
+            font_info = self.font_settings[font_type]
+            try:
+                sel_index = font_families.index(font_info.family)
+            except Exception:
+                sel_index = -1
+
+            family_var = tk.StringVar(self)
+            size_var = tk.StringVar(self, str(font_info.size))
+            weight_var = tk.IntVar(self, int(font_info.weight == "bold"))
+            self.write_trace(family_var, lambda *a, v=family_var, t=font_type:
+                             self.update_font_family(v, t))
+            self.write_trace(size_var, lambda *a, v=size_var, t=font_type:
+                             self.update_font_size(v, t))
+            self.write_trace(weight_var, lambda *a, v=weight_var, t=font_type:
+                             self.update_font_weight(v, t))
+
+            family_label = tk.Label(font_frame, text="Family ")
+            family_menu = ScrollMenu(
+                font_frame, str_variable=family_var, menu_width=20,
+                options=font_families, sel_index=sel_index)
+            weight_btn = tk.Checkbutton(font_frame, text="bold", variable=weight_var)
+            size_label = tk.Label(font_frame, text="Size ")
+            size_menu = tk.Spinbox(
+                font_frame, width=3, state="readonly",
+                textvariable=size_var, from_=0, to=200)
+
+            font_frame_widgets[font_type_name_text] = (
+                font_frame, (family_label, family_menu, weight_btn,
+                             size_label, size_menu))
+
+        self.apply_fonts_btn = tk.Button(
+            self.fonts_frame, text="Apply changes", command=self.apply_fonts)
 
 
         self.autoload_resources_cbtn = tk.Checkbutton(
@@ -1083,6 +1140,15 @@ class RefinerySettingsWindow(tk.Toplevel):
                   ):
             w.pack(padx=4, anchor='w')
 
+        for k in sorted(font_frame_widgets):
+            font_frame, font_widgets = font_frame_widgets[k]
+            font_frame.pack(padx=4, anchor='w', expand=True, fill="x")
+            for w in font_widgets:
+                w.pack(padx=(0, 4), pady=2, side='left', fill='both',
+                       expand=isinstance(w, ScrollMenu))
+
+        self.apply_fonts_btn.pack(padx=4, anchor='w', expand=True, fill="both")
+
         for w1, w2 in ((self.tags_dir_entry, self.tags_dir_browse_button),
                        (self.data_dir_entry, self.data_dir_browse_button),
                        (self.tags_list_entry, self.browse_tags_list_button)):
@@ -1091,10 +1157,26 @@ class RefinerySettingsWindow(tk.Toplevel):
 
         # make the window not show up on the start bar
         self.transient(self.master)
+        self.apply_style()
+
+    def update_font_family(self, var, font_type):
+        self.set_font_config(font_type, False, family=str(var.get()))
+
+    def update_font_size(self, var, font_type):
+        self.set_font_config(font_type, False, size=int(var.get()))
+
+    def update_font_weight(self, var, font_type):
+        self.set_font_config(font_type, False,
+                             weight=("bold" if var.get() else "normal"))
+
+    def apply_fonts(self):
+        self.reload_fonts()
+        self.master.apply_style()
 
     def destroy(self):
         try: self.master.settings_window = None
         except AttributeError: pass
+        self.delete_all_traces()
         tk.Toplevel.destroy(self)
 
     def tags_dir_browse(self):
@@ -1139,7 +1221,7 @@ class RefinerySettingsWindow(tk.Toplevel):
         self.tagslist_path.set(sanitize_path(dirpath))
 
 
-class RefineryActionsWindow(tk.Toplevel):
+class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
     app_root = None
     settings = None
     renamable = True
@@ -1156,6 +1238,7 @@ class RefineryActionsWindow(tk.Toplevel):
         self.renamable = kwargs.pop('renamable', self.renamable)
         self.settings = settings = kwargs.pop('settings', {})
         self.tag_index_ref = kwargs.pop('tag_index_ref', self.tag_index_ref)
+        BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
 
         try:
@@ -1308,6 +1391,7 @@ class RefineryActionsWindow(tk.Toplevel):
         # make the window not show up on the start bar
         self.transient(self.master)
         self.grab_set()
+        self.apply_style()
 
         try:
             self.update()
@@ -1435,11 +1519,12 @@ class RefineryActionsWindow(tk.Toplevel):
             return
 
 
-class RefineryRenameWindow(tk.Toplevel):
+class RefineryRenameWindow(tk.Toplevel, BinillaWidget):
     active_map = None
 
     def __init__(self, *args, **kwargs):
         self.active_map = kwargs.pop('active_map', None)
+        BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
         
         try:
@@ -1488,6 +1573,7 @@ class RefineryRenameWindow(tk.Toplevel):
 
         # make the window not show up on the start bar
         self.transient(self.master)
+        self.apply_style()
 
     def destroy(self):
         try: self.master.rename_window = None
@@ -1532,12 +1618,13 @@ class RefineryEditActionsWindow(RefineryActionsWindow):
         self.title("Edit: %s" % self.title())
 
 
-class RefineryChecksumEditorWindow(tk.Toplevel):
+class RefineryChecksumEditorWindow(tk.Toplevel, BinillaWidget):
     active_map = None
     validating = False
 
     def __init__(self, *args, **kwargs):
         self.active_map = kwargs.pop('active_map', None)
+        BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
 
         try:
@@ -1585,6 +1672,7 @@ class RefineryChecksumEditorWindow(tk.Toplevel):
                 if len(s) % 3 == 2:
                     s += " "
             self.cs.set(s[: 11])
+        self.apply_style()
 
     def destroy(self):
         try: self.master.checksum_window = None
