@@ -95,9 +95,19 @@ path = Container("path",
     StrUtf8("path", SIZE=".length")
     )
 
+font = Struct("font",
+    UInt16("size"),
+    Bool16("flags",
+        "bold",
+        ),
+    Pad(12),
+    StrUtf8("family", SIZE=240),
+    )
+
 array_sizes = Struct("array_sizes",
-    UInt32("paths_count"),
+    UInt32("path_count"),
     UInt16("column_widths_size"),
+    UInt16("font_count"),
     SIZE=64, VISIBLE=False,
     )
 
@@ -111,7 +121,7 @@ app_window = Struct("app_window",
     )
 
 paths = Array("paths",
-    SUB_STRUCT=path, SIZE=".array_sizes.paths_count",
+    SUB_STRUCT=path, SIZE=".array_sizes.path_count",
     NAME_MAP=("last_dir", "tagslist", "tags_dir", "data_dir"),
     VISIBLE=False
     )
@@ -121,11 +131,16 @@ column_widths = UInt16Array("column_widths",
     VISIBLE=False
     )
 
+fonts = Array("fonts",
+    SUB_STRUCT=font, SIZE=".array_sizes.font_count",
+    )
+
 config_def = TagDef("refinery_config",
     config_header,
     array_sizes,
     app_window,
     paths,
     column_widths,
+    fonts,
     ENDIAN='<', ext=".cfg",
     )
