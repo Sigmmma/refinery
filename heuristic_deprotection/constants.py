@@ -1,14 +1,10 @@
+from refinery.constants import INF, MAX_TAG_NAME_LEN, ACTIVE_INDEX,\
+     MAP_TYPE_ANY, MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE, BAD_CLASSES,\
+     INVALID, PATHDIV, UNPRINTABLE
 """
 Some of these are here for shorthand, but they are mainly here as
 a reminder to me of what types of folders are expected to be where.
 """
-from os.path import join, splitext, dirname, basename
-from reclaimer.meta.class_repair import tag_cls_int_to_fcc, tag_cls_int_to_ext
-
-MAX_TAG_NAME_LEN = 243
-
-INF = float('inf')
-
 VERY_HIGH_PRIORITY = 10.0
 VEHICLE_WEAP_PRIORITY = 5.0
 HIGH_PRIORITY = 4.0

@@ -1,17 +1,10 @@
-from refinery.recursive_rename.constants import *
-from refinery.recursive_rename.functions import sanitize_win32_path
+import os
+
+from refinery.constants import INF
+from refinery.util import sanitize_win32_path, get_unique_name
 from supyr_struct.defs.util import str_to_identifier
 
-from os.path import splitext
 from queue import LifoQueue, Empty as EmptyQueueException
-
-def get_unique_name(collection, name="", ext="", curr_value=object()):
-    final_name = name
-    i = 1
-    while collection.get(final_name + ext) not in (None, curr_value):
-        final_name = "%s #%s" % (name, i)
-        i += 1
-    return final_name
 
 
 class TagPathHandler():
@@ -251,7 +244,7 @@ class TagPathHandler():
 
         for tag_path, index in self._path_map.items():
             tag_path = sanitize_win32_path(tag_path)
-            if len(splitext(tag_path)[0]) < max_len:
+            if len(os.path.splitext(tag_path)[0]) < max_len:
                 # don't rename tags below the limit. use None as the key so
                 # the tag path is still considered when chosing unique names
                 index = None
@@ -267,8 +260,8 @@ class TagPathHandler():
                 print(err_str)
                 return
 
-            for dirname in tag_path_pieces[: -1]:
-                curr_dir = curr_dir.setdefault(dirname, {})
+            for dname in tag_path_pieces[: -1]:
+                curr_dir = curr_dir.setdefault(dname, {})
 
             tag_ref = None
             if index is not None:
@@ -290,14 +283,14 @@ class TagPathHandler():
                 val = curr_paths[name]
                 if not isinstance(val, dict):
                     # reached a filename. move the item and continue.
-                    basename, ext = splitext(name)
-                    new_basename = basename
+                    base, ext = os.path.splitext(name)
+                    new_base = base
                     if val is not None:
-                        new_basename = self.shorten_name_to_parent(parent, basename)
+                        new_base = self.shorten_name_to_parent(parent, base)
 
                     curr_paths.pop(name)
-                    if new_basename:
-                        curr_new_paths[new_basename + ext] = val
+                    if new_base:
+                        curr_new_paths[new_base + ext] = val
                     else:
                         # name was simplified to nothing.
                         # schedule it to be put it in the parent
@@ -345,7 +338,7 @@ class TagPathHandler():
 
             for name in curr_reparent:
                 for item in curr_reparent[name]:
-                    no_ext_name, ext = splitext(name)
+                    no_ext_name, ext = os.path.splitext(name)
                     curr_new_paths[
                         self.get_unique_name(
                             curr_new_paths, no_ext_name, ext) + ext] = item
@@ -374,7 +367,7 @@ class TagPathHandler():
 
                 # reached a filename that needs to be renamed. rename the item and continue.
                 tag_path = val.path
-                new_tag_path = "\\".join(path_pieces + splitext(name)[: 1])
+                new_tag_path = "\\".join(path_pieces + os.path.splitext(name)[: 1])
                 if do_printout:
                     print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
                           (len(tag_path), len(new_tag_path), tag_path, new_tag_path))
