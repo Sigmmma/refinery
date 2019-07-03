@@ -1,19 +1,14 @@
-import mmap
-import gc
 import os
-import refinery
 import shutil
 import sys
 import zlib
 
-from os.path import dirname, basename, exists, join, splitext
 from struct import unpack
 from time import time
 from traceback import format_exc
 
-from supyr_struct.buffer import get_rawdata_context,\
-     BytearrayBuffer, PeekableMmap
-from supyr_struct.defs.constants import *
+from supyr_struct.buffer import get_rawdata_context, PeekableMmap
+from supyr_struct.defs import constants as supyr_constants
 from supyr_struct.field_types import FieldType
 
 
@@ -44,24 +39,22 @@ from reclaimer.meta.class_repair import class_repair_functions,\
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 
+from refinery.constants import INF, ACTIVE_INDEX, MAP_TYPE_ANY,\
+     MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
 from refinery import crc_functions
-from refinery.exceptions import *
+from refinery.exceptions import RefineryError, MapNotLoadedError,\
+     EngineDetectionError, MapAlreadyLoadedError, CouldNotGetMetaError,\
+     InvalidTagIdError, InvalidClassError, MetaConversionError,\
+     DataExtractionError
 from refinery.queue_item import RefineryQueueItem
-from refinery.recursive_rename.tag_path_handler import TagPathHandler
-from refinery.recursive_rename.constants import VERY_HIGH_PRIORITY
-from refinery.recursive_rename.functions import recursive_rename
-from refinery.tag_index_crawler import TagIndexCrawler
+from refinery.heuristic_deprotection.constants import VERY_HIGH_PRIORITY
+from refinery.heuristic_deprotection.functions import heuristic_deprotect
+from refinery.tag_index.tag_path_handler import TagPathHandler
+from refinery.tag_index.tag_path_detokenizer import TagPathDetokenizer
 from refinery.util import *
 
 
-platform = sys.platform.lower()
 curr_dir = get_cwd(__file__)
-INF = float("inf")
-
-ACTIVE_INDEX = "<active>"
-MAP_TYPE_ANY = "any"
-MAP_TYPE_REGULAR = "regular"
-MAP_TYPE_RESOURCE = "resource"
 
 halo_map_wrappers_by_engine = {
     "stubbs":          StubbsMap,
@@ -817,7 +810,8 @@ class RefineryCore:
             tag_id = b.id & 0xFFff
             if tag_id == halo_map.tag_index.scenario_tag_id & 0xFFff:
                 tag_cls = "scnr"
-            elif b.indexed or b.class_1.enum_name in ("<INVALID>", "NONE"):
+            elif b.indexed or b.class_1.enum_name in (supyr_constants.INVALID,
+                                                      "NONE"):
                 continue
 
             tag_cls = fourcc(b.class_1.data)
@@ -872,7 +866,8 @@ class RefineryCore:
                     tag_cls = None
                     if tag_id in repaired:
                         continue
-                    elif b.class_1.enum_name not in ("<INVALID>", "NONE"):
+                    elif b.class_1.enum_name not in (supyr_constants.INVALID,
+                                                     "NONE"):
                         tag_cls = fourcc(b.class_1.data)
                     else:
                         _, reffed_tag_types = get_tagc_refs(
@@ -1049,7 +1044,7 @@ class RefineryCore:
                     continue
 
                 try:
-                    recursive_rename(
+                    heuristic_deprotect(
                         tag_id, halo_map, path_handler,
                         do_printout=print_name_changes,
                         shallow_ui_widget_nesting=shallow_ui_widget_nesting,
@@ -1069,7 +1064,7 @@ class RefineryCore:
             try:
                 depth = INF if (path_handler.get_priority(tag_id) ==
                                 path_handler.def_priority) else 1
-                recursive_rename(tag_id, halo_map, path_handler, depth=depth,
+                heuristic_deprotect(tag_id, halo_map, path_handler, depth=depth,
                                  do_printout=print_name_changes)
             except Exception:
                 if not print_errors:
@@ -1086,7 +1081,7 @@ class RefineryCore:
             try:
                 depth = INF if (path_handler.get_priority(tag_id) ==
                                 path_handler.def_priority) else 0
-                recursive_rename(tag_id, halo_map, path_handler, depth=depth,
+                heuristic_deprotect(tag_id, halo_map, path_handler, depth=depth,
                                  do_printout=print_name_changes)
             except Exception:
                 if not print_errors:
@@ -1207,10 +1202,10 @@ class RefineryCore:
                 kw.update(tags_to_ignore=ignore)
 
             ignore.update(self.extract_tags(
-                TagIndexCrawler(tag_ids).get_filtered_tag_ids(halo_map),
+                TagPathDetokenizer(tag_ids).get_filtered_tag_ids(halo_map),
                 map_name, engine, **kw))
         elif op == "extract_tag":
-            tag_ids = TagIndexCrawler((tag_id,)).get_filtered_tag_ids(halo_map)
+            tag_ids = TagPathDetokenizer((tag_id,)).get_filtered_tag_ids(halo_map)
             if len(tag_ids) == 0:
                 return
             elif filepath:
@@ -1253,7 +1248,7 @@ class RefineryCore:
                         '%s has no attribute "%s"' % (type(self), name))
                 setattr(self, name, value)
         elif op == "rename_tag_by_id":
-            tag_ids = TagIndexCrawler((tag_id,)).get_filtered_tag_ids(halo_map)
+            tag_ids = TagPathDetokenizer((tag_id,)).get_filtered_tag_ids(halo_map)
             if len(tag_ids) == 0:
                 return
             halo_map.rename_tag_by_id(tag_ids[0], queue_item.new_path)
@@ -1434,7 +1429,8 @@ class RefineryCore:
 
         tag_index_ref = tag_index_array[tag_id]
         tag_path = sanitize_path(tag_index_ref.path)
-        if tag_index_ref.class_1.enum_name in ("<INVALID>", "NONE"):
+        if tag_index_ref.class_1.enum_name in (supyr_constants.INVALID,
+                                               "NONE"):
             raise InvalidClassError(
                 'Unknown class for "%s". Run deprotection to fix.' % tag_path)
 
@@ -1571,7 +1567,7 @@ class RefineryCore:
                 "Refinery does not have permission to save here. "
                 "Running Refinery as admin could potentially fix this.")
         except FileNotFoundError:
-            if platform != "win32" or len(filepath) < 256:
+            if sys.platform.lower() != "win32" or len(filepath) < 256:
                 raise
             raise RefineryError("Filepath is over the Windows 260 character limit.")
 

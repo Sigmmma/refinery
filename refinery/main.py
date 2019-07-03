@@ -1,33 +1,31 @@
-import mmap
-import gc
+import refinery
 import tkinter as tk
 import os
-import refinery
-import shutil
 import sys
-import zlib
 
 from refinery.core import *
 
-from struct import unpack
 from time import time
-from traceback import format_exc, format_stack
+from traceback import format_exc
 
-from tkinter.font import Font
 from tkinter import messagebox
 from tkinter.filedialog import askopenfilename, askopenfilenames,\
      asksaveasfilename
 
 
-from binilla.about_window import AboutWindow
-from binilla.widgets import ScrollMenu, BinillaWidget
+from binilla.widgets.binilla_widget import BinillaWidget
+from binilla.widgets.scroll_menu import ScrollMenu
+from binilla.windows.about_window import AboutWindow
 from mozzarilla import editor_constants as e_c
 
-from refinery.defs.config_def import config_def
-from refinery.widgets import QueueTree, RefinerySettingsWindow,\
-     RefineryRenameWindow, RefineryChecksumEditorWindow,\
-     ExplorerHierarchyTree, ExplorerClassTree, ExplorerHybridTree,\
-     bitmap_file_formats
+from refinery.defs.config_def import config_def, bitmap_file_formats
+from refinery.widgets.explorer_hierarchy_tree import ExplorerHierarchyTree
+from refinery.widgets.explorer_class_tree import ExplorerClassTree
+from refinery.widgets.explorer_hybrid_tree import ExplorerHybridTree
+from refinery.widgets.queue_tree import QueueTree
+from refinery.windows.settings_window import RefinerySettingsWindow
+from refinery.windows.rename_window import RefineryRenameWindow
+from refinery.windows.crc_window import RefineryChecksumEditorWindow
 
 
 default_config_path = os.path.join(curr_dir, 'refinery.cfg')
@@ -91,7 +89,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         tk.Tk.__init__(self, *args, **kwargs)
         BinillaWidget.__init__(self, *args, **kwargs)
         try:
-            with open(os.path.os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
+            with open(os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
                 setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
         except Exception:
             pass
@@ -481,7 +479,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if header.bitmap_extract_format.enum_name in bitmap_file_formats:
             self.bitmap_extract_format = header.bitmap_extract_format.enum_name
 
-        if header.globals_overwrite_mode.enum_name == "<INVALID>":
+        if header.globals_overwrite_mode.enum_name == supyr_constants.INVALID:
             self.globals_overwrite_mode = 0
 
         for i in range(len(fonts)):
@@ -539,7 +537,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if self.bitmap_extract_format in bitmap_file_formats:
             header.bitmap_extract_format.set_to(self.bitmap_extract_format)
 
-        if header.globals_overwrite_mode.enum_name == "<INVALID>":
+        if header.globals_overwrite_mode.enum_name == supyr_constants.INVALID:
             header.globals_overwrite_mode.data = 0
 
         try:
@@ -993,7 +991,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         print("Loading resource maps for: %s" % halo_map.map_name)
         kw.setdefault("do_printout", True)
         if not maps_dir:
-            maps_dir = dirname(halo_map.filepath)
+            maps_dir = os.path.dirname(halo_map.filepath)
 
         not_loaded = RefineryCore.load_resource_maps(
             self, halo_map, maps_dir, (), **kw)
@@ -1014,7 +1012,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                 print("You wont be able to extract from %s.map" % map_name)
                 continue
 
-            maps_dir = dirname(map_path)
+            maps_dir = os.path.dirname(map_path)
             RefineryCore.load_resource_maps(self, halo_map, maps_dir,
                                             {map_name: map_path}, **kw)
 
@@ -1057,8 +1055,9 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
 
         if halo_map is None:
-            print('No map named "%s" under engine "%s" is loaded.' %
-                  (map_name, engine))
+            if engine != ACTIVE_INDEX and map_name != ACTIVE_INDEX:
+                print('No map named "%s" under engine "%s" is loaded.' %
+                      (map_name, engine))
             return
         elif halo_map.is_resource:
             print("Cannot deprotect resource maps.")
@@ -1117,7 +1116,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         print()
         if len(repaired) != len(tag_index_array):
             print("The deprotector could not reach these tags:\n"
-                  "  (This does not mean they are protected however)\n"
+                  "  (This does not mean they are protected. It could just\n"
+                  "   mean that they aren't actually used in any way)\n"
                   "  [ id,  offset,  type,  path ]\n")
             for i in range(len(tag_index_array)):
                 if i in repaired:
@@ -1129,7 +1129,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                         b.class_1.enum_name, b.path))
                 except Exception:
                     print("  [ %s, %s, %s ]" % (
-                        i, b.meta_offset - halo_map.map_magic, "<UNPRINTABLE>"))
+                        i, b.meta_offset - halo_map.map_magic,
+                        supyr_constants.UNPRINTABLE))
             print()
 
         return repaired

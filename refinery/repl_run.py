@@ -7,19 +7,17 @@ from time import time
 from traceback import format_exc
 
 from refinery import core
-from refinery import tag_path_tokens
-from refinery import repl_arg_parsers
-from refinery import repl_help_strs
-from refinery import repl_util
+from refinery import repl
+from refinery.tag_index import tag_path_tokens
 
 
 def queue_action(unparsed_command):
-    command_args = repl_util.convert_arg_line_to_args(unparsed_command.strip())
+    command_args = repl.util.convert_arg_line_to_args(unparsed_command.strip())
     if not command_args:
         return None, None
 
     try:
-        args = repl_arg_parsers.repl_parser.parse_args(command_args)
+        args = repl.arg_parsers.repl_parser.parse_args(command_args)
         op = args.operation.replace("-", "_").lower()
     except SystemExit:
         op = args = None
@@ -75,10 +73,10 @@ def queue_action(unparsed_command):
     elif op in ("tag_id_tokens", "tag_id_macros"):
         if op == "tag_id_tokens":
             prefix = args.prefix.lower()
-            help_strs = repl_help_strs.token_help_strings
+            help_strs = repl.help_strs.token_help_strings
         else:
             prefix = args.prefix.upper()
-            help_strs = repl_help_strs.macro_help_strings
+            help_strs = repl.help_strs.macro_help_strings
 
         for name in sorted(help_strs):
             # print the tag-id macro and token help strings with the same
@@ -202,8 +200,8 @@ def main_loop():
 if __name__ == '__main__':
     start = time()
     init_arg_parser = argparse.ArgumentParser(
-        description=repl_help_strs.refinery_desc_string,
-        epilog=repl_help_strs.refinery_epilog_string,
+        description=repl.help_strs.refinery_desc_string,
+        epilog=repl.help_strs.refinery_epilog_string,
         formatter_class=argparse.RawDescriptionHelpFormatter)
 
     if not hasattr(sys, "orig_stdout"):

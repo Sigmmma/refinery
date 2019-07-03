@@ -1,8 +1,11 @@
-__all__ = ("get_filtered_tag_index_ids", "TagIndexCrawler", )
+__all__ = ("get_filtered_tag_index_ids", "TagPathDetokenizer", )
 
 import os
 
-from refinery.tag_path_tokens import *
+from refinery.tag_index.tag_path_tokens import tokens_to_tag_paths,\
+     ALL_TOKENS, TOKEN_SCNR, TOKEN_MATG, TOKEN_ALL,\
+     TOKEN_XBOX_SOUL, TOKEN_PC_SCNR_MAP_TYPE_TAGC,\
+     PC_SCNR_TAGC_TAG_PATHS, XBOX_SOUL_TAG_PATHS
 
 
 def get_filtered_tag_index_ids(tag_index_array, tag_path=None,
@@ -21,7 +24,7 @@ def get_filtered_tag_index_ids(tag_index_array, tag_path=None,
     return list(tag_index_ids)
 
 
-class TagIndexCrawler(list):
+class TagPathDetokenizer(list):
 
     def get_filtered_tag_ids(self, halo_map):
         tag_index = halo_map.tag_index.STEPTREE

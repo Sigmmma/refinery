@@ -1,0 +1,10 @@
+; set our the default variables
+set-vars --autoload-resources 1 --bitmap-extract-format "png" --bitmap-extract-keep-alpha 0 --data-dir "C:\Users\Moses\Desktop\lockout_test\data\" --decode-adpcm 1 --do-printout 1 --fix-tag-classes 1 --fix-tag-index-offset 0 --force-lower-case-paths 1 --generate-comp-verts 1 --generate-uncomp-verts 1 --limit-tag-path-lengths 1 --overwrite 1 --print-errors 1 --print-heuristic-name-changes 0 --recursive 1 --rename-cached-tags 1 --rename-scnr-dups 1 --scrape-tag-paths-from-scripts 1 --shallow-ui-widget-nesting 1 --tags-dir "C:\Users\Moses\Desktop\lockout_test\tags\" --tagslist-path "C:\Users\Moses\Desktop\lockout_test\tagslist.txt" --use-heuristics 1 --use-minimum-priorities 1 --use-scenario-names-for-script-names 1 --use-tag-index-for-script-names 1 --valid-tag-paths-are-accurate 1
+
+load-map "C:\Users\Moses\Desktop\halo\maps\a10.map" --make-active 1
+
+; print the map info for a quick preview while it deprotects and extracts
+;map-info
+
+;deprotect-map
+extract-tags --tag-ids <scenario>

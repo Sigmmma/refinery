@@ -7,6 +7,8 @@ from traceback import format_exc
 
 _crc=0
 __all__ = ()
+# this was intentionally obfuscated at one point, and I don't
+# have the unobfuscated version, so it's staying as-is
 def J(l=[0,0,0]):
  if l[2]<0:return U([l[0],l[1],l[2]])
  while l[1]:

@@ -1,7 +1,7 @@
 import argparse
 
-from refinery import tag_path_tokens
-from refinery.repl_help_strs import command_help_strings,\
+from refinery.tag_index import tag_path_tokens
+from refinery.repl.help_strs import command_help_strings,\
      command_arg_strings, refinery_desc_string, refinery_epilog_string
 
 __all__ = ("repl_parser", "repl_subparser",)
