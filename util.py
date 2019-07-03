@@ -6,6 +6,7 @@ import traceback
 from reclaimer.util import *
 from binilla.util import get_cwd
 
+
 def inject_file_padding(file, *off_padsize_pairs, padchar=b'\xCA'):
     file.flush()
     file.seek(0, 2)
@@ -106,3 +107,18 @@ def sanitize_filename(name):
             final_name += c
     if final_name == '':
         raise Exception('Bad %s char filename' % len(name))
+
+
+def sanitize_win32_path(name):
+    for c in ':*?"<>|':
+        name = name.replace(c, '')
+    return name.lower().replace('/', '\\').strip()
+
+
+def get_unique_name(collection, name="", ext="", curr_value=object()):
+    final_name = name
+    i = 1
+    while collection.get(final_name + ext) not in (None, curr_value):
+        final_name = "%s #%s" % (name, i)
+        i += 1
+    return final_name

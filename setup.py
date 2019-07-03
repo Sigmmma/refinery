@@ -30,7 +30,11 @@ setup(
     packages=[
         'refinery',
         'refinery.defs',
-        'refinery.recursive_rename',
+        'refinery.heuristic_deprotection',
+        'refinery.repl',
+        'refinery.tag_index',
+        'refinery.widgets',
+        'refinery.windows',
         ],
     package_data={
         '': ['*.txt', '*.md', '*.rst', '*.ico', '*.png', 'msg.dat']
