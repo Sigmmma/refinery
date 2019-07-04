@@ -33,7 +33,7 @@ from reclaimer.meta.wrappers.stubbs_map import StubbsMap
 from reclaimer.meta.wrappers.shadowrun_map import ShadowrunMap
 
 from reclaimer.meta.halo_map import get_map_header, get_map_version,\
-     get_tag_index
+     get_tag_index, get_map_magic
 from reclaimer.meta.class_repair import class_repair_functions,\
      get_tagc_refs
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions

@@ -1,8 +1,7 @@
 from refinery.tag_index.tag_path_tokens import *
 
 __all__ = ("macro_help_strings", "token_help_strings",
-           "command_help_strings", "command_arg_strings",
-           "refinery_help_string")
+           "command_help_strings", "command_arg_strings")
 
 refinery_desc_string = """
 Welcome to Refinery! This program is designed to extract
