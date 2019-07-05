@@ -3,7 +3,9 @@ import refinery
 import tkinter as tk
 
 from binilla.windows.tag_window import TagWindow
+
 from mozzarilla.widgets.field_widget_picker import def_halo_widget_picker
+
 from refinery.util import get_cwd
 
 

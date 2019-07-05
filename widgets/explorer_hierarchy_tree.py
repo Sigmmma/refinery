@@ -2,8 +2,6 @@ import os
 import refinery
 import tkinter as tk
 
-from supyr_struct.defs.frozen_dict import FrozenDict
-from supyr_struct.defs.constants import PATHDIV
 from traceback import format_exc
 
 from mozzarilla.widgets.directory_frame import HierarchyFrame
@@ -11,6 +9,9 @@ from refinery.constants import MAX_TAG_NAME_LEN, BAD_CLASSES,\
      H1_TAG_SUPERCLASSES
 from refinery.util import get_cwd, sanitize_path, fourcc, is_reserved_tag
 from refinery.windows.actions_window import RefineryActionsWindow
+
+from supyr_struct.defs.frozen_dict import FrozenDict
+from supyr_struct.defs.constants import PATHDIV
 
 
 curr_dir = get_cwd(refinery.__file__)

@@ -3,7 +3,6 @@ import refinery
 import tkinter.font
 import tkinter as tk
 
-from supyr_struct.defs.constants import *
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from tkinter import ttk
 from traceback import format_exc
@@ -13,6 +12,7 @@ from refinery.defs.config_def import bitmap_file_formats, \
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
 from refinery.util import get_cwd, sanitize_path
+from supyr_struct.defs.constants import PATHDIV
 
 
 curr_dir = get_cwd(refinery.__file__)
@@ -237,13 +237,16 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
 
         font_frame_widgets = {}
         for font_type in sorted(self.font_settings):
-            if font_type in ("comment", "tooltip", "fixed", "fixed_small"):
+            if font_type not in ("default", "treeview", "console", "heading",
+                                 "heading_small", "frame_title",):
                 continue
 
             if font_type == "console":
                 font_type_name_text = "Map info"
             elif font_type == "treeview":
                 font_type_name_text = "Map contents / Extraction queue"
+            elif font_type == "heading_small":
+                font_type_name_text = "Map contents columns / Settings tabs"
             else:
                 font_type_name_text = font_type.replace("_", " ").capitalize()
 

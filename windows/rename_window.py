@@ -2,12 +2,14 @@ import os
 import refinery
 import tkinter as tk
 
-from supyr_struct.defs.constants import *
 from tkinter import messagebox
 from traceback import format_exc
 
 from binilla.widgets.binilla_widget import BinillaWidget
+
 from refinery.util import get_cwd, is_protected_tag as is_protected_filename
+
+from supyr_struct.defs.constants import *
 
 
 curr_dir = get_cwd(refinery.__file__)

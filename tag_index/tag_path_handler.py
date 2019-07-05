@@ -2,7 +2,7 @@ import os
 
 from refinery.constants import INF
 from refinery.util import sanitize_win32_path, get_unique_name
-from supyr_struct.defs.util import str_to_identifier
+from supyr_struct.util import str_to_identifier
 
 from queue import LifoQueue, Empty as EmptyQueueException
 

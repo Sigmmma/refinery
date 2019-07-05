@@ -1,11 +1,11 @@
 import tkinter as tk
 
-from supyr_struct.defs.constants import PATHDIV, INVALID
-
 from refinery.constants import BAD_CLASSES
 from refinery.util import sanitize_path, fourcc
 from refinery.widgets.explorer_class_tree import ExplorerClassTree
 from refinery.widgets.explorer_hierarchy_tree import ExplorerHierarchyTree
+
+from supyr_struct.defs.constants import PATHDIV, INVALID
 
 
 class ExplorerHybridTree(ExplorerHierarchyTree):
