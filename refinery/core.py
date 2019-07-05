@@ -13,8 +13,6 @@ from supyr_struct.field_types import FieldType
 
 
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
-from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
-     h3_data_extractors
 from reclaimer.halo_script.hsc import get_hsc_data_block, HSC_IS_GLOBAL,\
      get_h1_scenario_script_object_type_strings
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
@@ -51,7 +49,8 @@ from refinery.heuristic_deprotection.constants import VERY_HIGH_PRIORITY
 from refinery.heuristic_deprotection.functions import heuristic_deprotect
 from refinery.tag_index.tag_path_handler import TagPathHandler
 from refinery.tag_index.tag_path_detokenizer import TagPathDetokenizer
-from refinery.util import *
+from refinery.util import inject_file_padding, sanitize_path, get_cwd,\
+     int_to_fourcc
 
 
 curr_dir = get_cwd(__file__)
@@ -122,7 +121,7 @@ def expand_halo_map(halo_map, raw_data_expansion=0, vertex_data_expansion=0,
     # adjust rawdata pointers in various tags if the index header moved
     if meta_ptr_diff:
         for ref in tag_index_array:
-            func = rawdata_ref_move_functions.get(fourcc(ref.class_1.data))
+            func = rawdata_ref_move_functions.get(int_to_fourcc(ref.class_1.data))
             if func is None or ref.indexed:
                 continue
             func(ref.id & 0xFFff, tag_index_array, map_file,
@@ -814,7 +813,7 @@ class RefineryCore:
                                                       "NONE"):
                 continue
 
-            tag_cls = fourcc(b.class_1.data)
+            tag_cls = int_to_fourcc(b.class_1.data)
             if tag_cls in ("scnr", "DeLa"):
                 repair[tag_id] = tag_cls
             elif tag_cls == "matg" and b.path == "globals\\globals":
@@ -868,7 +867,7 @@ class RefineryCore:
                         continue
                     elif b.class_1.enum_name not in (supyr_constants.INVALID,
                                                      "NONE"):
-                        tag_cls = fourcc(b.class_1.data)
+                        tag_cls = int_to_fourcc(b.class_1.data)
                     else:
                         _, reffed_tag_types = get_tagc_refs(
                             b.meta_offset, halo_map.get_writable_map_data(),
@@ -1442,7 +1441,7 @@ class RefineryCore:
         if force_lower_case_paths:
             tag_path = tag_path.lower()
 
-        tag_cls = fourcc(tag_index_ref.class_1.data)
+        tag_cls = int_to_fourcc(tag_index_ref.class_1.data)
         if extract_mode == "tags":
             out_dir = kw.get("out_dir", self.tags_dir)
             filepath = kw.pop("filepath", os.path.join(out_dir, tag_path))

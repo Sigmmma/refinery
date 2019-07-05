@@ -3,7 +3,7 @@ import tkinter as tk
 import os
 import sys
 
-from refinery.core import *
+from refinery.core import RefineryCore, curr_dir
 
 from time import time
 from traceback import format_exc
@@ -18,6 +18,9 @@ from binilla.widgets.scroll_menu import ScrollMenu
 from binilla.windows.about_window import AboutWindow
 from mozzarilla import editor_constants as e_c
 
+from refinery.constants import ACTIVE_INDEX, MAP_TYPE_ANY,\
+     MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
+from refinery.exceptions import MapNotLoadedError, EngineDetectionError
 from refinery.defs.config_def import config_def, bitmap_file_formats
 from refinery.widgets.explorer_hierarchy_tree import ExplorerHierarchyTree
 from refinery.widgets.explorer_class_tree import ExplorerClassTree
@@ -27,6 +30,12 @@ from refinery.windows.settings_window import RefinerySettingsWindow
 from refinery.windows.rename_window import RefineryRenameWindow
 from refinery.windows.crc_window import RefineryChecksumEditorWindow
 
+from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
+     h3_data_extractors
+
+from supyr_struct.defs import constants as supyr_constants
+from supyr_struct.util import sanitize_path
+from supyr_struct.field_types import FieldType
 
 default_config_path = os.path.join(curr_dir, 'refinery.cfg')
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
@@ -540,11 +549,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if header.globals_overwrite_mode.enum_name == supyr_constants.INVALID:
             header.globals_overwrite_mode.data = 0
 
-        try:
-            active_tree = self.tree_frames[self._display_mode + "_tree"]
-        except Exception:
-            pass
-
+        active_tree = self.tree_frames[self._display_mode + "_tree"]
         tree = active_tree.tags_tree
         column_names = ("#0", ) + tree['columns']
         del column_widths[:]
