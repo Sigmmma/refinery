@@ -6,6 +6,7 @@ from supyr_struct.defs.constants import *
 from traceback import format_exc
 
 from binilla.widgets.binilla_widget import BinillaWidget
+
 from refinery.util import get_cwd
 from refinery import crc_functions
 

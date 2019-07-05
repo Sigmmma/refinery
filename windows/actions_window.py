@@ -2,19 +2,21 @@ import os
 import refinery
 import tkinter as tk
 
-from supyr_struct.defs.constants import PATHDIV
 from tkinter import messagebox
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
-from refinery.windows.meta_window import MetaWindow
-
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
-from reclaimer.common_descs import blam_header, QStruct
+
 from refinery.constants import MAX_TAG_NAME_LEN, BAD_CLASSES
 from refinery.util import get_cwd, sanitize_path, is_protected_tag
+from refinery.windows.meta_window import MetaWindow
+
+from reclaimer.common_descs import blam_header, QStruct
+
 from supyr_struct.defs.tag_def import TagDef
+from supyr_struct.defs.constants import PATHDIV
 
 
 curr_dir = get_cwd(refinery.__file__)

@@ -1,6 +1,10 @@
 from supyr_struct.defs.tag_def import TagDef
-from supyr_struct.defs.constants import *
 from supyr_struct.field_types import *
+
+__all__ = (
+    "get", "bitmap_file_formats", "config_def",
+    "globals_overwrite_gui_names", "globals_overwrite_modes",
+    )
 
 bitmap_file_formats = (
     "dds",
