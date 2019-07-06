@@ -1,7 +1,7 @@
 import tkinter as tk
 
 from refinery.constants import BAD_CLASSES
-from refinery.util import sanitize_path, fourcc
+from refinery.util import sanitize_path, int_to_fourcc
 from refinery.widgets.explorer_class_tree import ExplorerClassTree
 from refinery.widgets.explorer_hierarchy_tree import ExplorerHierarchyTree
 
@@ -19,7 +19,7 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
         check_classes = hasattr(self.valid_classes, "__iter__")
         for b in index_refs:
             if check_classes:
-                if fourcc(b.class_1.data) not in self.valid_classes:
+                if int_to_fourcc(b.class_1.data) not in self.valid_classes:
                     continue
 
             if b.class_1.enum_name not in BAD_CLASSES:
@@ -29,7 +29,7 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
 
             tag_cls = INVALID
             if b.class_1.enum_name not in BAD_CLASSES:
-                tag_cls = fourcc(b.class_1.data)
+                tag_cls = int_to_fourcc(b.class_1.data)
 
             tag_path = b.path.lower()
             if PATHDIV == "/":

@@ -3,8 +3,10 @@ import mmap
 import shutil
 import traceback
 
-from reclaimer.util import *
+from reclaimer.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS,\
+     is_reserved_tag, is_protected_tag
 from binilla.util import get_cwd
+from supyr_struct.util import sanitize_path, int_to_fourcc, fourcc_to_int
 
 
 def inject_file_padding(file, *off_padsize_pairs, padchar=b'\xCA'):
