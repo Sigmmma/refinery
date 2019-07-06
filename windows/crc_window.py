@@ -2,7 +2,6 @@ import os
 import refinery
 import tkinter as tk
 
-from supyr_struct.defs.constants import *
 from traceback import format_exc
 
 from binilla.widgets.binilla_widget import BinillaWidget

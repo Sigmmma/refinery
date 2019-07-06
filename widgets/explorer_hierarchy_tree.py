@@ -7,7 +7,7 @@ from traceback import format_exc
 from mozzarilla.widgets.directory_frame import HierarchyFrame
 from refinery.constants import MAX_TAG_NAME_LEN, BAD_CLASSES,\
      H1_TAG_SUPERCLASSES
-from refinery.util import get_cwd, sanitize_path, fourcc, is_reserved_tag
+from refinery.util import get_cwd, sanitize_path, int_to_fourcc, is_reserved_tag
 from refinery.windows.actions_window import RefineryActionsWindow
 
 from supyr_struct.defs.frozen_dict import FrozenDict
@@ -399,7 +399,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
             check_classes = hasattr(self.valid_classes, "__iter__")
             for b in index_refs:
                 if check_classes:
-                    if fourcc(b.class_1.data) not in self.valid_classes:
+                    if int_to_fourcc(b.class_1.data) not in self.valid_classes:
                         continue
 
                 if b.class_1.enum_name not in BAD_CLASSES:
@@ -461,11 +461,11 @@ class ExplorerHierarchyTree(HierarchyFrame):
             try:
                 cls1 = cls2 = cls3 = ""
                 if b.class_1.enum_name not in BAD_CLASSES:
-                    cls1 = fourcc(b.class_1.data)
+                    cls1 = int_to_fourcc(b.class_1.data)
                 if b.class_2.enum_name not in BAD_CLASSES:
-                    cls2 = fourcc(b.class_2.data)
+                    cls2 = int_to_fourcc(b.class_2.data)
                 if b.class_3.enum_name not in BAD_CLASSES:
-                    cls3 = fourcc(b.class_3.data)
+                    cls3 = int_to_fourcc(b.class_3.data)
                 tags_tree.insert(
                     # NEED TO DO str OR ELSE THE SCENARIO TAG'S ID WILL
                     # BE INTERPRETED AS NOTHING AND BE CHANGED TO 'I001'

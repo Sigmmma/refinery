@@ -20,7 +20,7 @@ from mozzarilla import editor_constants as e_c
 
 from refinery.constants import ACTIVE_INDEX, MAP_TYPE_ANY,\
      MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
-from refinery.exceptions import MapNotLoadedError, EngineDetectionError
+from refinery.exceptions import MapAlreadyLoadedError, EngineDetectionError
 from refinery.defs.config_def import config_def, bitmap_file_formats
 from refinery.widgets.explorer_hierarchy_tree import ExplorerHierarchyTree
 from refinery.widgets.explorer_class_tree import ExplorerClassTree
