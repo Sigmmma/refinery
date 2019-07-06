@@ -5,7 +5,7 @@ from supyr_struct.defs.constants import PATHDIV, INVALID
 from traceback import format_exc
 
 from refinery.constants import BAD_CLASSES
-from refinery.util import sanitize_path, fourcc, is_reserved_tag
+from refinery.util import sanitize_path, int_to_fourcc, is_reserved_tag
 from refinery.widgets.explorer_hierarchy_tree import ask_extract_settings,\
      ExplorerHierarchyTree
 
@@ -31,11 +31,11 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             check_classes = hasattr(self.valid_classes, "__iter__")
             for b in index_refs:
                 if check_classes:
-                    if fourcc(b.class_1.data) not in self.valid_classes:
+                    if int_to_fourcc(b.class_1.data) not in self.valid_classes:
                         continue
 
                 if b.class_1.enum_name not in BAD_CLASSES:
-                    tag_cls = fourcc(b.class_1.data)
+                    tag_cls = int_to_fourcc(b.class_1.data)
                     ext = ".%s" % b.class_1.enum_name
                 else:
                     tag_cls = INVALID
@@ -54,7 +54,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             tag_classes = []
             for index_ref in sorted_index_refs:
                 class_enum = index_ref[1].class_1
-                class_fcc  = fourcc(class_enum.data)
+                class_fcc  = int_to_fourcc(class_enum.data)
                 if class_enum.enum_name in BAD_CLASSES:     continue
                 elif tags_tree.exists(class_fcc + PATHDIV): continue
                 elif class_fcc in tag_classes:              continue
@@ -73,7 +73,7 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             map_magic = self.active_map.map_magic
             tag_cls = INVALID
             if b.class_1.enum_name not in BAD_CLASSES:
-                tag_cls = fourcc(b.class_1.data)
+                tag_cls = int_to_fourcc(b.class_1.data)
 
             pointer_converter = self.active_map.map_pointer_converter
             if hasattr(self.active_map, "bsp_pointer_converters"):
@@ -97,11 +97,11 @@ class ExplorerClassTree(ExplorerHierarchyTree):
 
                 cls1 = cls2 = cls3 = ""
                 if b.class_1.enum_name not in BAD_CLASSES:
-                    cls1 = fourcc(b.class_1.data)
+                    cls1 = int_to_fourcc(b.class_1.data)
                 if b.class_2.enum_name not in BAD_CLASSES:
-                    cls2 = fourcc(b.class_2.data)
+                    cls2 = int_to_fourcc(b.class_2.data)
                 if b.class_3.enum_name not in BAD_CLASSES:
-                    cls3 = fourcc(b.class_3.data)
+                    cls3 = int_to_fourcc(b.class_3.data)
 
                 tags_tree.insert(
                     tag_cls + PATHDIV, 'end', iid=str(tag_id),
