@@ -549,12 +549,17 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if header.globals_overwrite_mode.enum_name == supyr_constants.INVALID:
             header.globals_overwrite_mode.data = 0
 
-        active_tree = self.tree_frames[self._display_mode + "_tree"]
-        tree = active_tree.tags_tree
-        column_names = ("#0", ) + tree['columns']
+        try:
+            active_tree = self.tree_frames[self._display_mode + "_tree"]
+            tree = active_tree.tags_tree
+            widths = [tree.column(name)["width"] for name in
+                      (("#0", ) + tree['columns'])]
+        except Exception:
+            widths = [200, 45, 15, 15, 15, 70, 50]
+
         del column_widths[:]
-        for name in column_names:
-            column_widths.append(tree.column(name)["width"])
+        for width in widths:
+            column_widths.append(width)
 
         config_file.data.set_size(None, "column_widths")
 
@@ -562,7 +567,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             # idk if this value can ever be negative, so i'm using abs
             app_window.sash_position = abs(self.panes.sash_coord(0)[0])
         except Exception:
-            pass
+            app_window.sash_position = sum(widths)
 
         for i in range(len(self.font_names)):
             try:
