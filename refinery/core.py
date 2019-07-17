@@ -15,6 +15,7 @@ from supyr_struct.field_types import FieldType
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
 from reclaimer.halo_script.hsc import get_hsc_data_block, HSC_IS_GLOBAL,\
      get_h1_scenario_script_object_type_strings
+from reclaimer.hek import hardcoded_ce_tag_paths
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
@@ -626,29 +627,35 @@ class RefineryCore:
                     raise
                 print(format_exc())
 
+        tag_paths_to_not_rename = set()
+        ignore_filepath = os.path.join(curr_dir, "tag_paths_to_never_rename.txt")
+        try:
+            with open(ignore_filepath) as file:
+                for line in file:
+                    line = line.split(";")[0].strip().lower().replace("/", "\\")
+                    if line:
+                        tag_paths_to_not_rename.add(line)
+        except Exception:
+            print("Could not read from '%s'" % ignore_filepath)
+
         # never want to overwrite these as they are seekd out by name and class
         for i in range(len(tag_index_array)):
-            tag_path = tag_path_handler.get_path(i).lower()
+            tag_path  = tag_path_handler.get_full_tag_path(i).lower()
             tag_class = tag_path_handler.get_ext(i).lower()
-            if tag_class == "bitmap" and tag_path in (
-                    r"ui\shell\bitmaps\background",
-                    r"ui\shell\bitmaps\cursor",
-                    r"ui\shell\bitmaps\trouble_brewing",
-                    r"ui\shell\bitmaps\team_background",
-                    r"ui\shell\bitmaps\team_icon_ctf",
-                    r"ui\shell\bitmaps\team_icon_king",
-                    r"ui\shell\bitmaps\team_icon_oddball",
-                    r"ui\shell\bitmaps\team_icon_race",
-                    r"ui\shell\bitmaps\team_icon_slayer"):
+
+            if (tag_path in hardcoded_ce_tag_paths.HARDCODED_TAG_PATHS or
+                tag_path in tag_paths_to_not_rename):
+
                 tag_path_handler.set_overwritable(i, False)
-            elif tag_class == "sound" and tag_path in (
-                    r"sound\sfx\ui\cursor", r"sound\sfx\ui\forward",
-                    r"sound\sfx\ui\back", r"sound\sfx\ui\flag_failure"):
-                tag_path_handler.set_overwritable(i, False)
-            elif tag_class == "unicode_string_list" and tag_path in (
-                    r"ui\shell\strings\loading",
-                    r"ui\shell\main_menu\mp_map_list"):
-                tag_path_handler.set_overwritable(i, False)
+                tag_path_handler.set_priority(i, INF)
+                if tag_class in (
+                        "actor", "bitmap", "camera_track", "color_table",
+                        "hud_message_text", "input_device_defaults",
+                        "physics", "point_physics", "sound_environment",
+                        "string_list", "unicode_string_list", "wind"):
+                    # these tags dont have dependencies, so we can
+                    # set their minimum priority to infinite
+                    tag_path_handler.set_priority_min(i, INF)
 
         if valid_tag_paths_are_accurate:
             for b in tag_index_array:
@@ -1355,9 +1362,9 @@ class RefineryCore:
                             continue
 
                         tag_index_ref = halo_map.tag_index.tag_index[tag_id]
-                        tagpath = "%s.%s" % (sanitize_path(tag_index_ref.path),
-                                             tag_index_ref.class_1.enum_name)
-                        tagslist += "%s: %s\n" % (extract_mode, tagpath)
+                        tag_path = "%s.%s" % (sanitize_path(tag_index_ref.path),
+                                              tag_index_ref.class_1.enum_name)
+                        tagslist += "%s: %s\n" % (extract_mode, tag_path)
                 except RefineryError:
                     print(format_exc(0)) # only last line for RefineryErrors
                 except Exception:

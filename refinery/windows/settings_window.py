@@ -67,7 +67,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
             self.dirs_frame, text="Tags list log (erase to disable logging)")
 
         for attr in ("overwrite", "recursive",
-                     "rename_duplicates_in_scnr", "decode_adpcm",
+                     "rename_scnr_dups", "decode_adpcm",
                      "bitmap_extract_keep_alpha",
                      "generate_comp_verts", "generate_uncomp_verts",
                      "force_lower_case_paths", "fix_tag_classes",
@@ -113,11 +113,11 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
             command=self.tags_list_browse, width=6)
 
 
-        self.rename_duplicates_in_scnr_cbtn = tk.Checkbutton(
+        self.rename_scnr_dups_cbtn = tk.Checkbutton(
             self.tag_fixup_frame, text=(
                 "Rename duplicate camera points, cutscene\n"+
                 "flags, and recorded animations in scenario"),
-            variable=self.rename_duplicates_in_scnr, justify="left")
+            variable=self.rename_scnr_dups, justify="left")
         self.generate_comp_verts_cbtn = tk.Checkbutton(
             self.tag_fixup_frame, text="Generate compressed lightmap vertices",
             variable=self.generate_comp_verts)
@@ -326,7 +326,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
                   self.use_scenario_names_for_script_names_cbtn):
             w.pack(padx=4, anchor='w')
 
-        for w in (self.rename_duplicates_in_scnr_cbtn,
+        for w in (self.rename_scnr_dups_cbtn,
                   self.generate_uncomp_verts_cbtn, self.generate_comp_verts_cbtn):
             w.pack(padx=4, anchor='w')
 
