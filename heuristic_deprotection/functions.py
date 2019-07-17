@@ -1861,8 +1861,8 @@ def rename_DeLa(tag_id, halo_map, tag_path_handler,
     name = tag_path_handler.get_basename(tag_id)
 
     for b in meta.event_handlers.STEPTREE:
-        min_prio.val = heuristic_deprotect(get_tag_id(b.sound_effect),
-                         sub_dir=sub_dir + "sfx\\", **kw)
+        min_prio.val = heuristic_deprotect(
+            get_tag_id(b.sound_effect), sub_dir=sub_dir + "sfx\\", **kw)
 
         if (tag_path_handler.get_priority(get_tag_id(b.widget_tag)) >=
             kw["priority"] and tag_id in seen):

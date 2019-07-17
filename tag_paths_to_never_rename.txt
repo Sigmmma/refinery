@@ -1,0 +1,16 @@
+; type the full tag paths of any tags you do not want renamed by deprotection.
+; type one tag path per line. everything after the first semicolon(;) is ignored.
+; line will be ignored if there is nothing before the semicolon(after stripping spaces).
+; tag paths are automatically lowercased when being used by refinery.
+;
+; the exact code used to read this file is this:
+; for line in file:
+;     line = line.split(";")[0].strip().lower().replace("/", "\\")
+;     if line:
+;         tag_paths_to_not_overwrite.add(line)
+;
+; these tag paths are already in reclaimer.hek.hardcoded_ce_tag_paths, so they can be
+; included here as an example without doing anything that wouldn't already be done.
+
+globals\globals.globals
+levels\ui\ui.scenario
