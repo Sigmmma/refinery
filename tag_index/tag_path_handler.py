@@ -231,10 +231,10 @@ class TagPathHandler():
             self._priority_mins[index] = float(priority)
 
     def set_overwritable(self, index, new_val=True):
-        if index is not None: return
+        if index is None: return
         index &= 0xFFff
         if index in range(len(self._index_map)):
-            self._overwritables[index] = new_val
+            self._overwritables[index] = bool(new_val)
 
     def shorten_paths(self, max_len, **kw):
         paths = {}
