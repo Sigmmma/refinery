@@ -4,6 +4,7 @@ import tkinter as tk
 
 from traceback import format_exc
 
+from binilla import editor_constants as e_c
 from binilla.widgets.binilla_widget import BinillaWidget
 
 from refinery.util import get_cwd
@@ -28,7 +29,8 @@ class RefineryChecksumEditorWindow(tk.Toplevel, BinillaWidget):
             except Exception:
                 self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
         except Exception:
-            print("Could not load window icon.")
+            if not e_c.IS_LNX:
+                print("Could not load window icon.")
 
         self.geometry("300x80")
         self.title("Change map checksum")

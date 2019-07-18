@@ -7,10 +7,11 @@ from tkinter.filedialog import asksaveasfilename, askdirectory
 from tkinter import ttk
 from traceback import format_exc
 
-from refinery.defs.config_def import bitmap_file_formats, \
-     globals_overwrite_gui_names
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
+from binilla import editor_constants as e_c
+from refinery.defs.config_def import bitmap_file_formats, \
+     globals_overwrite_gui_names
 from refinery.util import get_cwd, sanitize_path
 from supyr_struct.defs.constants import PATHDIV
 
@@ -31,7 +32,8 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
             except Exception:
                 self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
         except Exception:
-            print("Could not load window icon.")
+            if not e_c.IS_LNX:
+                print("Could not load window icon.")
 
         self.geometry("550x350")
         self.minsize(width=450, height=350)
