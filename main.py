@@ -72,6 +72,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     font_names = e_c.font_names
 
     icon_filepath = ""
+    app_bitmap_filepath = ""
 
     about_module_names = (
         "arbytmap",
@@ -103,18 +104,24 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         except Exception:
             pass
 
-        try:
-            try:
-                icon_filepath = os.path.join(curr_dir, 'refinery.ico')
-                self.iconbitmap(icon_filepath)
-            except Exception:
-                icon_filepath = os.path.join(os.path.join(curr_dir, 'icons', 'refinery.ico'))
-                self.iconbitmap(icon_filepath)
-        except Exception:
-            icon_filepath = ""
-            print("Could not load window icon.")
+        self.app_bitmap_filepath = os.path.join(curr_dir, 'refinery.png')
+        if not os.path.isfile(self.app_bitmap_filepath):
+            self.app_bitmap_filepath = os.path.join(curr_dir, 'icons', 'refinery.png')
+        if not os.path.isfile(self.app_bitmap_filepath):
+            self.app_bitmap_filepath = ""
 
-        self.icon_filepath = icon_filepath
+        if not e_c.IS_LNX:
+            try:
+                try:
+                    self.icon_filepath = os.path.join(curr_dir, 'refinery.ico')
+                    self.iconbitmap(self.icon_filepath)
+                except Exception:
+                    self.icon_filepath = os.path.join(curr_dir, 'icons', 'refinery.ico')
+                    self.iconbitmap(self.icon_filepath)
+            except Exception:
+                self.icon_filepath = ""
+                print("Could not load window icon.")
+
         self.title('%s v%s.%s.%s' % ((self.app_name,) + self.version))
         self.minsize(width=500, height=300)
 
@@ -396,6 +403,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             column_names = ("#0", ) + tree['columns']
             for name, width in zip(column_names, column_widths):
                 tree.column(name, width=width)
+
+        self.update_ttk_style()
 
     def __getattribute__(self, attr_name):
         # it would have been a LOT of boilerplate for abstracting the
@@ -1391,8 +1400,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         self.about_window = AboutWindow(
             self, module_names=self.about_module_names,
-            iconbitmap=self.icon_filepath, app_name=self.app_name,
-            messages=self.about_messages)
+            iconbitmap=self.icon_filepath, appbitmap=self.app_bitmap_filepath,
+            app_name=self.app_name, messages=self.about_messages)
         self.place_window_relative(self.about_window, 30, 50)
 
     def some_func(self):
