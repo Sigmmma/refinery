@@ -2,6 +2,7 @@ import os
 import refinery
 import tkinter as tk
 
+from binilla import editor_constants as e_c
 from binilla.windows.tag_window import TagWindow
 
 from mozzarilla.widgets.field_widget_picker import def_halo_widget_picker
@@ -38,7 +39,8 @@ class MetaWindow(TagWindow):
             except Exception:
                 self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
         except Exception:
-            print("Could not load window icon.")
+            if not e_c.IS_LNX:
+                print("Could not load window icon.")
 
     def save(self, **kwargs):
         print("Cannot save meta-data")

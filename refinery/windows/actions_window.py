@@ -6,6 +6,7 @@ from tkinter import messagebox
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
+from binilla import editor_constants as e_c
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
 
@@ -54,7 +55,8 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
             except Exception:
                 self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
         except Exception:
-            print("Could not load window icon.")
+            if not e_c.IS_LNX:
+                print("Could not load window icon.")
 
         self.bind('<Escape>', lambda e=None, s=self, *a, **kw: s.destroy())
 

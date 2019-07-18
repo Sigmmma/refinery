@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import messagebox
 from traceback import format_exc
 
+from binilla import editor_constants as e_c
 from binilla.widgets.binilla_widget import BinillaWidget
 
 from refinery.util import get_cwd, is_protected_tag as is_protected_filename
@@ -27,7 +28,8 @@ class RefineryRenameWindow(tk.Toplevel, BinillaWidget):
             except Exception:
                 self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
         except Exception:
-            print("Could not load window icon.")
+            if not e_c.IS_LNX:
+                print("Could not load window icon.")
 
         self.geometry("300x80")
         self.title("Rename map")
