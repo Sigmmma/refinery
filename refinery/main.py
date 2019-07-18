@@ -564,7 +564,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             widths = [tree.column(name)["width"] for name in
                       (("#0", ) + tree['columns'])]
         except Exception:
-            widths = [200, 45, 15, 15, 15, 70, 50]
+            widths = [200, 45, 10, 10, 12, 70, 50]
 
         del column_widths[:]
         for width in widths:

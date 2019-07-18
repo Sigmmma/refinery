@@ -148,9 +148,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
             tags_tree.column("#0", minwidth=100, width=200)
             tags_tree.column("class1", minwidth=5, width=45, stretch=False)
-            tags_tree.column("class2", minwidth=5, width=15, stretch=False)
-            tags_tree.column("class3", minwidth=5, width=15, stretch=False)
-            tags_tree.column("magic",  minwidth=5, width=15, stretch=False)
+            tags_tree.column("class2", minwidth=5, width=10, stretch=False)
+            tags_tree.column("class3", minwidth=5, width=10, stretch=False)
+            tags_tree.column("magic",  minwidth=5, width=12, stretch=False)
             tags_tree.column("pointer", minwidth=5, width=70, stretch=False)
             tags_tree.column("index_id", minwidth=5, width=50, stretch=False)
 
