@@ -1023,8 +1023,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             asked.add(map_name)
             map_path = askopenfilename(
                 initialdir=maps_dir, title="Select the %s.map" % map_name,
-                filetypes=((map_name, "*.map"), (map_name, "*.yelo"),
-                           (map_name, "*.vap"), (map_name, "*.map.dtz"),
+                filetypes=((map_name, "*.map"), (map_name, "*.map.dtz"),
                            ("All", "*.*")))
 
             if not map_path:
