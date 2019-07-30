@@ -813,14 +813,16 @@ class RefineryCore:
         # locate the tags to start deprotecting with
         repair = {}
         for b in tag_index_array:
+            if b.indexed or b.class_1.enum_name in (
+                    supyr_constants.INVALID, "NONE"):
+                continue
+
             tag_id = b.id & 0xFFff
             if tag_id == halo_map.tag_index.scenario_tag_id & 0xFFff:
                 tag_cls = "scnr"
-            elif b.indexed or b.class_1.enum_name in (supyr_constants.INVALID,
-                                                      "NONE"):
-                continue
+            else:
+                tag_cls = int_to_fourcc(b.class_1.data)
 
-            tag_cls = int_to_fourcc(b.class_1.data)
             if tag_cls in ("scnr", "DeLa"):
                 repair[tag_id] = tag_cls
             elif tag_cls == "matg" and b.path == "globals\\globals":
