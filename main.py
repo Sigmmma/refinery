@@ -389,10 +389,18 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self._initialized = True
 
     def apply_style(self, seen=None):
+        app_window = self.config_file.data.app_window
         super(Refinery, self).apply_style(seen)
         if not self._window_geometry_initialized:
             app_window = self.config_file.data.app_window
             self._window_geometry_initialized = True
+
+            if app_window.app_offset_x not in range(0, self.winfo_screenwidth()):
+                app_window.app_offset_x = 0
+
+            if app_window.app_offset_y not in range(0, self.winfo_screenheight()):
+                app_window.app_offset_y = 0
+
             self.geometry("%sx%s+%s+%s" %
                           (app_window.app_width, app_window.app_height,
                            app_window.app_offset_x, app_window.app_offset_y))
@@ -523,10 +531,12 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         header.version = self.config_version
 
         if self._initialized:
-            app_window.app_width    = self.winfo_width()
-            app_window.app_height   = self.winfo_height()
-            app_window.app_offset_x = self.winfo_x()
-            app_window.app_offset_y = self.winfo_y()
+            w, geom = self.geometry().split("x")
+            h, x, y = geom.split("+")
+            app_window.app_width = int(w)
+            app_window.app_height = int(h)
+            app_window.app_offset_x = int(x)
+            app_window.app_offset_y = int(y)
 
         # make sure there are enough entries in the paths
         if len(paths.NAME_MAP) > len(paths):
