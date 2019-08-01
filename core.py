@@ -661,6 +661,7 @@ class RefineryCore:
             for b in tag_index_array:
                 if not b.path.lower().startswith("protected"):
                     tag_path_handler.set_overwritable(b.id, False)
+                    tag_path_handler.set_priority(b.id, VERY_HIGH_PRIORITY)
 
         try:
             tagc_names = self.detect_tag_collection_names(map_name, engine)
@@ -1040,7 +1041,8 @@ class RefineryCore:
         # NOTE: These are ordered in this way to allow the most logical sorting
         for tag_type in (
                 "scenario_structure_bsp", "vehicle", "weapon", "equipment",
-                "actor_variant", "biped", "ui_widget_collection", "hud_globals",
+                "actor_variant", "biped",
+                "ui_widget_collection", "ui_widget_definition", "hud_globals",
                 "project_yellow", "globals", "scenario", "tag_collection"):
             if do_printout:
                 print("Renaming %s tags" % tag_type)
@@ -1052,9 +1054,10 @@ class RefineryCore:
                     continue
 
                 try:
+                    depth = 0 if tag_type == "ui_widget_collection" else INF
                     heuristic_deprotect(
                         tag_id, halo_map, path_handler,
-                        do_printout=print_name_changes,
+                        do_printout=print_name_changes, depth=depth,
                         shallow_ui_widget_nesting=shallow_ui_widget_nesting,
                         use_minimum_priorities=use_minimum_priorities)
                 except Exception:
