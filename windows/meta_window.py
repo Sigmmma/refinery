@@ -58,10 +58,26 @@ class MetaWindow(TagWindow):
     def unbind_hotkeys(self, hotkeys=None):
         pass
 
-    @property
-    def all_visible(self):
+    def get_visible(self, visibility_level):
+        if (visibility_level is None or
+            visibility_level >= constants.VISIBILITY_SHOWN):
+            return True
+
         try:
-            return bool(self.app_root.show_all_fields.get())
+            if self.is_config and not (self.app_root.config_file.data.\
+                                       app_window.flags.debug_mode):
+                # No one should be fucking with the configs hidden values
+                return False
+        except Exception:
+            pass
+
+        try:
+            if visibility_level == constants.VISIBILITY_METADATA:
+                return bool(self.app_root.show_structure_meta_fields.get())
+            elif visibility_level == constants.VISIBILITY_HIDDEN:
+                return bool(self.app_root.show_all_fields.get())
+            else:
+                return True
         except Exception:
             return False
 
