@@ -80,6 +80,7 @@ config_header = Struct("header",
         "show_all_fields",
         "edit_all_fields",
         "allow_corrupt",
+        "show_structure_meta",
         ),
     Pad(48 - 4*6),
 

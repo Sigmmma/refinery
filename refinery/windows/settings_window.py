@@ -76,6 +76,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
                      "autoload_resources", "extract_yelo_cheape",
                      "use_minimum_priorities", "use_heuristics",
                      "rename_cached_tags", "show_all_fields",
+                     "show_structure_meta",
                      "edit_all_fields", "allow_corrupt",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
@@ -299,6 +300,9 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         self.show_all_fields_cbtn = tk.Checkbutton(
             self.other_frame, variable=self.show_all_fields,
             text="Show hidden fields when viewing metadata")
+        self.show_structure_meta_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.show_structure_meta,
+            text="Show hidden meta structure fields when viewing metadata")
         self.edit_all_fields_cbtn = tk.Checkbutton(
             self.other_frame, variable=self.edit_all_fields,
             text="Allow editing all fields when viewing metadata")
@@ -351,8 +355,8 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
             w.pack(padx=4, anchor='w')
 
         for w in (self.autoload_resources_cbtn, self.extract_yelo_cheape_cbtn,
-                  self.show_all_fields_cbtn, self.edit_all_fields_cbtn,
-                  self.allow_corrupt_cbtn,
+                  self.show_all_fields_cbtn, self.show_structure_meta_cbtn,
+                  self.edit_all_fields_cbtn, self.allow_corrupt_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
 

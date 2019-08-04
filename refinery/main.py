@@ -128,6 +128,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         # make the tkinter variables
         self.extract_mode = tk.StringVar(self, "tags")
         self.show_all_fields = tk.IntVar(self)
+        self.show_structure_meta = tk.IntVar(self)
         self.edit_all_fields = tk.IntVar(self)
         self.allow_corrupt = tk.IntVar(self)
 
@@ -174,6 +175,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.tk_vars = dict(
             extract_mode=self.extract_mode,
             show_all_fields=self.show_all_fields,
+            show_structure_meta=self.show_structure_meta,
             edit_all_fields=self.edit_all_fields,
             allow_corrupt=self.allow_corrupt,
 
