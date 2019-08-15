@@ -989,7 +989,7 @@ class RefineryCore:
         ids_to_deprotect_by_class = {class_name: [] for class_name in (
             "scenario", "globals", "hud_globals", "project_yellow", "vehicle",
             "actor_variant", "biped", "weapon", "equipment", "tag_collection",
-            "ui_widget_collection", "scenario_structure_bsp"
+            "ui_widget_collection", "ui_widget_definition", "scenario_structure_bsp"
             )}
 
         do_printout = kw.pop("do_printout", self.do_printout)
