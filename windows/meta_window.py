@@ -3,6 +3,7 @@ import refinery
 import tkinter as tk
 
 from binilla import editor_constants as e_c
+from binilla import constants
 from binilla.windows.tag_window import TagWindow
 
 from mozzarilla.widgets.field_widget_picker import def_halo_widget_picker
@@ -73,7 +74,7 @@ class MetaWindow(TagWindow):
 
         try:
             if visibility_level == constants.VISIBILITY_METADATA:
-                return bool(self.app_root.show_structure_meta_fields.get())
+                return bool(self.app_root.show_structure_meta.get())
             elif visibility_level == constants.VISIBILITY_HIDDEN:
                 return bool(self.app_root.show_all_fields.get())
             else:
