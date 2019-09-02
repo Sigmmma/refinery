@@ -1,0 +1,7 @@
+**__pycache__/
+data/
+tags/
+**.cfg
+**.log
+**.backup
+**.BACKUP
