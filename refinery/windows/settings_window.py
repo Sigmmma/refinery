@@ -130,7 +130,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         
         self.dont_touch_frame = tk.LabelFrame(
             self.tag_fixup_frame,
-            text="ONLY UNCHECK THESE IF YOU ARE NOT DEALING WITH PROTECTED MAPS")
+            text="ONLY CHECK THESE IF YOU ARE NOT DEALING WITH PROTECTED MAPS")
         self.disable_safe_mode_cbtn = tk.Checkbutton(
             self.dont_touch_frame, variable=self.disable_safe_mode, justify="left",
             text="Disable safe-mode")
