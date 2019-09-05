@@ -1,8 +1,0 @@
-syntax: glob
-*__pycache__/*
-data/*
-tags/*
-*.cfg
-*.log
-*.backup
-*.BACKUP
