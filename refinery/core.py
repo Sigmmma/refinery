@@ -848,7 +848,8 @@ class RefineryCore:
                     if tag_cls != "sbsp":
                         class_repair_functions[tag_cls](
                             tag_id, tag_index_array, halo_map.get_writable_map_data(),
-                            halo_map.map_magic, next_repair, halo_map.engine)
+                            halo_map.map_magic, next_repair, halo_map.engine,
+                            not self.disable_safe_mode)
 
                         # replace meta with the deprotected one
                         if tag_cls == "matg":
@@ -860,7 +861,8 @@ class RefineryCore:
                             halo_map.bsp_headers[tag_id].meta_pointer,
                             tag_index_array, halo_map.get_writable_map_data(),
                             halo_map.bsp_magics[tag_id] - halo_map.bsp_header_offsets[tag_id],
-                            next_repair, halo_map.engine, halo_map.map_magic)
+                            next_repair, halo_map.engine, halo_map.map_magic,
+                            not self.disable_safe_mode)
                 except Exception:
                     print(format_exc())
 
