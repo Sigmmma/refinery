@@ -2,6 +2,7 @@ import refinery
 import tkinter as tk
 import os
 import sys
+import webbrowser
 
 from refinery.core import RefineryCore, curr_dir
 
@@ -86,6 +87,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
     about_messages = ()
     tk_vars = ()
+
+    issue_tracker_url = "https://github.com/MosesofEgypt/refinery/issues"
 
     def __init__(self, *args, **kwargs):
         self.app_name = str(kwargs.pop('app_name', self.app_name))
@@ -275,6 +278,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             label="Switch extract mode", command=self.toggle_extract_mode)
         self.menubar.add_command(
             label="About", command=self.show_about_window)
+        self.menubar.add_command(label="Report Bug", command=self.open_issue_tracker)
         self.config(menu=self.menubar)
 
         # make the window pane
@@ -1414,6 +1418,9 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             iconbitmap=self.icon_filepath, appbitmap=self.app_bitmap_filepath,
             app_name=self.app_name, messages=self.about_messages)
         self.place_window_relative(self.about_window, 30, 50)
+
+    def open_issue_tracker(self):
+        webbrowser.open_new_tab(self.issue_tracker_url) 
 
     def some_func(self):
         self.title(self.title().replace(self.app_name, "rotidE paM ehT"[::-1]))
