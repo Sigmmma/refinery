@@ -3,7 +3,7 @@ import refinery
 import tkinter as tk
 
 from tkinter import messagebox
-from tkinter.filedialog import asksaveasfilename, askdirectory
+from binilla.windows.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
 from binilla import editor_constants as e_c
