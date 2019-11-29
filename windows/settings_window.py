@@ -3,7 +3,7 @@ import refinery
 import tkinter.font
 import tkinter as tk
 
-from tkinter.filedialog import asksaveasfilename, askdirectory
+from binilla.windows.filedialog import asksaveasfilename, askdirectory
 from tkinter import ttk
 from traceback import format_exc
 
