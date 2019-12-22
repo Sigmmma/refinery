@@ -1,6 +1,6 @@
 __all__ = ("get_filtered_tag_index_ids", "TagPathDetokenizer", )
 
-import os
+from pathlib import WindowsPath
 
 from refinery.tag_index.tag_path_tokens import tokens_to_tag_paths,\
      ALL_TOKENS, TOKEN_SCNR, TOKEN_MATG, TOKEN_ALL,\
@@ -11,6 +11,10 @@ from refinery.tag_index.tag_path_tokens import tokens_to_tag_paths,\
 def get_filtered_tag_index_ids(tag_index_array, tag_path=None,
                                tag_class="", exact=False):
     tag_index_ids = set()
+    # TODO: Determine if we should lowercase tag_path in all cases.
+    #       Extracting tags by their name should work the same
+    #       regardless of operating system, but there is an argument
+    #       for allowing different cases. Give this some thought.
     tag_path  = tag_path.lower()
     tag_class = tag_class.lower()
     for i in range(len(tag_index_array)):
@@ -37,13 +41,20 @@ class TagPathDetokenizer(list):
                 tag_index_ids.add(tag_id)
                 continue
 
-            tag_path_pieces = tag_id.replace("\\", "/").lower().split("/")
-            tag_path, tag_class = os.path.splitext(tag_path_pieces[-1])
-            if len(tag_path_pieces) > 1:
-                tag_path = "\\".join(
-                    tuple(tag_path_pieces[: -1]) + (tag_path, ))
-            elif tag_path == ("*" * len(tag_path)):
-                tag_path = ""
+            tag_path = WindowsPath(tag_id)
+            tag_class = tag_path.suffix
+            if len(tag_path.parts) > 1:
+                # tag path has multiple parts. use the whole
+                # path as the tag_path, minus the extension.
+                tag_path = str(tag_path.with_suffix(""))
+            else:
+                # only one piece in the tag path. use the only
+                # piece(minus the extension) as the tag_path.
+                tag_path = tag_path.stem
+                if set(tag_path) == set("*"):
+                    # tag path is all asterisks. This means we're only
+                    # matching based on extension, so match all tag paths
+                    tag_path = ""
 
             exact = tag_path and tag_class
             tag_index_ids.update(get_filtered_tag_index_ids(

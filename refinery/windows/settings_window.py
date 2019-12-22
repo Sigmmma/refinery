@@ -10,9 +10,12 @@ from traceback import format_exc
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
 from binilla import editor_constants as e_c
+
+from refinery import editor_constants as e_c
 from refinery.defs.config_def import bitmap_file_formats, \
      globals_overwrite_gui_names
 from refinery.util import get_cwd, sanitize_path
+
 from supyr_struct.defs.constants import PATHDIV
 
 
@@ -27,10 +30,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
         try:
-            try:
-                self.iconbitmap(os.path.join(curr_dir, 'refinery.ico'))
-            except Exception:
-                self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
+            self.iconbitmap(e_c.REFINERY_ICON_PATH)
         except Exception:
             if not e_c.IS_LNX:
                 print("Could not load window icon.")

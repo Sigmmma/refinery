@@ -1,5 +1,3 @@
-import os
-
 from refinery.util import sanitize_win32_path
 from refinery.heuristic_deprotection import constants as const
 

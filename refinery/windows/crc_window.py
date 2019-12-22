@@ -4,9 +4,9 @@ import tkinter as tk
 
 from traceback import format_exc
 
-from binilla import editor_constants as e_c
 from binilla.widgets.binilla_widget import BinillaWidget
 
+from refinery import editor_constants as e_c
 from refinery.util import get_cwd
 from refinery import crc_functions
 
@@ -24,10 +24,7 @@ class RefineryChecksumEditorWindow(tk.Toplevel, BinillaWidget):
         tk.Toplevel.__init__(self, *args, **kwargs)
 
         try:
-            try:
-                self.iconbitmap(os.path.join(curr_dir, 'refinery.ico'))
-            except Exception:
-                self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
+            self.iconbitmap(e_c.REFINERY_ICON_PATH)
         except Exception:
             if not e_c.IS_LNX:
                 print("Could not load window icon.")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys
+import sys
 
 info = sys.version_info
 
