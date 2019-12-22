@@ -1,12 +1,18 @@
-import os
 import mmap
+import re
 import shutil
 import traceback
+
+from pathlib import WindowsPath
 
 from reclaimer.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS,\
      is_reserved_tag, is_protected_tag
 from binilla.util import get_cwd
-from supyr_struct.util import sanitize_path, int_to_fourcc, fourcc_to_int
+from supyr_struct.util import sanitize_path, is_path_empty,\
+     int_to_fourcc, fourcc_to_int
+
+
+INVALID_WINDOWS_CHAR_SUB = re.compile('[:*?"<>|]')
 
 
 def inject_file_padding(file, *off_padsize_pairs, padchar=b'\xCA'):
@@ -99,22 +105,9 @@ def intra_file_move(file, dstoff_cpysize_by_srcoff, padchar=b'\xCA'):
     file.flush()
 
 
-def sanitize_filename(name):
-    # make sure to rename reserved windows filenames to a valid one
-    if name in RESERVED_WINDOWS_FILENAME_MAP:
-        return RESERVED_WINDOWS_FILENAME_MAP[name]
-    final_name = ''
-    for c in name:
-        if c not in INVALID_PATH_CHARS:
-            final_name += c
-    if final_name == '':
-        raise Exception('Bad %s char filename' % len(name))
-
-
 def sanitize_win32_path(name):
-    for c in ':*?"<>|':
-        name = name.replace(c, '')
-    return name.lower().replace('/', '\\').strip()
+    name = INVALID_WINDOWS_CHAR_SUB.sub('', name)
+    return str(WindowsPath(name)).lower()
 
 
 def get_unique_name(collection, name="", ext="", curr_value=object()):
@@ -123,4 +116,5 @@ def get_unique_name(collection, name="", ext="", curr_value=object()):
     while collection.get(final_name + ext) not in (None, curr_value):
         final_name = "%s #%s" % (name, i)
         i += 1
+
     return final_name

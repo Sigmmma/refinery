@@ -1,4 +1,5 @@
 import os
+# TODO: Fix this module to use pathlib instead of os for path compatability
 
 from refinery.constants import INF
 from refinery.util import sanitize_win32_path, get_unique_name

@@ -6,19 +6,19 @@ import webbrowser
 
 from refinery.core import RefineryCore, curr_dir
 
+from pathlib import Path
 from time import time
-from traceback import format_exc
-
 from tkinter import messagebox
 from tkinter.filedialog import askopenfilename, askopenfilenames,\
      asksaveasfilename
+from traceback import format_exc
 
 
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
 from binilla.windows.about_window import AboutWindow
-from mozzarilla import editor_constants as e_c
 
+from refinery import editor_constants as e_c
 from refinery.constants import ACTIVE_INDEX, MAP_TYPE_ANY,\
      MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
 from refinery.exceptions import MapAlreadyLoadedError, EngineDetectionError
@@ -30,25 +30,24 @@ from refinery.widgets.queue_tree import QueueTree
 from refinery.windows.settings_window import RefinerySettingsWindow
 from refinery.windows.rename_window import RefineryRenameWindow
 from refinery.windows.crc_window import RefineryChecksumEditorWindow
+from refinery.util import sanitize_path, is_path_empty
 
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
      h3_data_extractors
 
 from supyr_struct.defs import constants as supyr_constants
-from supyr_struct.util import sanitize_path
 from supyr_struct.field_types import FieldType
 
-default_config_path = os.path.join(curr_dir, 'refinery.cfg')
+
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
 VALID_EXTRACT_MODES = frozenset(("tags", "data"))
-
 
 
 class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     last_dir = curr_dir
 
-    config_path = default_config_path
     config_file = None
+    _config_path = Path(e_c.SETTINGS_DIR, "refinery.cfg")
 
     config_version = 2
     app_name = "Refinery"
@@ -107,23 +106,14 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         except Exception:
             pass
 
-        self.app_bitmap_filepath = os.path.join(curr_dir, 'refinery.png')
-        if not os.path.isfile(self.app_bitmap_filepath):
-            self.app_bitmap_filepath = os.path.join(curr_dir, 'icons', 'refinery.png')
-        if not os.path.isfile(self.app_bitmap_filepath):
-            self.app_bitmap_filepath = ""
-
+        self.app_bitmap_filepath = e_c.REFINERY_BITMAP_PATH
         if not e_c.IS_LNX:
-            try:
-                try:
-                    self.icon_filepath = os.path.join(curr_dir, 'refinery.ico')
-                    self.iconbitmap(self.icon_filepath)
-                except Exception:
-                    self.icon_filepath = os.path.join(curr_dir, 'icons', 'refinery.ico')
-                    self.iconbitmap(self.icon_filepath)
-            except Exception:
-                self.icon_filepath = ""
-                print("Could not load window icon.")
+            self.icon_filepath = e_c.REFINERY_ICON_PATH
+            if self.icon_filepath:
+                self.iconbitmap(str(self.icon_filepath))
+
+        if is_path_empty(self.icon_filepath):
+            print("Could not load window icon.")
 
         self.title('%s v%s.%s.%s' % ((self.app_name,) + self.version))
         self.minsize(width=500, height=300)
@@ -221,7 +211,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         if self.config_file is not None:
             pass
-        elif os.path.exists(self.config_path):
+        elif self.config_path.is_file():
             # load the config file
             try:
                 self.load_config()
@@ -394,6 +384,15 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         self._initialized = True
 
+    @property
+    def config_path(self):
+        return self._config_path
+    @config_path.setter
+    def config_path(self, new_val):
+        if not isinstance(new_val, Path):
+            new_val = Path(new_val)
+        self._config_path = new_val
+
     def apply_style(self, seen=None):
         app_window = self.config_file.data.app_window
         super(Refinery, self).apply_style(seen)
@@ -454,7 +453,9 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     def load_config(self, filepath=None):
         if filepath is None:
             filepath = self.config_path
-        assert os.path.exists(filepath)
+
+        filepath = Path(filepath)
+        assert filepath.is_file()
 
         # load the config file
         self.config_file = config_def.build(filepath=filepath)
@@ -467,6 +468,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     def make_config(self, filepath=None):
         if filepath is None:
             filepath = self.config_path
+
+        filepath = Path(filepath)
 
         # create the config file from scratch
         self.config_file = config_def.build()

@@ -6,10 +6,10 @@ from tkinter import messagebox
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
-from binilla import editor_constants as e_c
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
 
+from refinery import editor_constants as e_c
 from refinery.constants import MAX_TAG_NAME_LEN, BAD_CLASSES
 from refinery.util import get_cwd, sanitize_path, is_protected_tag
 from refinery.windows.meta_window import MetaWindow
@@ -50,10 +50,7 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         tk.Toplevel.__init__(self, *args, **kwargs)
 
         try:
-            try:
-                self.iconbitmap(os.path.join(curr_dir, 'refinery.ico'))
-            except Exception:
-                self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
+            self.iconbitmap(e_c.REFINERY_ICON_PATH)
         except Exception:
             if not e_c.IS_LNX:
                 print("Could not load window icon.")
