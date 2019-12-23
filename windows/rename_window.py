@@ -9,10 +9,7 @@ from binilla import editor_constants as e_c
 from binilla.widgets.binilla_widget import BinillaWidget
 
 from refinery import editor_constants as e_c
-from refinery.util import get_cwd, is_protected_tag as is_protected_filename
-
-
-curr_dir = get_cwd(refinery.__file__)
+from refinery.util import is_protected_tag as is_protected_filename
 
 
 class RefineryRenameWindow(tk.Toplevel, BinillaWidget):

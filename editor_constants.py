@@ -1,7 +1,8 @@
+from refinery.util import get_cwd
 from mozzarilla.editor_constants import *
 from pathlib import Path
 
-REFINERYLIB_DIR = Path(__file__).parent
+REFINERYLIB_DIR = get_cwd(__file__)
 
 REFINERY_ICON_PATH = Path(REFINERYLIB_DIR, "refinery.ico")
 if not REFINERY_ICON_PATH.is_file():
@@ -26,3 +27,4 @@ if not REFINERY_BITMAP_PATH.is_file():
 
 # not for export
 del Path
+del get_cwd

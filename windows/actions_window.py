@@ -11,16 +11,13 @@ from binilla.widgets.scroll_menu import ScrollMenu
 
 from refinery import editor_constants as e_c
 from refinery.constants import MAX_TAG_NAME_LEN, BAD_CLASSES
-from refinery.util import get_cwd, sanitize_path, is_protected_tag
+from refinery.util import sanitize_path, is_protected_tag
 from refinery.windows.meta_window import MetaWindow
 
 from reclaimer.common_descs import blam_header, QStruct
 
 from supyr_struct.defs.tag_def import TagDef
 from supyr_struct.defs.constants import PATHDIV
-
-
-curr_dir = get_cwd(refinery.__file__)
 
 
 meta_tag_def = TagDef("meta tag",

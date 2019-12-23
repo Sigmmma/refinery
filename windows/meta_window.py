@@ -7,10 +7,7 @@ from binilla.windows.tag_window import TagWindow
 from mozzarilla.widgets.field_widget_picker import def_halo_widget_picker
 
 from refinery import editor_constants as e_c
-from refinery.util import get_cwd, is_path_empty
-
-
-curr_dir = get_cwd(refinery.__file__)
+from refinery.util import is_path_empty
 
 
 class MetaWindow(TagWindow):

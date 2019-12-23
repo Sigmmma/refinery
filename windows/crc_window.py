@@ -7,11 +7,7 @@ from traceback import format_exc
 from binilla.widgets.binilla_widget import BinillaWidget
 
 from refinery import editor_constants as e_c
-from refinery.util import get_cwd
 from refinery import crc_functions
-
-
-curr_dir = get_cwd(refinery.__file__)
 
 
 class RefineryChecksumEditorWindow(tk.Toplevel, BinillaWidget):

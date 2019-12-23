@@ -183,8 +183,8 @@ class RefineryCore:
     _extract_queue = ()
 
     def __init__(self, *args, **kwargs):
-        self.tags_dir = os.path.join(curr_dir, "tags", "")
-        self.data_dir = os.path.join(curr_dir, "data", "")
+        self.tags_dir = str(curr_dir.joinpath("tags"))
+        self.data_dir = str(curr_dir.joinpath("data"))
         self.tagslist_path = os.path.join(self.tags_dir, "tagslist.txt")
         self._maps_by_engine = {}
         self._extract_queue = []
@@ -628,7 +628,8 @@ class RefineryCore:
                 print(format_exc())
 
         tag_paths_to_not_rename = set()
-        ignore_filepath = os.path.join(curr_dir, "tag_paths_to_never_rename.txt")
+        ignore_filepath = curr_dir.joinpath(
+            "tag_paths_to_never_rename.txt")
         try:
             with open(ignore_filepath) as file:
                 for line in file:
