@@ -14,12 +14,9 @@ from binilla import editor_constants as e_c
 from refinery import editor_constants as e_c
 from refinery.defs.config_def import bitmap_file_formats, \
      globals_overwrite_gui_names
-from refinery.util import get_cwd, sanitize_path
+from refinery.util import sanitize_path
 
 from supyr_struct.defs.constants import PATHDIV
-
-
-curr_dir = get_cwd(refinery.__file__)
 
 
 class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):

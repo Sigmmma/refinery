@@ -1,6 +1,6 @@
 from refinery.constants import INF, MAX_TAG_NAME_LEN, ACTIVE_INDEX,\
      MAP_TYPE_ANY, MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE, BAD_CLASSES,\
-     INVALID, PATHDIV, UNPRINTABLE
+     INVALID, UNPRINTABLE
 """
 Some of these are here for shorthand, but they are mainly here as
 a reminder to me of what types of folders are expected to be where.

@@ -4,7 +4,7 @@ import os
 import sys
 import webbrowser
 
-from refinery.core import RefineryCore, curr_dir
+from refinery.core import RefineryCore
 
 from pathlib import Path
 from time import time
@@ -44,7 +44,7 @@ VALID_EXTRACT_MODES = frozenset(("tags", "data"))
 
 
 class Refinery(tk.Tk, BinillaWidget, RefineryCore):
-    last_dir = curr_dir
+    last_dir = str(e_c.WORKING_DIR)
 
     config_file = None
     _config_path = Path(e_c.SETTINGS_DIR, "refinery.cfg")
@@ -101,7 +101,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         tk.Tk.__init__(self, *args, **kwargs)
         BinillaWidget.__init__(self, *args, **kwargs)
         try:
-            with open(os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
+            with Path(e_c.REFINERYLIB_DIR, "tad.gsm"[::-1]).open('r', -1, "037") as f:
                 setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
         except Exception:
             pass

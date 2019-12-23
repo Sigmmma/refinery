@@ -1,5 +1,5 @@
 from supyr_struct.defs.frozen_dict import FrozenDict
-from supyr_struct.defs.constants import INVALID, PATHDIV, UNPRINTABLE
+from supyr_struct.defs.constants import INVALID, UNPRINTABLE
 
 # max number of characters long a tag name can be before halo wont accept it
 MAX_TAG_NAME_LEN = 243
