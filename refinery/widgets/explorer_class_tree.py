@@ -15,102 +15,44 @@ from supyr_struct.util import sanitize_path
 
 class ExplorerClassTree(ExplorerHierarchyTree):
 
-    def add_tag_index_refs(self, index_refs, presorted=False):
-        if self.active_map is None: return
+    def get_tag_tree_key(self, tag_index_ref):
+        tag_path_key = ExplorerHierarchyTree.get_tag_tree_key(self, tag_index_ref)
+        if tag_path_key is None:
+            return None
 
-        map_magic = self.active_map.map_magic
-        tags_tree = self.tags_tree
-        tree_id_to_index_ref = self.tree_id_to_index_ref
-
-        if presorted:
-            sorted_index_refs = index_refs
+        if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
+            tag_cls = int_to_fourcc(tag_index_ref.class_1.data)
         else:
-            sorted_index_refs = []
+            tag_cls = INVALID
 
-            # sort the index_refs
-            if isinstance(index_refs, dict):
-                index_refs = index_refs.keys()
+        return str(PureWindowsPath(tag_cls, tag_path_key))
 
-            check_classes = hasattr(self.valid_classes, "__iter__")
-            for b in index_refs:
-                if check_classes:
-                    if int_to_fourcc(b.class_1.data) not in self.valid_classes:
-                        continue
+    def add_tag_index_refs(self, index_refs):
+        if self.active_map is None:
+            return
 
-                if b.class_1.enum_name not in BAD_CLASSES:
-                    tag_cls = int_to_fourcc(b.class_1.data)
-                    ext = ".%s" % b.class_1.enum_name
-                else:
-                    tag_cls = INVALID
-                    ext = ".INVALID"
-
-                tag_path = str(PureWindowsPath(tag_cls, b.path.lower()))
-                sorted_index_refs.append((tag_path + ext, b))
-
-        sorted_index_refs = self.sort_index_refs(sorted_index_refs)
+        sorted_index_refs = self.sort_index_refs(index_refs)
 
         if self.sort_by != "name":
             # add all the directories before files and have them sorted by name
-            tag_classes = []
+            tag_classes = set()
             for index_ref in sorted_index_refs:
                 class_enum = index_ref[1].class_1
-                class_fcc  = int_to_fourcc(class_enum.data)
-                if class_enum.enum_name in BAD_CLASSES:     continue
-                elif tags_tree.exists(class_fcc + PATHDIV): continue
-                elif class_fcc in tag_classes:              continue
-
-                tag_classes.append(class_fcc)
+                if class_enum.enum_name not in BAD_CLASSES:
+                    tag_classes.add(int_to_fourcc(class_enum.data))
 
             for tag_class in sorted(tag_classes):
                 self.add_folder_path([tag_class])
 
-        for index_ref in sorted_index_refs:
-            tag_path, b = index_ref
-            if is_reserved_tag(b): continue
+        for tag_path, tag_index_ref in sorted_index_refs:
+            if is_reserved_tag(tag_index_ref):
+                continue
 
-            tag_path = tag_path.split(PATHDIV, 1)[1]
-            tag_id = b.id & 0xFFff
-            map_magic = self.active_map.map_magic
             tag_cls = INVALID
-            if b.class_1.enum_name not in BAD_CLASSES:
-                tag_cls = int_to_fourcc(b.class_1.data)
+            if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
+                tag_cls = int_to_fourcc(tag_index_ref.class_1.data)
 
-            pointer_converter = self.active_map.map_pointer_converter
-            if hasattr(self.active_map, "bsp_pointer_converters"):
-                pointer_converter = self.active_map.bsp_pointer_converters.get(
-                    tag_id, pointer_converter)
-
-            if b.indexed and pointer_converter:
-                pointer = "not in map"
-            elif pointer_converter is not None:
-                pointer = pointer_converter.v_ptr_to_f_ptr(b.meta_offset)
-            else:
-                pointer = 0
-
-            if not self.active_map.map_magic:
-                # resource cache tag
-                tag_id = b.id
-
-            try:
-                if not self.tags_tree.exists(tag_cls + PATHDIV):
-                    self.add_folder_path([tag_cls])
-
-                cls1 = cls2 = cls3 = ""
-                if b.class_1.enum_name not in BAD_CLASSES:
-                    cls1 = int_to_fourcc(b.class_1.data)
-                if b.class_2.enum_name not in BAD_CLASSES:
-                    cls2 = int_to_fourcc(b.class_2.data)
-                if b.class_3.enum_name not in BAD_CLASSES:
-                    cls3 = int_to_fourcc(b.class_3.data)
-
-                tags_tree.insert(
-                    tag_cls + PATHDIV, 'end', iid=str(tag_id),
-                    tags=("item", ), text=tag_path,
-                    values=(cls1, cls2, cls3, b.meta_offset, pointer, tag_id))
-
-                tree_id_to_index_ref[tag_id] = b
-            except Exception:
-                print(format_exc())
+            self.add_tag_index_ref([tag_cls], tag_path, tag_index_ref)
 
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
