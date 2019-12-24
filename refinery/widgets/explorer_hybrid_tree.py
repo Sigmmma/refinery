@@ -1,5 +1,3 @@
-import tkinter as tk
-
 from pathlib import PureWindowsPath
 
 from refinery.constants import BAD_CLASSES

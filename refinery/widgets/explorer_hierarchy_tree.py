@@ -110,23 +110,17 @@ class ExplorerHierarchyTree(HierarchyFrame):
         new_sorting = {}
         if self.sort_by == "index_id":
             for index_ref in sortable_index_refs:
-                key = index_ref[1].id & 0xFFff
-                same_list = new_sorting.get(key, [])
-                same_list.append(index_ref)
-                new_sorting[key] = same_list
+                new_sorting.setdefault(
+                    index_ref[1].id & 0xFFff, []).append(index_ref)
         elif self.sort_by == "pointer":
             for index_ref in sortable_index_refs:
-                key = index_ref[1].meta_offset
-                same_list = new_sorting.get(key, [])
-                same_list.append(index_ref)
-                new_sorting[key] = same_list
+                new_sorting.setdefault(
+                    index_ref[1].meta_offset, []).append(index_ref)
         else:
             # default to sorting by name
             for index_ref in sortable_index_refs:
-                key = index_ref[0]
-                same_list = new_sorting.get(key, [])
-                same_list.append(index_ref)
-                new_sorting[key] = same_list
+                new_sorting.setdefault(
+                    index_ref[0], []).append(index_ref)
 
         sorted_index_refs = [None]*len(sortable_index_refs)
         i = 0
