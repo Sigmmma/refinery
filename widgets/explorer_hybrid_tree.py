@@ -8,36 +8,19 @@ from refinery.widgets.explorer_class_tree import ExplorerClassTree
 from refinery.widgets.explorer_hierarchy_tree import ExplorerHierarchyTree
 
 from supyr_struct.defs.constants import INVALID
-from supyr_struct.util import sanitize_path
 
 
 class ExplorerHybridTree(ExplorerHierarchyTree):
 
-    def add_tag_index_refs(self, index_refs, presorted=False):
-        if presorted:
-            ExplorerHierarchyTree.add_tag_index_refs(self, index_refs, True)
-            
-        sorted_index_refs = []
+    def get_tag_tree_key(self, tag_index_ref):
+        tag_path_key = ExplorerHierarchyTree.get_tag_tree_key(self, tag_index_ref)
+        if tag_path_key is None:
+            return None
 
-        check_classes = hasattr(self.valid_classes, "__iter__")
-        for b in index_refs:
-            if check_classes:
-                if int_to_fourcc(b.class_1.data) not in self.valid_classes:
-                    continue
+        tag_cls = INVALID
+        if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
+            tag_cls = int_to_fourcc(tag_index_ref.class_1.data)
 
-            if b.class_1.enum_name not in BAD_CLASSES:
-                ext = ".%s" % b.class_1.enum_name
-            else:
-                ext = ".INVALID"
-
-            tag_cls = INVALID
-            if b.class_1.enum_name not in BAD_CLASSES:
-                tag_cls = int_to_fourcc(b.class_1.data)
-
-            tag_path = str(PureWindowsPath(tag_cls, b.path.lower()))
-            sorted_index_refs.append((tag_path + ext, b))
-
-        sorted_index_refs = self.sort_index_refs(sorted_index_refs)
-        ExplorerHierarchyTree.add_tag_index_refs(self, sorted_index_refs, True)
+        return str(PureWindowsPath(tag_cls, tag_path_key))
 
     activate_item = ExplorerClassTree.activate_item

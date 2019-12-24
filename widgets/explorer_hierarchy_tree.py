@@ -97,9 +97,17 @@ class ExplorerHierarchyTree(HierarchyFrame):
         self.sort_by = new_sort
         self.reload(self.active_map)
 
-    def sort_index_refs(self, sortable_index_refs):
-        new_sorting = {}
+    def sort_index_refs(self, index_refs):
+        if isinstance(index_refs, dict):
+            index_refs = index_refs.keys()
 
+        sortable_index_refs = []
+        for b in index_refs:
+            tag_path_key = self.get_tag_tree_key(b)
+            if tag_path_key is not None:
+                sortable_index_refs.append((tag_path_key, b))
+
+        new_sorting = {}
         if self.sort_by == "index_id":
             for index_ref in sortable_index_refs:
                 key = index_ref[1].id & 0xFFff
@@ -381,105 +389,112 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tree.rename_tag_index_refs(renamed_index_refs, old_basename,
                                            new_basename, new_cls, False)
 
-    def add_tag_index_refs(self, index_refs, presorted=False):
-        if self.active_map is None: return
+    def get_tag_tree_key(self, tag_index_ref):
+        if (hasattr(self.valid_classes, "__iter__") and
+            int_to_fourcc(tag_index_ref.class_1.data) not in self.valid_classes):
+            return None
 
-        map_magic = self.active_map.map_magic
-        tags_tree = self.tags_tree
-        tree_id_to_index_ref = self.tree_id_to_index_ref
-
-        if presorted:
-            sorted_index_refs = index_refs
+        if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
+            ext = ".%s" % tag_index_ref.class_1.enum_name
         else:
-            sorted_index_refs = []
-            # sort the index_refs
-            if isinstance(index_refs, dict):
-                index_refs = index_refs.values()
+            ext = ".INVALID"
 
-            check_classes = hasattr(self.valid_classes, "__iter__")
-            for b in index_refs:
-                if check_classes:
-                    if int_to_fourcc(b.class_1.data) not in self.valid_classes:
-                        continue
+        return str(PureWindowsPath(
+            tag_index_ref.path.lower()).with_suffix(ext))
 
-                if b.class_1.enum_name not in BAD_CLASSES:
-                    ext = ".%s" % b.class_1.enum_name
-                else:
-                    ext = ".INVALID"
+    def add_tag_index_refs(self, index_refs):
+        if self.active_map is None:
+            return
 
-                tag_path = str(PureWindowsPath(b.path.lower()))
-                sorted_index_refs.append((tag_path + ext, b))
-
-            sorted_index_refs = self.sort_index_refs(sorted_index_refs)
+        sorted_index_refs = self.sort_index_refs(index_refs)
 
         # add all the directories before files
         # put the directories in sorted by name
-        indices_by_dirpath = {os.path.dirname(sorted_index_refs[i][0]): i
-                              for i in range(len(sorted_index_refs))}
+        indices_by_dirpath = {
+            os.path.dirname(block[0]): i
+            for i, block in enumerate(sorted_index_refs)
+            }
         for dir_path in sorted(indices_by_dirpath):
             b = sorted_index_refs[indices_by_dirpath[dir_path]][1]
             if is_reserved_tag(b): continue
             if dir_path: dir_path += PATHDIV
 
             try:
-                if not tags_tree.exists(dir_path):
+                if not self.tags_tree.exists(dir_path):
                     self.add_folder_path(dir_path.split(PATHDIV))
             except Exception:
                 print(format_exc())
 
-        halo_map = self.active_map
-        is_h1_rsrc_map = (halo_map.is_resource and halo_map.engine in (
-            "halo1pcdemo", "halo1pc", "halo1ce", "halo1yelo"))
-        for index_ref in sorted_index_refs:
-            tag_path, b = index_ref
-            if is_reserved_tag(b): continue
+        for tag_path, tag_index_ref in sorted_index_refs:
+            if is_reserved_tag(tag_index_ref):
+                continue
 
-            dir_path = os.path.dirname(tag_path)
-            if dir_path:
-                dir_path += PATHDIV
+            self.add_tag_index_ref(
+                os.path.dirname(tag_path).split(PATHDIV),
+                os.path.basename(tag_path), tag_index_ref)
 
-            tag_name = os.path.basename(tag_path)
-            tag_id = b.id & 0xFFff
-            pointer_converter = halo_map.map_pointer_converter
-            if hasattr(halo_map, "bsp_pointer_converters"):
-                pointer_converter = halo_map.bsp_pointer_converters.get(
-                    tag_id, pointer_converter)
+    def add_tag_index_ref(self, parent_dir_parts, tag_path, tag_index_ref):
+        tag_id = tag_index_ref.id & 0xFFff
+        if not self.active_map.map_magic:
+            # resource cache tag
+            tag_id = tag_index_ref.id
 
-            if b.indexed and pointer_converter and not is_h1_rsrc_map:
-                pointer = "not in map"
-            elif pointer_converter is not None:
-                pointer = pointer_converter.v_ptr_to_f_ptr(b.meta_offset)
-            else:
-                pointer = 0
+        pointer_converter = self.active_map.map_pointer_converter
+        if hasattr(self.active_map, "bsp_pointer_converters"):
+            pointer_converter = self.active_map.bsp_pointer_converters.get(
+                tag_id, pointer_converter)
 
-            if not halo_map.map_magic:
-                # resource cache tag
-                tag_id = b.id
+        is_h1_rsrc_map = (self.active_map.is_resource and
+                          self.active_map.engine in (
+                              "halo1pcdemo", "halo1pc",
+                              "halo1ce", "halo1yelo"))
 
-            try:
-                cls1 = cls2 = cls3 = ""
-                if b.class_1.enum_name not in BAD_CLASSES:
-                    cls1 = int_to_fourcc(b.class_1.data)
-                if b.class_2.enum_name not in BAD_CLASSES:
-                    cls2 = int_to_fourcc(b.class_2.data)
-                if b.class_3.enum_name not in BAD_CLASSES:
-                    cls3 = int_to_fourcc(b.class_3.data)
-                tags_tree.insert(
-                    # NEED TO DO str OR ELSE THE SCENARIO TAG'S ID WILL
-                    # BE INTERPRETED AS NOTHING AND BE CHANGED TO 'I001'
-                    dir_path, 'end', iid=str(tag_id), text=tag_name, tags=("item", ),
-                    values=(cls1, cls2, cls3, b.meta_offset, pointer, tag_id))
-                tree_id_to_index_ref[tag_id] = b
-            except Exception:
-                print(format_exc())
+        if tag_index_ref.indexed and pointer_converter and not is_h1_rsrc_map:
+            pointer = "not in map"
+        elif pointer_converter is not None:
+            pointer = pointer_converter.v_ptr_to_f_ptr(
+                tag_index_ref.meta_offset)
+        else:
+            pointer = 0
 
-    def add_folder_path(self, dir_paths=(), parent_dir=''):
-        if not dir_paths:
-            return
+        try:
+            cls1 = cls2 = cls3 = ""
+            if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
+                cls1 = int_to_fourcc(tag_index_ref.class_1.data)
+            if tag_index_ref.class_2.enum_name not in BAD_CLASSES:
+                cls2 = int_to_fourcc(tag_index_ref.class_2.data)
+            if tag_index_ref.class_3.enum_name not in BAD_CLASSES:
+                cls3 = int_to_fourcc(tag_index_ref.class_3.data)
 
-        this_dir = dir_paths.pop(0)
+            parent_iid = self.add_folder_path(parent_dir_parts)
+            self.tags_tree.insert(
+                # NEED TO DO str OR ELSE THE SCENARIO TAG'S ID WILL
+                # BE INTERPRETED AS NOTHING AND BE CHANGED TO 'I001'
+                parent_iid, 'end', iid=str(tag_id),
+                tags=("item", ), text=tag_path,
+                values=(cls1, cls2, cls3,
+                        tag_index_ref.meta_offset, pointer, tag_id))
+            self.tree_id_to_index_ref[tag_id] = tag_index_ref
+        except Exception:
+            print(format_exc())
+
+    def add_folder_path(self, dir_parts):
+        abs_dir_path = PATHDIV.join(dir_parts)
+        if abs_dir_path:
+            abs_dir_path += PATHDIV
+
+        if self.tags_tree.exists(abs_dir_path):
+            return abs_dir_path
+
+        return self._add_folder_path(dir_parts, '')
+
+    def _add_folder_path(self, dir_parts, parent_dir):
+        if not dir_parts:
+            return parent_dir
+
+        this_dir = dir_parts.pop(0)
         if not this_dir:
-            return
+            return parent_dir
 
         abs_dir_path = parent_dir + this_dir
         if abs_dir_path:
@@ -488,9 +503,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if not self.tags_tree.exists(abs_dir_path):
             # add the directory to the treeview
             self.tags_tree.insert(
-                parent_dir, 'end', iid=abs_dir_path, tags=("item", ), text=this_dir)
+                parent_dir, 'end', iid=abs_dir_path,
+                tags=("item", ), text=this_dir)
 
-        self.add_folder_path(dir_paths, abs_dir_path)
+        return self._add_folder_path(dir_parts, abs_dir_path)
 
     open_selected = close_selected = no_op
 
