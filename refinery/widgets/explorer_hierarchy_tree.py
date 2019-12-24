@@ -12,8 +12,6 @@ from refinery.util import int_to_fourcc, is_reserved_tag
 from refinery.windows.actions_window import RefineryActionsWindow
 
 from supyr_struct.defs.frozen_dict import FrozenDict
-from supyr_struct.defs.constants import PATHDIV
-from supyr_struct.util import sanitize_path
 
 no_op = lambda *a, **kw: None
 
@@ -192,10 +190,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if self.active_map is None:
             return
 
-        engine = self.active_map.engine
         if self.queue_tree is None:
             return
-        elif "halo2" in engine and engine != "halo2vista":
+        elif ("halo2" in self.active_map.engine and
+              self.active_map.engine != "halo2vista"):
             print("Cannot interact with Halo 2 Xbox maps.")
             return
 
@@ -221,13 +219,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
-        if self.active_map is None:
+        if self.active_map is None or self.queue_tree is None:
             return
-
-        engine = self.active_map.engine
-        if self.queue_tree is None:
-            return
-        elif "halo2" in engine and engine != "halo2vista":
+        elif ("halo2" in self.active_map.engine and
+              self.active_map.engine != "halo2vista"):
             print("Cannot interact with Halo 2 Xbox maps.")
             return
 
@@ -303,7 +298,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                     new_cls = None
 
             # when renaming only one tag, the basenames COULD BE the full names
-            old_name = sanitize_path(index_ref.path.lower())
+            old_name = str(PureWindowsPath(index_ref.path.lower()))
             new_name = old_name.replace(old_basename, new_basename, 1)
             if not old_name.startswith(old_basename):
                 # tag_path doesnt have the base_name in it
@@ -410,22 +405,16 @@ class ExplorerHierarchyTree(HierarchyFrame):
             }
         for dir_path in sorted(indices_by_dirpath):
             b = sorted_index_refs[indices_by_dirpath[dir_path]][1]
-            if is_reserved_tag(b): continue
-            if dir_path: dir_path += PATHDIV
-
-            try:
-                if not self.tags_tree.exists(dir_path):
-                    self.add_folder_path(dir_path.split(PATHDIV))
-            except Exception:
-                print(format_exc())
+            if not is_reserved_tag(b):
+                self.add_folder_path(PureWindowsPath(dir_path).parts)
 
         for tag_path, tag_index_ref in sorted_index_refs:
             if is_reserved_tag(tag_index_ref):
                 continue
 
+            tag_path = PureWindowsPath(tag_path)
             self.add_tag_index_ref(
-                os.path.dirname(tag_path).split(PATHDIV),
-                os.path.basename(tag_path), tag_index_ref)
+                tag_path.parent.parts, tag_path.name, tag_index_ref)
 
     def add_tag_index_ref(self, parent_dir_parts, tag_path, tag_index_ref):
         tag_id = tag_index_ref.id & 0xFFff
@@ -473,14 +462,15 @@ class ExplorerHierarchyTree(HierarchyFrame):
             print(format_exc())
 
     def add_folder_path(self, dir_parts):
-        abs_dir_path = PATHDIV.join(dir_parts)
+        abs_dir_path = str(PureWindowsPath(*dir_parts))
         if abs_dir_path:
-            abs_dir_path += PATHDIV
+            abs_dir_path += "\\"  # directories must end with a backslash.
+            #                       this is how we distinguish dirs from files
 
         if self.tags_tree.exists(abs_dir_path):
             return abs_dir_path
 
-        return self._add_folder_path(dir_parts, '')
+        return self._add_folder_path(list(dir_parts), '')
 
     def _add_folder_path(self, dir_parts, parent_dir):
         if not dir_parts:
@@ -492,7 +482,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         abs_dir_path = parent_dir + this_dir
         if abs_dir_path:
-            abs_dir_path += PATHDIV
+            abs_dir_path += "\\"  # directories must end with a backslash.
+            #                       this is how we distinguish dirs from files
 
         if not self.tags_tree.exists(abs_dir_path):
             # add the directory to the treeview

@@ -1,15 +1,13 @@
 import os
 
 from pathlib import PureWindowsPath
-from supyr_struct.defs.constants import PATHDIV, INVALID
+from supyr_struct.defs.constants import INVALID
 from traceback import format_exc
 
 from refinery.constants import BAD_CLASSES
 from refinery.util import int_to_fourcc, is_reserved_tag
 from refinery.widgets.explorer_hierarchy_tree import ask_extract_settings,\
      ExplorerHierarchyTree
-
-from supyr_struct.util import sanitize_path
 
 
 class ExplorerClassTree(ExplorerHierarchyTree):
@@ -57,7 +55,11 @@ class ExplorerClassTree(ExplorerHierarchyTree):
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
-        if self.queue_tree is None:
+        if self.active_map is None or self.queue_tree is None:
+            return
+        elif ("halo2" in self.active_map.engine and
+              self.active_map.engine != "halo2vista"):
+            print("Cannot interact with Halo 2 Xbox maps.")
             return
 
         def_settings = {}
@@ -80,9 +82,16 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                 tag_index_ref  = None
                 tag_index_refs = self._compile_list_of_selected(iid)
 
-            title, path_string = item_name.split(PATHDIV, 1)
-            if path_string:
-                title = None
+            path_parts = PureWindowsPath(item_name).parts
+            if not path_parts:
+                continue
+
+            title, path_string = None, ""
+            if len(path_parts) == 1:
+                title = path_parts[0]
+            else:
+                path_string = str(PureWindowsPath(*path_parts[1:]))
+
             def_settings['rename_string'] = path_string
 
             # ask for extraction settings
