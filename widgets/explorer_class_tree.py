@@ -1,5 +1,4 @@
 import os
-import tkinter as tk
 
 from pathlib import PureWindowsPath
 from supyr_struct.defs.constants import PATHDIV, INVALID
@@ -33,16 +32,15 @@ class ExplorerClassTree(ExplorerHierarchyTree):
 
         sorted_index_refs = self.sort_index_refs(index_refs)
 
-        if self.sort_by != "name":
-            # add all the directories before files and have them sorted by name
-            tag_classes = set()
-            for index_ref in sorted_index_refs:
-                class_enum = index_ref[1].class_1
-                if class_enum.enum_name not in BAD_CLASSES:
-                    tag_classes.add(int_to_fourcc(class_enum.data))
+        # add all the directories before files and have them sorted by name
+        tag_classes = set()
+        for index_ref in sorted_index_refs:
+            class_enum = index_ref[1].class_1
+            if class_enum.enum_name not in BAD_CLASSES:
+                tag_classes.add(int_to_fourcc(class_enum.data))
 
-            for tag_class in sorted(tag_classes):
-                self.add_folder_path([tag_class])
+        for tag_class in sorted(tag_classes):
+            self.add_folder_path([tag_class])
 
         for tag_path, tag_index_ref in sorted_index_refs:
             if is_reserved_tag(tag_index_ref):
@@ -52,6 +50,8 @@ class ExplorerClassTree(ExplorerHierarchyTree):
             if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
                 tag_cls = int_to_fourcc(tag_index_ref.class_1.data)
 
+            tag_path = str(PureWindowsPath(
+                *PureWindowsPath(tag_path).parts[1:]))
             self.add_tag_index_ref([tag_cls], tag_path, tag_index_ref)
 
     def activate_item(self, e=None):
