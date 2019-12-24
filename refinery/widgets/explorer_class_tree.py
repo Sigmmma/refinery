@@ -1,13 +1,16 @@
 import os
 import tkinter as tk
 
+from pathlib import PureWindowsPath
 from supyr_struct.defs.constants import PATHDIV, INVALID
 from traceback import format_exc
 
 from refinery.constants import BAD_CLASSES
-from refinery.util import sanitize_path, int_to_fourcc, is_reserved_tag
+from refinery.util import int_to_fourcc, is_reserved_tag
 from refinery.widgets.explorer_hierarchy_tree import ask_extract_settings,\
      ExplorerHierarchyTree
+
+from supyr_struct.util import sanitize_path
 
 
 class ExplorerClassTree(ExplorerHierarchyTree):
@@ -41,11 +44,8 @@ class ExplorerClassTree(ExplorerHierarchyTree):
                     tag_cls = INVALID
                     ext = ".INVALID"
 
-                tag_path = b.path.lower()
-                if PATHDIV == "/":
-                    tag_path = sanitize_path(tag_path)
-                sorted_index_refs.append(
-                    (tag_cls + PATHDIV + tag_path + ext, b))
+                tag_path = str(PureWindowsPath(tag_cls, b.path.lower()))
+                sorted_index_refs.append((tag_path + ext, b))
 
         sorted_index_refs = self.sort_index_refs(sorted_index_refs)
 

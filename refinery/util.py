@@ -8,8 +8,7 @@ from pathlib import WindowsPath
 from reclaimer.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS,\
      is_reserved_tag, is_protected_tag
 from binilla.util import get_cwd
-from supyr_struct.util import sanitize_path, is_path_empty,\
-     int_to_fourcc, fourcc_to_int
+from supyr_struct.util import is_path_empty, int_to_fourcc, fourcc_to_int
 
 
 INVALID_WINDOWS_CHAR_SUB = re.compile('[:*?"<>|]')

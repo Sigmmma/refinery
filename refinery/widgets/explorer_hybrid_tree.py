@@ -1,11 +1,14 @@
 import tkinter as tk
 
+from pathlib import PureWindowsPath
+
 from refinery.constants import BAD_CLASSES
-from refinery.util import sanitize_path, int_to_fourcc
+from refinery.util import int_to_fourcc
 from refinery.widgets.explorer_class_tree import ExplorerClassTree
 from refinery.widgets.explorer_hierarchy_tree import ExplorerHierarchyTree
 
-from supyr_struct.defs.constants import PATHDIV, INVALID
+from supyr_struct.defs.constants import INVALID
+from supyr_struct.util import sanitize_path
 
 
 class ExplorerHybridTree(ExplorerHierarchyTree):
@@ -31,11 +34,8 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
             if b.class_1.enum_name not in BAD_CLASSES:
                 tag_cls = int_to_fourcc(b.class_1.data)
 
-            tag_path = b.path.lower()
-            if PATHDIV == "/":
-                tag_path = sanitize_path(tag_path)
-            sorted_index_refs.append(
-                (tag_cls + PATHDIV + tag_path + ext, b))
+            tag_path = str(PureWindowsPath(tag_cls, b.path.lower()))
+            sorted_index_refs.append((tag_path + ext, b))
 
         sorted_index_refs = self.sort_index_refs(sorted_index_refs)
         ExplorerHierarchyTree.add_tag_index_refs(self, sorted_index_refs, True)

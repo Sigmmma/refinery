@@ -14,9 +14,9 @@ from binilla import editor_constants as e_c
 from refinery import editor_constants as e_c
 from refinery.defs.config_def import bitmap_file_formats, \
      globals_overwrite_gui_names
-from refinery.util import sanitize_path
 
 from supyr_struct.defs.constants import PATHDIV
+from supyr_struct.util import sanitize_path
 
 
 class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
