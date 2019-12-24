@@ -2,16 +2,18 @@ import os
 import refinery
 import tkinter as tk
 
+from pathlib import PureWindowsPath
 from traceback import format_exc
 
 from mozzarilla.widgets.directory_frame import HierarchyFrame
 from refinery.constants import MAX_TAG_NAME_LEN, BAD_CLASSES,\
      H1_TAG_SUPERCLASSES
-from refinery.util import sanitize_path, int_to_fourcc, is_reserved_tag
+from refinery.util import int_to_fourcc, is_reserved_tag
 from refinery.windows.actions_window import RefineryActionsWindow
 
 from supyr_struct.defs.frozen_dict import FrozenDict
 from supyr_struct.defs.constants import PATHDIV
+from supyr_struct.util import sanitize_path
 
 no_op = lambda *a, **kw: None
 
@@ -405,9 +407,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 else:
                     ext = ".INVALID"
 
-                tag_path = b.path.lower()
-                if PATHDIV == "/":
-                    tag_path = sanitize_path(tag_path)
+                tag_path = str(PureWindowsPath(b.path.lower()))
                 sorted_index_refs.append((tag_path + ext, b))
 
             sorted_index_refs = self.sort_index_refs(sorted_index_refs)

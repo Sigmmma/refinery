@@ -50,8 +50,9 @@ from refinery.heuristic_deprotection.constants import VERY_HIGH_PRIORITY
 from refinery.heuristic_deprotection.functions import heuristic_deprotect
 from refinery.tag_index.tag_path_handler import TagPathHandler
 from refinery.tag_index.tag_path_detokenizer import TagPathDetokenizer
-from refinery.util import inject_file_padding, sanitize_path, get_cwd,\
-     int_to_fourcc
+from refinery.util import inject_file_padding, get_cwd, int_to_fourcc
+
+from supyr_struct.util import sanitize_path
 
 
 curr_dir = get_cwd(__file__)

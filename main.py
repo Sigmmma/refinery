@@ -30,13 +30,14 @@ from refinery.widgets.queue_tree import QueueTree
 from refinery.windows.settings_window import RefinerySettingsWindow
 from refinery.windows.rename_window import RefineryRenameWindow
 from refinery.windows.crc_window import RefineryChecksumEditorWindow
-from refinery.util import sanitize_path, is_path_empty
+from refinery.util import is_path_empty
 
 from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
      h3_data_extractors
 
 from supyr_struct.defs import constants as supyr_constants
 from supyr_struct.field_types import FieldType
+from supyr_struct.util import sanitize_path
 
 
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
