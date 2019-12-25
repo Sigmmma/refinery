@@ -19,45 +19,6 @@ TREE_SORT_METHODS = FrozenDict(
     {0: "name", 4:"pointer", 5:"pointer", 6:"index_id"})
 
 
-def ask_extract_settings(parent, def_vars=None, **kwargs):
-    if def_vars is None:
-        def_vars = {}
-
-    settings_vars = dict(
-        recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
-        do_printout=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
-        autoload_resources=tk.IntVar(parent), decode_adpcm=tk.IntVar(parent),
-        bitmap_extract_keep_alpha=tk.IntVar(parent),
-        generate_comp_verts=tk.IntVar(parent), generate_uncomp_verts=tk.IntVar(parent),
-        accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
-        extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
-        rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
-        tagslist_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
-        skip_seen_tags_during_queue_processing=tk.IntVar(parent),
-        disable_safe_mode=tk.IntVar(parent), disable_tag_cleaning=tk.IntVar(parent),
-
-        bitmap_extract_format=tk.StringVar(parent),
-        globals_overwrite_mode=tk.StringVar(parent),
-        )
-
-    settings_vars['rename_string'].set(def_vars.pop('rename_string', ''))
-
-    for k in def_vars:
-        if k in settings_vars:
-            settings_vars[k].set(def_vars[k].get())
-
-    dir_type = def_vars.get("extract_mode").get() + "_dir"
-    if dir_type in def_vars:
-        settings_vars["out_dir"].set(def_vars[dir_type].get())
-
-    w = RefineryActionsWindow(parent, settings=settings_vars, **kwargs)
-
-    # make the parent freeze what it's doing until we're destroyed
-    parent.wait_window(w)
-
-    return settings_vars
-
-
 class ExplorerHierarchyTree(HierarchyFrame):
     active_map = None
     tags_tree = None
@@ -203,18 +164,18 @@ class ExplorerHierarchyTree(HierarchyFrame):
             if self.app_root.running:
                 return
 
-        item_name = self.active_map.map_header.map_name
+        map_name = self.active_map.map_header.map_name
 
         # ask for extraction settings
-        settings = ask_extract_settings(
-            self, def_settings, title=item_name, renamable=False)
+        settings, _, __ = self.show_actions_dialog(
+            "", renamable=False, title=map_name, defaults=def_settings)
 
         if settings['accept_settings'].get():
             settings['tag_index_refs'] = self._compile_list_of_selected("")
-            settings['title'] = item_name
+            settings['title'] = map_name
             self.queue_tree.add_to_queue("%s: %s: %s" % (
                 settings['extract_mode'].get(), self.active_map.engine,
-                item_name), settings)
+                map_name), settings)
 
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
@@ -246,24 +207,67 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tag_index_ref = None
                 tag_index_refs = self._compile_list_of_selected(iid)
 
-            def_settings['rename_string'] = item_name
-
             # ask for extraction settings
-            settings = ask_extract_settings(self, def_settings, title=item_name,
-                                            tag_index_ref=tag_index_ref)
+            settings, original_name, title = self.show_actions_dialog(
+                item_name, defaults=def_settings, tag_index_ref=tag_index_ref)
 
             if settings['accept_rename'].get():
-                #new_name = os.path.splitext(settings['rename_string'].get())[0]
-                new_name = settings['rename_string'].get()
-                new_type = settings['newtype_string'].get()
+                item_name = str(PureWindowsPath(
+                    tags_tree.parent(iid),
+                    tags_tree.item(iid, 'text')).with_suffix(""))
+
                 self.rename_tag_index_refs(
-                    tag_index_refs, os.path.splitext(item_name)[0], new_name, new_type)
+                    tag_index_refs, original_name,
+                    settings['rename_string'].get(),
+                    settings['newtype_string'].get())
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
-                settings['title'] = item_name
+                settings['title'] = title
                 self.queue_tree.add_to_queue(
-                    "%s: map: %s: %s" % (settings['extract_mode'].get(),
-                                         map_name, item_name), settings)
+                    "%s: map: %s: %s" % (
+                        settings['extract_mode'].get(),
+                        map_name, item_name), settings)
+
+    def show_actions_dialog(self, item_name, **kwargs):
+        defaults = kwargs.pop("defaults", {})
+
+        kwargs.setdefault('title', item_name)
+
+        settings_vars = dict(
+            recursive=tk.IntVar(self), overwrite=tk.IntVar(self),
+            do_printout=tk.IntVar(self), accept_rename=tk.IntVar(self),
+            autoload_resources=tk.IntVar(self), decode_adpcm=tk.IntVar(self),
+            bitmap_extract_keep_alpha=tk.IntVar(self),
+            generate_comp_verts=tk.IntVar(self), generate_uncomp_verts=tk.IntVar(self),
+            accept_settings=tk.IntVar(self), out_dir=tk.StringVar(self),
+            extract_mode=tk.StringVar(self, "tags"), halo_map=self.active_map,
+            rename_string=tk.StringVar(self), newtype_string=tk.StringVar(self),
+            tagslist_path=tk.StringVar(self), allow_corrupt=tk.IntVar(self),
+            skip_seen_tags_during_queue_processing=tk.IntVar(self),
+            disable_safe_mode=tk.IntVar(self), disable_tag_cleaning=tk.IntVar(self),
+
+            bitmap_extract_format=tk.StringVar(self),
+            globals_overwrite_mode=tk.StringVar(self),
+            )
+
+        settings_vars['rename_string'].set(
+            defaults.pop('name_string', item_name))
+
+        for k in defaults:
+            if k in settings_vars:
+                settings_vars[k].set(defaults[k].get())
+
+        dir_type = defaults.get("extract_mode").get() + "_dir"
+        if dir_type in defaults:
+            settings_vars["out_dir"].set(defaults[dir_type].get())
+
+        w = RefineryActionsWindow(self, settings=settings_vars, **kwargs)
+        original_name, title = str(w.original_name), w.title()
+
+        # make the tree freeze until the settings ask window is done
+        self.wait_window(w)
+
+        return settings_vars, original_name, title
 
     def rename_tag_index_refs(self, index_refs, old_basename,
                               new_basename, new_cls, rename_other_trees=True):
