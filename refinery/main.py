@@ -37,7 +37,6 @@ from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
 
 from supyr_struct.defs import constants as supyr_constants
 from supyr_struct.field_types import FieldType
-from supyr_struct.util import sanitize_path
 
 
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
@@ -1125,13 +1124,14 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         self._running = True
         try:
-            save_path, ext = os.path.splitext(save_path)
-            save_path = sanitize_path(save_path + (ext if ext else (
-                '.yelo' if 'yelo' in halo_map.engine else '.map')))
+            save_path = Path(save_path)
+            if not save_path.suffix:
+                save_path = save_path.with_suffix(
+                    '.yelo' if 'yelo' in halo_map.engine else '.map')
 
             start = time()
 
-            RefineryCore.deprotect(self, save_path, map_name, engine, **kw)
+            RefineryCore.deprotect(self, str(save_path), map_name, engine, **kw)
             print("Completed. Took %s seconds." % round(time() - start, 1))
         except Exception:
             print(format_exc())
@@ -1396,7 +1396,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if not fps:
             return
 
-        fps = tuple(sanitize_path(fp) for fp in fps)
+        fps = tuple(str(Path(fp)) for fp in fps)
         self.last_dir = os.path.dirname(fps[0])
 
         self._running = True

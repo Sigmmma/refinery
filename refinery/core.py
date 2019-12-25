@@ -3,6 +3,7 @@ import shutil
 import sys
 import zlib
 
+from pathlib import Path, PureWindowsPath
 from struct import unpack
 from time import time
 from traceback import format_exc
@@ -333,10 +334,14 @@ class RefineryCore:
         elif not save_path:
             save_path = halo_map.filepath
 
-        save_dir  = os.path.dirname(save_path)
-        save_path, ext = os.path.splitext(save_path)
-        save_path = sanitize_path(save_path + (ext if ext else (
-            '.yelo' if 'yelo' in halo_map.engine else '.map')))
+        save_path = Path(save_path)
+        if not save_path.suffix:
+            save_path = save_path.with_suffix(
+                '.yelo' if 'yelo' in halo_map.engine else '.map')
+
+        save_dir  = str(save_path.parent)
+        save_path = str(save_path)
+        
         os.makedirs(save_dir, exist_ok=True)
 
         try:
