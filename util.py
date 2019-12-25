@@ -3,7 +3,7 @@ import re
 import shutil
 import traceback
 
-from pathlib import WindowsPath
+from pathlib import PureWindowsPath
 
 from reclaimer.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS,\
      is_reserved_tag, is_protected_tag
@@ -105,8 +105,7 @@ def intra_file_move(file, dstoff_cpysize_by_srcoff, padchar=b'\xCA'):
 
 
 def sanitize_win32_path(name):
-    name = INVALID_WINDOWS_CHAR_SUB.sub('', name)
-    return str(WindowsPath(name)).lower()
+    return PureWindowsPath(INVALID_WINDOWS_CHAR_SUB.sub('', name))
 
 
 def get_unique_name(collection, name="", ext="", curr_value=object()):

@@ -11,7 +11,8 @@ class MinPriority:
 
 
 def sanitize_name(name):
-    return sanitize_win32_path(name).replace("~", "").replace("\\", " ").strip()
+    return str(sanitize_win32_path(name)).lower()\
+           .replace("~", "").replace("\\", " ").strip()
 
 
 def sanitize_name_piece(name, default_name):
