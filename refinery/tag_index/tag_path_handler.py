@@ -1,6 +1,6 @@
 import os
-# TODO: Fix this module to use pathlib instead of os for path compatability
 
+from pathlib import PureWindowsPath
 from refinery.constants import INF
 from refinery.util import sanitize_win32_path, get_unique_name
 from supyr_struct.util import str_to_identifier
@@ -166,7 +166,7 @@ class TagPathHandler():
             new_path_no_ext += "protected %s" % index
 
         ext = "." + tag_ref.class_1.enum_name.lower()
-        new_path_no_ext = sanitize_win32_path(new_path_no_ext).strip()
+        new_path_no_ext = str(sanitize_win32_path(new_path_no_ext.lower())).strip()
 
         if ensure_unique_name and self._path_map.get(new_path_no_ext + ext) not in (None, index):
             path_pieces = new_path_no_ext.split("\\")
@@ -244,13 +244,13 @@ class TagPathHandler():
         print_errors = kw.pop("print_errors", False)
 
         for tag_path, index in self._path_map.items():
-            tag_path = sanitize_win32_path(tag_path)
-            if len(os.path.splitext(tag_path)[0]) < max_len:
+            tag_path = sanitize_win32_path(tag_path).lower()
+            if len(str(tag_path.with_suffix(""))) < max_len:
                 # don't rename tags below the limit. use None as the key so
                 # the tag path is still considered when chosing unique names
                 index = None
 
-            tag_path_pieces = tag_path.split("\\")
+            tag_path_pieces = tag_path.parts
             curr_dir = paths
             # 1 char for \, 1 for potential ~, 1 for potential number,
             # and 1 for at least one name character
@@ -368,7 +368,8 @@ class TagPathHandler():
 
                 # reached a filename that needs to be renamed. rename the item and continue.
                 tag_path = val.path
-                new_tag_path = "\\".join(path_pieces + os.path.splitext(name)[: 1])
+                new_tag_path = PureWindowsPath(
+                    *path_pieces).with_suffix(os.path.splitext(name)[1])
                 if do_printout:
                     print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
                           (len(tag_path), len(new_tag_path), tag_path, new_tag_path))

@@ -1,6 +1,6 @@
 __all__ = ("get_filtered_tag_index_ids", "TagPathDetokenizer", )
 
-from pathlib import WindowsPath
+from pathlib import PureWindowsPath
 
 from refinery.tag_index.tag_path_tokens import tokens_to_tag_paths,\
      ALL_TOKENS, TOKEN_SCNR, TOKEN_MATG, TOKEN_ALL,\
@@ -41,7 +41,7 @@ class TagPathDetokenizer(list):
                 tag_index_ids.add(tag_id)
                 continue
 
-            tag_path = WindowsPath(tag_id)
+            tag_path = PureWindowsPath(tag_id)
             tag_class = tag_path.suffix
             if len(tag_path.parts) > 1:
                 # tag path has multiple parts. use the whole
