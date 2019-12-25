@@ -3,6 +3,7 @@ import refinery
 import tkinter.font
 import tkinter as tk
 
+from pathlib import Path
 from tkinter.filedialog import asksaveasfilename, askdirectory
 from tkinter import ttk
 from traceback import format_exc
@@ -14,9 +15,6 @@ from binilla import editor_constants as e_c
 from refinery import editor_constants as e_c
 from refinery.defs.config_def import bitmap_file_formats, \
      globals_overwrite_gui_names
-
-from supyr_struct.defs.constants import PATHDIV
-from supyr_struct.util import sanitize_path
 
 
 class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
@@ -403,11 +401,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         if not dirpath:
             return
 
-        dirpath = sanitize_path(dirpath)
-        if not dirpath.endswith(PATHDIV):
-            dirpath += PATHDIV
-
-        self.tags_dir.set(dirpath)
+        self.tags_dir.set(str(Path(dirpath)))
 
     def data_dir_browse(self):
         dirpath = askdirectory(initialdir=self.data_dir.get(), parent=self,
@@ -416,11 +410,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         if not dirpath:
             return
 
-        dirpath = sanitize_path(dirpath)
-        if not dirpath.endswith(PATHDIV):
-            dirpath += PATHDIV
-
-        self.data_dir.set(dirpath)
+        self.data_dir.set(str(Path(dirpath)))
 
     def tags_list_browse(self):
         try:
@@ -435,4 +425,4 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         if not dirpath:
             return
 
-        self.tagslist_path.set(sanitize_path(dirpath))
+        self.tagslist_path.set(str(Path(dirpath)))

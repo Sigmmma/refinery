@@ -21,4 +21,4 @@ class ExplorerHybridTree(ExplorerHierarchyTree):
 
         return str(PureWindowsPath(tag_cls, tag_path_key))
 
-    activate_item = ExplorerClassTree.activate_item
+    show_actions_dialog = ExplorerClassTree.show_actions_dialog
