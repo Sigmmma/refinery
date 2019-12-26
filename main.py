@@ -49,6 +49,12 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
     _last_dir = e_c.WORKING_DIR
 
+    path_property_names = frozenset((
+        "tags_dir", "data_dir", "tagslist_dir", "active_map_path",
+        "last_dir", "config_path", "config_path",
+        "icon_filepath", "app_bitmap_filepath",
+        ))
+
     config_version = 2
     app_name = "Refinery"
     version = refinery.__version__
@@ -125,7 +131,6 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.edit_all_fields = tk.IntVar(self)
         self.allow_corrupt = tk.IntVar(self)
 
-        self._active_map_path = tk.StringVar(self)
         self._active_map_name = tk.StringVar(self)
         self._active_engine_name = tk.StringVar(self)
 
@@ -437,7 +442,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         try:
             if attr_name in object.__getattribute__(self, "tk_vars",):
                 val = object.__getattribute__(self, "_" + attr_name).get()
-                if attr_name in ("tags_dir", "data_dir", "tagslist_dir"):
+                if attr_name in self.path_property_names:
                     val = Path(val)
 
                 return val
@@ -1238,8 +1243,9 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         self._running = True
         try:
-            self.save_map(save_path, prompt_strings_expand=True,
-                          prompt_internal_rename=True)
+            save_path = self.save_map(
+                save_path, prompt_strings_expand=True,
+                prompt_internal_rename=True)
         except Exception:
             print(format_exc())
         self._running = False
