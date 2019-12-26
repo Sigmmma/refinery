@@ -191,18 +191,6 @@ class RefineryCore:
         self._maps_by_engine = {}
         self._extract_queue = []
 
-    def enqueue(self, operation="extract_tags", **kwargs):
-        if isinstance(operation, RefineryQueueItem):
-            self._extract_queue.append(operation)
-            return
-        kwargs.setdefault("engine", ACTIVE_INDEX)
-        kwargs.setdefault("map_name", ACTIVE_INDEX)
-        self._extract_queue.append(RefineryQueueItem(operation, **kwargs))
-
-    def dequeue(self, index=0):
-        if index in range(len(self._extract_queue)):
-            return self._extract_queue.pop(index)
-
     @property
     def maps_by_engine(self): return self._maps_by_engine
     @property
@@ -214,6 +202,18 @@ class RefineryCore:
     def active_maps(self): return self.maps_by_engine.get(ACTIVE_INDEX, {})
     @property
     def active_map(self):  return self.active_maps.get(ACTIVE_INDEX)
+
+    def enqueue(self, operation="extract_tags", **kwargs):
+        if isinstance(operation, RefineryQueueItem):
+            self._extract_queue.append(operation)
+            return
+        kwargs.setdefault("engine", ACTIVE_INDEX)
+        kwargs.setdefault("map_name", ACTIVE_INDEX)
+        self._extract_queue.append(RefineryQueueItem(operation, **kwargs))
+
+    def dequeue(self, index=0):
+        if index in range(len(self._extract_queue)):
+            return self._extract_queue.pop(index)
 
     def set_active_engine(self, name=None, map_name=None):
         if name == ACTIVE_INDEX and map_name == ACTIVE_INDEX:
