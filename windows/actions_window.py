@@ -4,7 +4,7 @@ import tkinter as tk
 
 from pathlib import Path, PureWindowsPath
 from tkinter import messagebox
-from tkinter.filedialog import asksaveasfilename, askdirectory
+from binilla.windows.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
 from binilla.widgets.binilla_widget import BinillaWidget

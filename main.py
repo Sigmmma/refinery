@@ -9,7 +9,7 @@ from refinery.core import RefineryCore
 from pathlib import Path
 from time import time
 from tkinter import messagebox
-from tkinter.filedialog import askopenfilename, askopenfilenames,\
+from binilla.windows.filedialog import askopenfilename, askopenfilenames,\
      asksaveasfilename
 from traceback import format_exc
 

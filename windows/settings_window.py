@@ -4,7 +4,7 @@ import tkinter.font
 import tkinter as tk
 
 from pathlib import Path
-from tkinter.filedialog import asksaveasfilename, askdirectory
+from binilla.windows.filedialog import asksaveasfilename, askdirectory
 from tkinter import ttk
 from traceback import format_exc
 
@@ -122,7 +122,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         self.generate_uncomp_verts_cbtn = tk.Checkbutton(
             self.tag_fixup_frame, text="Generate uncompressed lightmap vertices",
             variable=self.generate_uncomp_verts)
-        
+
         self.dont_touch_frame = tk.LabelFrame(
             self.tag_fixup_frame,
             text="ONLY CHECK THESE IF YOU ARE NOT DEALING WITH PROTECTED MAPS")
@@ -231,7 +231,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         self.print_heuristic_progress_cbtn = tk.Checkbutton(
             self.heuristics_frame, text=("Print heuristic tag path changes"),
             variable=self.print_heuristic_name_changes, justify='left')
-        
+
 
         font_frame_widgets = {}
         for font_type in sorted(self.font_settings):
