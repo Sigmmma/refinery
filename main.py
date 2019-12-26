@@ -32,9 +32,6 @@ from refinery.windows.rename_window import RefineryRenameWindow
 from refinery.windows.crc_window import RefineryChecksumEditorWindow
 from refinery.util import is_path_empty
 
-from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
-     h3_data_extractors
-
 from supyr_struct.defs import constants as supyr_constants
 from supyr_struct.field_types import FieldType
 
@@ -707,23 +704,15 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             if new_mode not in VALID_EXTRACT_MODES:
                 new_mode = "tags"
 
-        if new_mode not in VALID_EXTRACT_MODES:
-            return
-        elif new_mode == "tags" or not self.map_loaded:
+        valid_classes = None
+        if new_mode == "tags":
             next_mode = "data"
-            valid_classes = None
-        else:
+        elif new_mode == "data":
             next_mode = "tags"
-            engine = self.active_map.engine
-            if   ("halo1" in engine or "stubbs" in engine or
-                  "shadowrun" in engine):
-                valid_classes = h1_data_extractors.keys()
-            elif "halo2" in engine:
-                valid_classes = h2_data_extractors.keys()
-            elif "halo3" in engine:
-                valid_classes = h3_data_extractors.keys()
-            else:
-                return
+            if self.active_map is not None:
+                valid_classes = self.active_map.data_extractors.keys()
+        else:
+            return
 
         self.menubar.entryconfig(5, label="Switch to %s extraction" % next_mode)
 
@@ -887,6 +876,11 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         RefineryCore.set_active_map(self, map_name)
         if self.active_map is not prev_map or force_reload:
             self.display_map_info()
+            if self.active_map is not None:
+                valid_classes = self.active_map.data_extractors.keys()
+                for tree in self.tree_frames.values():
+                    tree.valid_classes = valid_classes
+
             self.reload_explorers()
 
     def reload_engine_select_options(self):
