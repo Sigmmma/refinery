@@ -1427,7 +1427,7 @@ class RefineryCore:
             if rsrc_map.is_resource or rsrc_map is halo_map:
                 rsrc_map.clear_map_cache()
 
-        if tagslist_path:
+        if not is_path_empty(tagslist_path):
             tagslist = "%s tags in: %s\n%s" % (
                 len(extracted), out_dir, tagslist)
             if self.write_tagslist(tagslist, tagslist_path):
@@ -1484,7 +1484,7 @@ class RefineryCore:
             raise InvalidTagIdError('tag_id "%s" is not in the tag index.' % tag_id)
 
         tag_index_ref = tag_index_array[tag_id]
-        tag_path = PureWindowsPath(tag_index_ref.path)
+        tag_path = Path(PureWindowsPath(tag_index_ref.path))
         if tag_index_ref.class_1.enum_name in (supyr_constants.INVALID,
                                                "NONE"):
             raise InvalidClassError(
