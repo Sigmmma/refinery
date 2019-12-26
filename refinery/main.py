@@ -875,10 +875,12 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         RefineryCore.set_active_map(self, map_name)
         if self.active_map is not prev_map or force_reload:
             self.display_map_info()
-            if self.active_map is not None:
+            valid_classes = None
+            if self.active_map is not None and self.extract_mode.get() == "data":
                 valid_classes = self.active_map.data_extractors.keys()
-                for tree in self.tree_frames.values():
-                    tree.valid_classes = valid_classes
+
+            for tree in self.tree_frames.values():
+                tree.valid_classes = valid_classes
 
             self.reload_explorers()
 
