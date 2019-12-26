@@ -128,6 +128,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         if active_map is not None:
             # generate the hierarchy
+            # TODO: Do a profile of this to determine where the bottleneck
+            #       is, as it's taking much longer to reload now.
             self.add_tag_index_refs(active_map.tag_index.tag_index)
 
     def _compile_list_of_selected(self, parent, selected=None):

@@ -121,8 +121,8 @@ class TagPathHandler():
         tag_ref = self.get_index_ref(index)
         if not tag_ref:
             return ""
-        root_dirs = root.split("\\")
-        dirs = tag_ref.path.split("\\")[: -1]
+        root_dirs = PureWindowsPath(root).parts
+        dirs = PureWindowsPath(tag_ref.path).parts[: -1]
         while (dirs and root_dirs) and dirs[0] == root_dirs[0]:
             dirs.pop(0)
             root_dirs.pop(0)
@@ -130,13 +130,13 @@ class TagPathHandler():
         if not dirs:
             return ""
 
-        return '\\'.join(dirs) + "\\"
+        return str(PureWindowsPath(*dirs)) + "\\"
 
     def get_basename(self, index):
         tag_ref = self.get_index_ref(index)
         if not tag_ref:
             return ""
-        return tag_ref.path.split("\\")[-1]
+        return PureWindowsPath(tag_ref.path).name
 
     def get_will_overwrite(self, index, priority, override=False):
         if index is None:
@@ -169,7 +169,7 @@ class TagPathHandler():
         new_path_no_ext = str(sanitize_win32_path(new_path_no_ext.lower())).strip()
 
         if ensure_unique_name and self._path_map.get(new_path_no_ext + ext) not in (None, index):
-            path_pieces = new_path_no_ext.split("\\")
+            path_pieces = PureWindowsPath(new_path_no_ext).parts
             path_basename = path_pieces[-1]
             try:
                 path_basename_pieces = path_basename.split("#")
@@ -180,7 +180,7 @@ class TagPathHandler():
 
             path_pieces = tuple(path_pieces[: -1]) + (path_basename, )
             new_path_no_ext = get_unique_name(
-                self._path_map, "\\".join(path_pieces), ext, index)
+                self._path_map, str(PureWindowsPath(*path_pieces)), ext, index)
 
         old_path = tag_ref.path.lower() + ext
         new_path = new_path_no_ext + ext
@@ -244,7 +244,7 @@ class TagPathHandler():
         print_errors = kw.pop("print_errors", False)
 
         for tag_path, index in self._path_map.items():
-            tag_path = sanitize_win32_path(tag_path).lower()
+            tag_path = sanitize_win32_path(tag_path.lower())
             if len(str(tag_path.with_suffix(""))) < max_len:
                 # don't rename tags below the limit. use None as the key so
                 # the tag path is still considered when chosing unique names
@@ -369,7 +369,7 @@ class TagPathHandler():
                 # reached a filename that needs to be renamed. rename the item and continue.
                 tag_path = val.path
                 new_tag_path = PureWindowsPath(
-                    *path_pieces).with_suffix(os.path.splitext(name)[1])
+                    *path_pieces).with_suffix(PureWindowsPath(name).suffix)
                 if do_printout:
                     print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
                           (len(tag_path), len(new_tag_path), tag_path, new_tag_path))
