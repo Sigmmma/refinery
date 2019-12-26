@@ -9,14 +9,13 @@ from refinery.core import RefineryCore
 from pathlib import Path
 from time import time
 from tkinter import messagebox
-from binilla.windows.filedialog import askopenfilename, askopenfilenames,\
-     asksaveasfilename
 from traceback import format_exc
 
-
-from binilla.widgets.binilla_widget import BinillaWidget
-from binilla.widgets.scroll_menu import ScrollMenu
 from binilla.windows.about_window import AboutWindow
+from binilla.widgets.binilla_widget import BinillaWidget
+from binilla.windows.filedialog import askopenfilename, askopenfilenames,\
+     asksaveasfilename
+from binilla.widgets.scroll_menu import ScrollMenu
 
 from refinery import editor_constants as e_c
 from refinery.constants import ACTIVE_INDEX, MAP_TYPE_ANY,\
@@ -1058,11 +1057,11 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                 filetypes=((map_name, "*.map"), (map_name, "*.map.dtz"),
                            ("All", "*.*")))
 
-            if not map_path:
+            map_path = Path(map_path)
+            if is_path_empty(map_path):
                 print("You wont be able to extract from %s.map" % map_name)
                 continue
 
-            map_path = Path(map_path)
             RefineryCore.load_resource_maps(self, halo_map, map_path.parent,
                                             {map_name: map_path}, **kw)
 
@@ -1117,7 +1116,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             print("Cannot deprotect this kind of map.")
             return
 
-        if not save_path:
+        if is_path_empty(save_path):
             filetypes = [("All", "*")]
             if halo_map.engine == "halo1vap":
                 filetypes.insert(0, ("Halo mapfile(chimerified)", "*.vap"))

@@ -594,8 +594,10 @@ class RefineryCore:
             maps = self.maps_by_engine[engine]
             for map_name in sorted(maps):
                 try:
-                    if map_name != ACTIVE_INDEX and not maps[map_name].is_resource:
-                        self.deprotect(None, engine, map_name, **kw)
+                    halo_map = maps.get(map_name)
+                    if halo_map is not None and (map_name != ACTIVE_INDEX and
+                                                 not halo_map.is_resource):
+                        self.deprotect(halo_map.filepath, map_name, engine, **kw)
                 except Exception:
                     print(format_exc())
 
@@ -1151,7 +1153,8 @@ class RefineryCore:
         if not halo_map or halo_map.engine != "halo1yelo":
             return Path("")
 
-        if not filepath:
+        filepath = Path(filepath)
+        if is_path_empty(filepath):
             filepath = self.tags_dir.joinpath(
                 halo_map.map_header.map_name + "_cheape.map")
 
@@ -1484,7 +1487,7 @@ class RefineryCore:
             raise InvalidTagIdError('tag_id "%s" is not in the tag index.' % tag_id)
 
         tag_index_ref = tag_index_array[tag_id]
-        tag_path = Path(PureWindowsPath(tag_index_ref.path))
+        tag_path = PureWindowsPath(tag_index_ref.path)
         if tag_index_ref.class_1.enum_name in (supyr_constants.INVALID,
                                                "NONE"):
             raise InvalidClassError(
