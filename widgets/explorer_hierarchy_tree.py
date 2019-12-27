@@ -394,8 +394,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
         else:
             ext = ".INVALID"
 
-        return str(PureWindowsPath(
-            tag_index_ref.path.lower()).with_suffix(ext))
+        return str(PureWindowsPath(tag_index_ref.path.lower())) + ext
 
     def add_tag_index_refs(self, index_refs):
         if self.active_map is None:
