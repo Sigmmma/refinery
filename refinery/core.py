@@ -1497,7 +1497,7 @@ class RefineryCore:
             return False
 
         full_tag_class = tag_index_ref.class_1.enum_name
-        tag_path = str(tag_path.with_suffix("." + full_tag_class))
+        tag_path = str(tag_path) + "." + full_tag_class
         if force_lower_case_paths:
             tag_path = tag_path.lower()
 
