@@ -51,12 +51,10 @@ from refinery.heuristic_deprotection.constants import VERY_HIGH_PRIORITY
 from refinery.heuristic_deprotection.functions import heuristic_deprotect
 from refinery.tag_index.tag_path_handler import TagPathHandler
 from refinery.tag_index.tag_path_detokenizer import TagPathDetokenizer
-from refinery.util import inject_file_padding, get_cwd, int_to_fourcc
+from refinery.util import inject_file_padding, int_to_fourcc
 
 from supyr_struct.util import is_path_empty
 
-
-curr_dir = get_cwd(__file__)
 
 halo_map_wrappers_by_engine = {
     "stubbs":          StubbsMap,
@@ -185,8 +183,8 @@ class RefineryCore:
     _extract_queue = ()
 
     def __init__(self, *args, **kwargs):
-        self.tags_dir = curr_dir.joinpath("tags")
-        self.data_dir = curr_dir.joinpath("data")
+        self.tags_dir = Path.cwd().joinpath("tags")
+        self.data_dir = Path.cwd().joinpath("data")
         self.tagslist_path = self.tags_dir.joinpath("tagslist.txt")
         self._maps_by_engine = {}
         self._extract_queue = []
@@ -673,7 +671,7 @@ class RefineryCore:
                 print(format_exc())
 
         tag_paths_to_not_rename = set()
-        ignore_filepath = curr_dir.joinpath(
+        ignore_filepath = Path(__file__).parent.joinpath(
             "tag_paths_to_never_rename.txt")
         try:
             with ignore_filepath.open("r") as file:
