@@ -7,7 +7,6 @@ from pathlib import PureWindowsPath
 
 from reclaimer.util import RESERVED_WINDOWS_FILENAME_MAP, INVALID_PATH_CHARS,\
      is_reserved_tag, is_protected_tag
-from binilla.util import get_cwd
 from supyr_struct.util import is_path_empty, int_to_fourcc, fourcc_to_int
 
 
