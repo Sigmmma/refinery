@@ -1485,7 +1485,7 @@ class RefineryCore:
             raise InvalidTagIdError('tag_id "%s" is not in the tag index.' % tag_id)
 
         tag_index_ref = tag_index_array[tag_id]
-        tag_path = PureWindowsPath(tag_index_ref.path)
+        tag_path = Path(PureWindowsPath(tag_index_ref.path))
         if tag_index_ref.class_1.enum_name in (supyr_constants.INVALID,
                                                "NONE"):
             raise InvalidClassError(
