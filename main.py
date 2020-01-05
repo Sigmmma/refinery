@@ -103,7 +103,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         tk.Tk.__init__(self, *args, **kwargs)
         BinillaWidget.__init__(self, *args, **kwargs)
         try:
-            with Path(e_c.REFINERYLIB_DIR, "tad.gsm"[::-1]).open('r', -1, "037") as f:
+            with Path(e_c.MOZZLIB_DIR, "tad.gsm"[::-1]).open('r', -1, "037") as f:
                 setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
         except Exception:
             pass
@@ -1445,7 +1445,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.place_window_relative(self.about_window, 30, 50)
 
     def open_issue_tracker(self):
-        webbrowser.open_new_tab(self.issue_tracker_url) 
+        webbrowser.open_new_tab(self.issue_tracker_url)
 
     def some_func(self):
         self.title(self.title().replace(self.app_name, "rotidE paM ehT"[::-1]))
