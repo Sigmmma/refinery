@@ -1,3 +1,12 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 import refinery
 import tkinter as tk
 import os
@@ -1445,7 +1454,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.place_window_relative(self.about_window, 30, 50)
 
     def open_issue_tracker(self):
-        webbrowser.open_new_tab(self.issue_tracker_url) 
+        webbrowser.open_new_tab(self.issue_tracker_url)
 
     def some_func(self):
         self.title(self.title().replace(self.app_name, "rotidE paM ehT"[::-1]))
