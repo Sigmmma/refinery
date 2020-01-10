@@ -1408,7 +1408,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         fps = askopenfilenames(
             initialdir=self.last_dir,
             title="Select map(s) to load", parent=self,
-            filetypes=(("Halo mapfile", "*.map"),
+            filetypes=(("Halo mapfile", "*.map *.yelo *.vap *.map.dtz"),
+                       ("Halo mapfile(vanilla)", "*.map"),
                        ("Halo mapfile(extra sauce)", "*.yelo"),
                        ("Halo mapfile(chimerified)", "*.vap"),
                        ("Halo 2 Vista compressed mapfile", "*.map.dtz"),
