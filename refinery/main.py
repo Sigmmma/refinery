@@ -112,7 +112,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         tk.Tk.__init__(self, *args, **kwargs)
         BinillaWidget.__init__(self, *args, **kwargs)
         try:
-            with Path(e_c.REFINERYLIB_DIR, "tad.gsm"[::-1]).open('r', -1, "037") as f:
+            with Path(e_c.MOZZLIB_DIR, "tad.gsm"[::-1]).open('r', -1, "037") as f:
                 setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
         except Exception:
             pass
@@ -573,10 +573,10 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if len(paths.NAME_MAP) > len(paths):
             paths.extend(len(paths.NAME_MAP) - len(paths))
 
-        paths.tagslist.path = str(self.tagslist_path).lstrip(".")
-        paths.tags_dir.path = str(self.tags_dir).lstrip(".")
-        paths.data_dir.path = str(self.data_dir).lstrip(".")
-        paths.last_dir.path = str(self.last_dir).lstrip(".")
+        paths.tagslist.path = "" if is_path_empty(self.tagslist_path) else str(self.tagslist_path)
+        paths.tags_dir.path = "" if is_path_empty(self.tags_dir) else str(self.tags_dir)
+        paths.data_dir.path = "" if is_path_empty(self.data_dir) else str(self.data_dir)
+        paths.last_dir.path = "" if is_path_empty(self.last_dir) else str(self.last_dir)
 
         header.flags.display_mode.set_to(self._display_mode)
         for attr_name in ("do_printout", "autoload_resources"):
@@ -1417,7 +1417,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         fps = askopenfilenames(
             initialdir=self.last_dir,
             title="Select map(s) to load", parent=self,
-            filetypes=(("Halo mapfile", "*.map"),
+            filetypes=(("Halo mapfile", "*.map *.yelo *.vap *.map.dtz"),
+                       ("Halo mapfile(vanilla)", "*.map"),
                        ("Halo mapfile(extra sauce)", "*.yelo"),
                        ("Halo mapfile(chimerified)", "*.vap"),
                        ("Halo 2 Vista compressed mapfile", "*.map.dtz"),
