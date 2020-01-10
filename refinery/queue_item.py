@@ -1,6 +1,3 @@
-import os
-
-
 class RefineryQueueItem:
     __slots__ = ("_op", "_op_kwargs")
 

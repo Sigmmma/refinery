@@ -2,25 +2,22 @@ import os
 import refinery
 import tkinter as tk
 
+from pathlib import Path, PureWindowsPath
 from tkinter import messagebox
-from tkinter.filedialog import asksaveasfilename, askdirectory
+from binilla.windows.filedialog import asksaveasfilename, askdirectory
 from traceback import format_exc
 
-from binilla import editor_constants as e_c
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
 
+from refinery import editor_constants as e_c
 from refinery.constants import MAX_TAG_NAME_LEN, BAD_CLASSES
-from refinery.util import get_cwd, sanitize_path, is_protected_tag
+from refinery.util import is_protected_tag
 from refinery.windows.meta_window import MetaWindow
 
 from reclaimer.common_descs import blam_header, QStruct
 
 from supyr_struct.defs.tag_def import TagDef
-from supyr_struct.defs.constants import PATHDIV
-
-
-curr_dir = get_cwd(refinery.__file__)
 
 
 meta_tag_def = TagDef("meta tag",
@@ -41,6 +38,8 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
     newtype_string = None
     recursive_rename = None
 
+    original_name = ""
+
     def __init__(self, *args, **kwargs):
         title = kwargs.pop('title', None)
         self.renamable = kwargs.pop('renamable', self.renamable)
@@ -50,19 +49,12 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         tk.Toplevel.__init__(self, *args, **kwargs)
 
         try:
-            try:
-                self.iconbitmap(os.path.join(curr_dir, 'refinery.ico'))
-            except Exception:
-                self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
+            self.iconbitmap(e_c.REFINERY_ICON_PATH)
         except Exception:
             if not e_c.IS_LNX:
                 print("Could not load window icon.")
 
         self.bind('<Escape>', lambda e=None, s=self, *a, **kw: s.destroy())
-
-        height = 310 + bool(self.tag_index_ref)*30
-        self.geometry("300x%s" % height)
-        self.minsize(width=300, height=height)
 
         if self.app_root is None and hasattr(self.master, 'app_root'):
             self.app_root = self.master.app_root
@@ -83,7 +75,13 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
                 title = "Options"
         self.title(title)
 
-        self.rename_string.set(os.path.splitext(self.rename_string.get())[0])
+        self.original_name = PureWindowsPath(self.rename_string.get())
+        if self.tag_index_ref is not None:
+            # this ActionsWindow is displaying a single tag. the
+            # original name will have an extension. remove it
+            self.original_name = self.original_name.with_suffix("")
+
+        self.rename_string.set(str(self.original_name))
         self.newtype_string.set("")
 
         self.accept_rename.set(0)
@@ -103,8 +101,8 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         self.cancel_frame = tk.Frame(self.button_frame)
 
         # rename
-        self.rename_entry = tk.Entry(self.rename_frame_inner0,
-                                     textvariable=self.rename_string)
+        self.rename_entry = tk.Entry(
+            self.rename_frame_inner0, width=50, textvariable=self.rename_string)
         self.rename_button = tk.Button(self.rename_frame_inner0, text="Rename",
                                        command=self.rename, width=6)
         self.class_scroll_menu = ScrollMenu(self.rename_frame_inner1,
@@ -125,13 +123,13 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
 
         # tags list
         self.tags_list_entry = tk.Entry(
-            self.tags_list_frame, textvariable=self.tagslist_path)
+            self.tags_list_frame, width=50, textvariable=self.tagslist_path)
         self.browse_tags_list_button = tk.Button(
             self.tags_list_frame, text="Browse", command=self.tags_list_browse)
 
         # extract to dir
         self.extract_to_entry = tk.Entry(
-            self.extract_to_frame, textvariable=self.extract_to_dir)
+            self.extract_to_frame, width=50, textvariable=self.extract_to_dir)
         self.browse_extract_to_button = tk.Button(
             self.extract_to_frame, text="Browse",
             command=self.extract_to_browse)
@@ -210,18 +208,26 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         except AttributeError:
             pass
 
+    def apply_style(self, seen=None):
+        BinillaWidget.apply_style(self, seen)
+        self.update()
+        w, h = self.winfo_reqwidth(), self.winfo_reqheight()
+        self.geometry("%sx%s" % (w, h))
+        self.minsize(width=w, height=h)
+
     def add_to_queue(self, e=None):
         self.accept_settings.set(1)
         self.destroy()
 
     def rename(self, e=None):
+        if not self.renamable:
+            return
+
         new_name = self.rename_string.get()
-        new_name = sanitize_path(new_name).lower().strip(PATHDIV).strip('.')
-        if self.tag_index_ref is not None:
-            new_name.rstrip(PATHDIV)
-        elif new_name and not new_name.endswith(PATHDIV):
+        new_name = str(PureWindowsPath(new_name)).lower().strip(".")
+        if self.tag_index_ref is None and new_name:
             # directory of tags
-            new_name += PATHDIV
+            new_name += "\\"
 
         old_class = new_class = None
         try:
@@ -275,7 +281,7 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         if not dirpath:
             return
 
-        self.tagslist_path.set(sanitize_path(dirpath))
+        self.tagslist_path.set(str(Path(dirpath)))
 
     def extract_to_browse(self):
         dirpath = askdirectory(
@@ -285,7 +291,7 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         if not dirpath:
             return
 
-        self.extract_to_dir.set(sanitize_path(dirpath))
+        self.extract_to_dir.set(str(Path(dirpath)))
 
     def show_meta(self):
         index_ref = self.tag_index_ref
@@ -330,11 +336,8 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
 
 class RefineryEditActionsWindow(RefineryActionsWindow):
 
-    def __init__(self, *args, **kwargs):
-        RefineryActionsWindow.__init__(self, *args, **kwargs)
+    def apply_style(self, seen=None):
         self.rename_frame.pack_forget()
         self.button_frame.pack_forget()
-
-        self.geometry("300x200")
-        self.minsize(width=300, height=200)
         self.title("Edit: %s" % self.title())
+        RefineryActionsWindow.apply_style(self, seen)

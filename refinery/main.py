@@ -4,21 +4,20 @@ import os
 import sys
 import webbrowser
 
-from refinery.core import RefineryCore, curr_dir
+from refinery.core import RefineryCore
 
+from pathlib import Path
 from time import time
+from tkinter import messagebox
 from traceback import format_exc
 
-from tkinter import messagebox
-from tkinter.filedialog import askopenfilename, askopenfilenames,\
-     asksaveasfilename
-
-
-from binilla.widgets.binilla_widget import BinillaWidget
-from binilla.widgets.scroll_menu import ScrollMenu
 from binilla.windows.about_window import AboutWindow
-from mozzarilla import editor_constants as e_c
+from binilla.widgets.binilla_widget import BinillaWidget
+from binilla.windows.filedialog import askopenfilename, askopenfilenames,\
+     asksaveasfilename
+from binilla.widgets.scroll_menu import ScrollMenu
 
+from refinery import editor_constants as e_c
 from refinery.constants import ACTIVE_INDEX, MAP_TYPE_ANY,\
      MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
 from refinery.exceptions import MapAlreadyLoadedError, EngineDetectionError
@@ -30,25 +29,27 @@ from refinery.widgets.queue_tree import QueueTree
 from refinery.windows.settings_window import RefinerySettingsWindow
 from refinery.windows.rename_window import RefineryRenameWindow
 from refinery.windows.crc_window import RefineryChecksumEditorWindow
-
-from reclaimer.data_extraction import h1_data_extractors, h2_data_extractors,\
-     h3_data_extractors
+from refinery.util import is_path_empty
 
 from supyr_struct.defs import constants as supyr_constants
-from supyr_struct.util import sanitize_path
 from supyr_struct.field_types import FieldType
 
-default_config_path = os.path.join(curr_dir, 'refinery.cfg')
+
 VALID_DISPLAY_MODES = frozenset(("hierarchy", "class", "hybrid"))
 VALID_EXTRACT_MODES = frozenset(("tags", "data"))
 
 
-
 class Refinery(tk.Tk, BinillaWidget, RefineryCore):
-    last_dir = curr_dir
-
-    config_path = default_config_path
     config_file = None
+    _config_path = Path(e_c.SETTINGS_DIR, "refinery.cfg")
+
+    _last_dir = e_c.WORKING_DIR
+
+    path_property_names = frozenset((
+        "tags_dir", "data_dir", "tagslist_dir", "active_map_path",
+        "last_dir", "config_path", "config_path",
+        "icon_filepath", "app_bitmap_filepath",
+        ))
 
     config_version = 2
     app_name = "Refinery"
@@ -72,8 +73,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
     font_names = e_c.font_names
 
-    icon_filepath = ""
-    app_bitmap_filepath = ""
+    icon_filepath = Path("")
+    app_bitmap_filepath = Path("")
 
     about_module_names = (
         "arbytmap",
@@ -102,28 +103,19 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         tk.Tk.__init__(self, *args, **kwargs)
         BinillaWidget.__init__(self, *args, **kwargs)
         try:
-            with open(os.path.join(curr_dir, "tad.gsm"[::-1]), 'r', -1, "037") as f:
+            with Path(e_c.MOZZLIB_DIR, "tad.gsm"[::-1]).open('r', -1, "037") as f:
                 setattr(self, 'segassem_tuoba'[::-1], list(l for l in f))
         except Exception:
             pass
 
-        self.app_bitmap_filepath = os.path.join(curr_dir, 'refinery.png')
-        if not os.path.isfile(self.app_bitmap_filepath):
-            self.app_bitmap_filepath = os.path.join(curr_dir, 'icons', 'refinery.png')
-        if not os.path.isfile(self.app_bitmap_filepath):
-            self.app_bitmap_filepath = ""
-
+        self.app_bitmap_filepath = e_c.REFINERY_BITMAP_PATH
         if not e_c.IS_LNX:
-            try:
-                try:
-                    self.icon_filepath = os.path.join(curr_dir, 'refinery.ico')
-                    self.iconbitmap(self.icon_filepath)
-                except Exception:
-                    self.icon_filepath = os.path.join(curr_dir, 'icons', 'refinery.ico')
-                    self.iconbitmap(self.icon_filepath)
-            except Exception:
-                self.icon_filepath = ""
-                print("Could not load window icon.")
+            self.icon_filepath = e_c.REFINERY_ICON_PATH
+            if self.icon_filepath:
+                self.iconbitmap(str(self.icon_filepath))
+
+        if is_path_empty(self.icon_filepath):
+            print("Could not load window icon.")
 
         self.title('%s v%s.%s.%s' % ((self.app_name,) + self.version))
         self.minsize(width=500, height=300)
@@ -135,7 +127,6 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.edit_all_fields = tk.IntVar(self)
         self.allow_corrupt = tk.IntVar(self)
 
-        self._active_map_path = tk.StringVar(self)
         self._active_map_name = tk.StringVar(self)
         self._active_engine_name = tk.StringVar(self)
 
@@ -221,7 +212,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         if self.config_file is not None:
             pass
-        elif os.path.exists(self.config_path):
+        elif self.config_path.is_file():
             # load the config file
             try:
                 self.load_config()
@@ -394,8 +385,29 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         self._initialized = True
 
+    @property
+    def config_path(self):
+        return self._config_path
+    @config_path.setter
+    def config_path(self, new_val):
+        if not isinstance(new_val, Path):
+            new_val = Path(new_val)
+        self._config_path = new_val
+
+    @property
+    def last_dir(self):
+        return self._last_dir
+    @last_dir.setter
+    def last_dir(self, new_val):
+        if not isinstance(new_val, Path):
+            new_val = Path(new_val)
+        self._last_dir = new_val
+
+    @property
+    def running(self):
+        return self._running
+
     def apply_style(self, seen=None):
-        app_window = self.config_file.data.app_window
         super(Refinery, self).apply_style(seen)
         if not self._window_geometry_initialized:
             app_window = self.config_file.data.app_window
@@ -425,7 +437,11 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         # tkinter settings variables if I didn't overload __getattribute__
         try:
             if attr_name in object.__getattribute__(self, "tk_vars",):
-                return object.__getattribute__(self, "_" + attr_name).get()
+                val = object.__getattribute__(self, "_" + attr_name).get()
+                if attr_name in self.path_property_names:
+                    val = Path(val)
+
+                return val
         except AttributeError:
             pass
         return object.__getattribute__(self, attr_name)
@@ -447,14 +463,12 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             kwargs.setdefault("out_dir", self.data_dir)
         RefineryCore.enqueue(self, operation, **kwargs)
 
-    @property
-    def running(self):
-        return self._running
-
     def load_config(self, filepath=None):
         if filepath is None:
             filepath = self.config_path
-        assert os.path.exists(filepath)
+
+        filepath = Path(filepath)
+        assert filepath.is_file()
 
         # load the config file
         self.config_file = config_def.build(filepath=filepath)
@@ -467,6 +481,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     def make_config(self, filepath=None):
         if filepath is None:
             filepath = self.config_path
+
+        filepath = Path(filepath)
 
         # create the config file from scratch
         self.config_file = config_def.build()
@@ -548,10 +564,10 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if len(paths.NAME_MAP) > len(paths):
             paths.extend(len(paths.NAME_MAP) - len(paths))
 
-        paths.tagslist.path = self.tagslist_path
-        paths.tags_dir.path = self.tags_dir
-        paths.data_dir.path = self.data_dir
-        paths.last_dir.path = self.last_dir
+        paths.tagslist.path = "" if is_path_empty(self.tagslist_path) else str(self.tagslist_path)
+        paths.tags_dir.path = "" if is_path_empty(self.tags_dir) else str(self.tags_dir)
+        paths.data_dir.path = "" if is_path_empty(self.data_dir) else str(self.data_dir)
+        paths.last_dir.path = "" if is_path_empty(self.last_dir) else str(self.last_dir)
 
         header.flags.display_mode.set_to(self._display_mode)
         for attr_name in ("do_printout", "autoload_resources"):
@@ -687,23 +703,15 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             if new_mode not in VALID_EXTRACT_MODES:
                 new_mode = "tags"
 
-        if new_mode not in VALID_EXTRACT_MODES:
-            return
-        elif new_mode == "tags" or not self.map_loaded:
+        valid_classes = None
+        if new_mode == "tags":
             next_mode = "data"
-            valid_classes = None
-        else:
+        elif new_mode == "data":
             next_mode = "tags"
-            engine = self.active_map.engine
-            if   ("halo1" in engine or "stubbs" in engine or
-                  "shadowrun" in engine):
-                valid_classes = h1_data_extractors.keys()
-            elif "halo2" in engine:
-                valid_classes = h2_data_extractors.keys()
-            elif "halo3" in engine:
-                valid_classes = h3_data_extractors.keys()
-            else:
-                return
+            if self.active_map is not None:
+                valid_classes = self.active_map.data_extractors.keys()
+        else:
+            return
 
         self.menubar.entryconfig(5, label="Switch to %s extraction" % next_mode)
 
@@ -867,6 +875,13 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         RefineryCore.set_active_map(self, map_name)
         if self.active_map is not prev_map or force_reload:
             self.display_map_info()
+            valid_classes = None
+            if self.active_map is not None and self.extract_mode.get() == "data":
+                valid_classes = self.active_map.data_extractors.keys()
+
+            for tree in self.tree_frames.values():
+                tree.valid_classes = valid_classes
+
             self.reload_explorers()
 
     def reload_engine_select_options(self):
@@ -934,9 +949,10 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                     "A map with that name is already loaded!",
                     ('A map with the same name as "%s" is already loaded. '
                      "Close that map and load this one instead?") %
-                    os.path.basename(map_path), icon='warning', parent=self)):
+                    Path(map_path).stem, icon='warning', parent=self)):
                 print("    Skipped")
                 return
+
             prev_active_engine = self.active_engine_name
             prev_active_map = self.active_map_name
             new_map = RefineryCore.load_map(
@@ -1009,7 +1025,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         self._running = False
 
-    def load_resource_maps(self, halo_map=None, maps_dir="", map_paths=(), **kw):
+    def load_resource_maps(self, halo_map=None, maps_dir=Path(""), map_paths=(), **kw):
         if halo_map is None:
             halo_map = self.active_map
 
@@ -1020,13 +1036,14 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         for name in halo_map.get_resource_map_paths():
             if name not in halo_map.maps:
                 nothing_to_load = False
+
         if nothing_to_load:
             return
 
         print("Loading resource maps for: %s" % halo_map.map_name)
         kw.setdefault("do_printout", True)
-        if not maps_dir:
-            maps_dir = os.path.dirname(halo_map.filepath)
+        if is_path_empty(maps_dir):
+            maps_dir = halo_map.filepath.parent
 
         not_loaded = RefineryCore.load_resource_maps(
             self, halo_map, maps_dir, (), **kw)
@@ -1042,12 +1059,12 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                 filetypes=((map_name, "*.map"), (map_name, "*.map.dtz"),
                            ("All", "*.*")))
 
-            if not map_path:
+            map_path = Path(map_path)
+            if is_path_empty(map_path):
                 print("You wont be able to extract from %s.map" % map_name)
                 continue
 
-            maps_dir = os.path.dirname(map_path)
-            RefineryCore.load_resource_maps(self, halo_map, maps_dir,
+            RefineryCore.load_resource_maps(self, halo_map, map_path.parent,
                                             {map_name: map_path}, **kw)
 
         print("    Finished loading resource maps")
@@ -1101,7 +1118,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             print("Cannot deprotect this kind of map.")
             return
 
-        if not save_path:
+        if is_path_empty(save_path):
             filetypes = [("All", "*")]
             if halo_map.engine == "halo1vap":
                 filetypes.insert(0, ("Halo mapfile(chimerified)", "*.vap"))
@@ -1111,19 +1128,21 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                 filetypes.insert(0, ("Halo mapfile", "*.map"))
 
             save_path = asksaveasfilename(
-                initialdir=os.path.dirname(halo_map.filepath), parent=self,
+                initialdir=halo_map.filepath.parent, parent=self,
                 title="Choose where to save the deprotected map",
                 filetypes=filetypes)
 
-        if not save_path:
+        save_path = Path(save_path)
+
+        if is_path_empty(save_path):
             print("Deprotection cancelled.")
             return
 
         self._running = True
         try:
-            save_path, ext = os.path.splitext(save_path)
-            save_path = sanitize_path(save_path + (ext if ext else (
-                '.yelo' if 'yelo' in halo_map.engine else '.map')))
+            if not save_path.suffix:
+                save_path = save_path.with_suffix(
+                    '.yelo' if 'yelo' in halo_map.engine else '.map')
 
             start = time()
 
@@ -1187,17 +1206,18 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         RefineryCore._heuristics_deprotect(self, tag_path_handler,
                                            map_name, engine, **kw)
     def save_map_as(self, e=None):
+        # NOTE: This function now returns a Path instead of a string
         halo_map = self.active_map
 
         if self.running or halo_map is None:
-            return ""
+            return Path("")
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
-            return ""
+            return Path("")
         elif halo_map.engine not in ("halo1ce", "halo1yelo",
                                      "halo1pc", "halo1vap"):
             print("Cannot save this kind of map.")
-            return ""
+            return Path("")
 
         filetypes = [("All", "*")]
         if halo_map.engine == "halo1vap":
@@ -1208,17 +1228,19 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             filetypes.insert(0, ("Halo mapfile", "*.map"))
 
         save_path = asksaveasfilename(
-            initialdir=os.path.dirname(self.active_map_path), parent=self,
+            initialdir=self.active_map_path.parent, parent=self,
             title="Choose where to save the map",
             filetypes=tuple(filetypes))
 
-        if not save_path:
-            return ""
+        save_path = Path(save_path)
+        if is_path_empty(save_path):
+            return Path("")
 
         self._running = True
         try:
-            self.save_map(save_path, prompt_strings_expand=True,
-                          prompt_internal_rename=True)
+            save_path = self.save_map(
+                save_path, prompt_strings_expand=True,
+                prompt_internal_rename=True)
         except Exception:
             print(format_exc())
         self._running = False
@@ -1226,22 +1248,25 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
     def save_map(self, save_path=None, map_name=ACTIVE_INDEX,
                  engine=ACTIVE_INDEX, **kw):
+        # NOTE: This function now returns a Path instead of a string
         reload_window = kw.pop("reload_window", True)
         prompt_strings_expand = kw.pop("prompt_strings_expand", False)
         prompt_internal_rename = kw.pop("prompt_internal_rename", False)
 
         halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
         if halo_map is None:
-            return ""
+            return Path("")
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
-            return ""
+            return Path("")
         elif halo_map.engine not in ("halo1ce", "halo1yelo",
                                      "halo1pc", "halo1vap"):
             print("Cannot save this kind of map.")
-            return ""
-        elif not save_path:
+            return Path("")
+        elif save_path is None or is_path_empty(save_path):
             save_path = halo_map.filepath
+
+        save_path = Path(save_path)
 
         orig_tag_paths = halo_map.orig_tag_paths
         index_array    = halo_map.tag_index.STEPTREE
@@ -1258,9 +1283,9 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                  "\n\nContinue?") % new_strings_size,
                 icon='warning', parent=self)):
             print("    Save cancelled")
-            return ""
+            return Path("")
 
-        new_map_name = os.path.basename(save_path)
+        new_map_name = save_path.name
         if (prompt_internal_rename and len(new_map_name) < 32 and
             halo_map.map_name.lower() != new_map_name.lower()):
             if messagebox.askyesno(
@@ -1273,14 +1298,14 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         print('Saving "%s"' % save_path)
         try:
-            save_path = RefineryCore.save_map(self, save_path, map_name,
-                                              engine, **kw)
+            save_path = RefineryCore.save_map(
+                self, save_path, map_name, engine, **kw)
             print("    Finished")
         except Exception:
             print(format_exc())
             print("    Could not save map")
 
-        if reload_window and save_path:
+        if reload_window and not is_path_empty(save_path):
             print("Reloading map to apply changes...")
             self.load_map(save_path, make_active=True, autoload_resources=False)
 
@@ -1383,7 +1408,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         fps = askopenfilenames(
             initialdir=self.last_dir,
             title="Select map(s) to load", parent=self,
-            filetypes=(("Halo mapfile", "*.map"),
+            filetypes=(("Halo mapfile", "*.map *.yelo *.vap *.map.dtz"),
+                       ("Halo mapfile(vanilla)", "*.map"),
                        ("Halo mapfile(extra sauce)", "*.yelo"),
                        ("Halo mapfile(chimerified)", "*.vap"),
                        ("Halo 2 Vista compressed mapfile", "*.map.dtz"),
@@ -1392,8 +1418,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if not fps:
             return
 
-        fps = tuple(sanitize_path(fp) for fp in fps)
-        self.last_dir = os.path.dirname(fps[0])
+        fps = tuple(Path(fp) for fp in fps)
+        self.last_dir = fps[0].parent
 
         self._running = True
         try:
@@ -1420,7 +1446,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.place_window_relative(self.about_window, 30, 50)
 
     def open_issue_tracker(self):
-        webbrowser.open_new_tab(self.issue_tracker_url) 
+        webbrowser.open_new_tab(self.issue_tracker_url)
 
     def some_func(self):
         self.title(self.title().replace(self.app_name, "rotidE paM ehT"[::-1]))

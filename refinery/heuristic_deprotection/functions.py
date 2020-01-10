@@ -1,5 +1,3 @@
-import os
-
 from reclaimer.enums import materials_list, material_effect_types
 from refinery.heuristic_deprotection.constants import *
 from refinery.heuristic_deprotection.util import MinPriority, sanitize_name,\

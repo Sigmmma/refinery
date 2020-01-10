@@ -2,62 +2,21 @@ import os
 import refinery
 import tkinter as tk
 
+from pathlib import PureWindowsPath
 from traceback import format_exc
 
 from mozzarilla.widgets.directory_frame import HierarchyFrame
 from refinery.constants import MAX_TAG_NAME_LEN, BAD_CLASSES,\
      H1_TAG_SUPERCLASSES
-from refinery.util import get_cwd, sanitize_path, int_to_fourcc, is_reserved_tag
+from refinery.util import int_to_fourcc, is_reserved_tag
 from refinery.windows.actions_window import RefineryActionsWindow
 
 from supyr_struct.defs.frozen_dict import FrozenDict
-from supyr_struct.defs.constants import PATHDIV
 
-
-curr_dir = get_cwd(refinery.__file__)
 no_op = lambda *a, **kw: None
 
 TREE_SORT_METHODS = FrozenDict(
     {0: "name", 4:"pointer", 5:"pointer", 6:"index_id"})
-
-
-def ask_extract_settings(parent, def_vars=None, **kwargs):
-    if def_vars is None:
-        def_vars = {}
-
-    settings_vars = dict(
-        recursive=tk.IntVar(parent), overwrite=tk.IntVar(parent),
-        do_printout=tk.IntVar(parent), accept_rename=tk.IntVar(parent),
-        autoload_resources=tk.IntVar(parent), decode_adpcm=tk.IntVar(parent),
-        bitmap_extract_keep_alpha=tk.IntVar(parent),
-        generate_comp_verts=tk.IntVar(parent), generate_uncomp_verts=tk.IntVar(parent),
-        accept_settings=tk.IntVar(parent), out_dir=tk.StringVar(parent),
-        extract_mode=tk.StringVar(parent, "tags"), halo_map=parent.active_map,
-        rename_string=tk.StringVar(parent), newtype_string=tk.StringVar(parent),
-        tagslist_path=tk.StringVar(parent), allow_corrupt=tk.IntVar(parent),
-        skip_seen_tags_during_queue_processing=tk.IntVar(parent),
-        disable_safe_mode=tk.IntVar(parent), disable_tag_cleaning=tk.IntVar(parent),
-
-        bitmap_extract_format=tk.StringVar(parent),
-        globals_overwrite_mode=tk.StringVar(parent),
-        )
-
-    settings_vars['rename_string'].set(def_vars.pop('rename_string', ''))
-
-    for k in def_vars:
-        if k in settings_vars:
-            settings_vars[k].set(def_vars[k].get())
-
-    dir_type = def_vars.get("extract_mode").get() + "_dir"
-    if dir_type in def_vars:
-        settings_vars["out_dir"].set(def_vars[dir_type].get())
-
-    w = RefineryActionsWindow(parent, settings=settings_vars, **kwargs)
-
-    # make the parent freeze what it's doing until we're destroyed
-    parent.wait_window(w)
-
-    return settings_vars
 
 
 class ExplorerHierarchyTree(HierarchyFrame):
@@ -97,28 +56,30 @@ class ExplorerHierarchyTree(HierarchyFrame):
         self.sort_by = new_sort
         self.reload(self.active_map)
 
-    def sort_index_refs(self, sortable_index_refs):
-        new_sorting = {}
+    def sort_index_refs(self, index_refs):
+        if isinstance(index_refs, dict):
+            index_refs = index_refs.keys()
 
+        sortable_index_refs = []
+        for b in index_refs:
+            tag_path_key = self.get_tag_tree_key(b)
+            if tag_path_key is not None:
+                sortable_index_refs.append((tag_path_key, b))
+
+        new_sorting = {}
         if self.sort_by == "index_id":
             for index_ref in sortable_index_refs:
-                key = index_ref[1].id & 0xFFff
-                same_list = new_sorting.get(key, [])
-                same_list.append(index_ref)
-                new_sorting[key] = same_list
+                new_sorting.setdefault(
+                    index_ref[1].id & 0xFFff, []).append(index_ref)
         elif self.sort_by == "pointer":
             for index_ref in sortable_index_refs:
-                key = index_ref[1].meta_offset
-                same_list = new_sorting.get(key, [])
-                same_list.append(index_ref)
-                new_sorting[key] = same_list
+                new_sorting.setdefault(
+                    index_ref[1].meta_offset, []).append(index_ref)
         else:
             # default to sorting by name
             for index_ref in sortable_index_refs:
-                key = index_ref[0]
-                same_list = new_sorting.get(key, [])
-                same_list.append(index_ref)
-                new_sorting[key] = same_list
+                new_sorting.setdefault(
+                    index_ref[0], []).append(index_ref)
 
         sorted_index_refs = [None]*len(sortable_index_refs)
         i = 0
@@ -167,6 +128,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         if active_map is not None:
             # generate the hierarchy
+            # TODO: Do a profile of this to determine where the bottleneck
+            #       is, as it's taking much longer to reload now.
             self.add_tag_index_refs(active_map.tag_index.tag_index)
 
     def _compile_list_of_selected(self, parent, selected=None):
@@ -190,10 +153,10 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if self.active_map is None:
             return
 
-        engine = self.active_map.engine
         if self.queue_tree is None:
             return
-        elif "halo2" in engine and engine != "halo2vista":
+        elif ("halo2" in self.active_map.engine and
+              self.active_map.engine != "halo2vista"):
             print("Cannot interact with Halo 2 Xbox maps.")
             return
 
@@ -203,29 +166,26 @@ class ExplorerHierarchyTree(HierarchyFrame):
             if self.app_root.running:
                 return
 
-        item_name = self.active_map.map_header.map_name
+        map_name = self.active_map.map_header.map_name
 
         # ask for extraction settings
-        settings = ask_extract_settings(
-            self, def_settings, title=item_name, renamable=False)
+        settings, _, __ = self.show_actions_dialog(
+            "", renamable=False, title=map_name, defaults=def_settings)
 
         if settings['accept_settings'].get():
             settings['tag_index_refs'] = self._compile_list_of_selected("")
-            settings['title'] = item_name
+            settings['title'] = map_name
             self.queue_tree.add_to_queue("%s: %s: %s" % (
                 settings['extract_mode'].get(), self.active_map.engine,
-                item_name), settings)
+                map_name), settings)
 
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
         tree_id_to_index_ref = self.tree_id_to_index_ref
-        if self.active_map is None:
+        if self.active_map is None or self.queue_tree is None:
             return
-
-        engine = self.active_map.engine
-        if self.queue_tree is None:
-            return
-        elif "halo2" in engine and engine != "halo2vista":
+        elif ("halo2" in self.active_map.engine and
+              self.active_map.engine != "halo2vista"):
             print("Cannot interact with Halo 2 Xbox maps.")
             return
 
@@ -249,24 +209,67 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tag_index_ref = None
                 tag_index_refs = self._compile_list_of_selected(iid)
 
-            def_settings['rename_string'] = item_name
-
             # ask for extraction settings
-            settings = ask_extract_settings(self, def_settings, title=item_name,
-                                            tag_index_ref=tag_index_ref)
+            settings, original_name, title = self.show_actions_dialog(
+                item_name, defaults=def_settings, tag_index_ref=tag_index_ref)
 
             if settings['accept_rename'].get():
-                #new_name = os.path.splitext(settings['rename_string'].get())[0]
-                new_name = settings['rename_string'].get()
-                new_type = settings['newtype_string'].get()
+                item_name = str(PureWindowsPath(
+                    tags_tree.parent(iid),
+                    tags_tree.item(iid, 'text')).with_suffix(""))
+
                 self.rename_tag_index_refs(
-                    tag_index_refs, os.path.splitext(item_name)[0], new_name, new_type)
+                    tag_index_refs, original_name,
+                    settings['rename_string'].get(),
+                    settings['newtype_string'].get())
             elif settings['accept_settings'].get():
                 settings['tag_index_refs'] = tag_index_refs
-                settings['title'] = item_name
+                settings['title'] = title
                 self.queue_tree.add_to_queue(
-                    "%s: map: %s: %s" % (settings['extract_mode'].get(),
-                                         map_name, item_name), settings)
+                    "%s: map: %s: %s" % (
+                        settings['extract_mode'].get(),
+                        map_name, item_name), settings)
+
+    def show_actions_dialog(self, item_name, **kwargs):
+        defaults = kwargs.pop("defaults", {})
+
+        kwargs.setdefault('title', item_name)
+
+        settings_vars = dict(
+            recursive=tk.IntVar(self), overwrite=tk.IntVar(self),
+            do_printout=tk.IntVar(self), accept_rename=tk.IntVar(self),
+            autoload_resources=tk.IntVar(self), decode_adpcm=tk.IntVar(self),
+            bitmap_extract_keep_alpha=tk.IntVar(self),
+            generate_comp_verts=tk.IntVar(self), generate_uncomp_verts=tk.IntVar(self),
+            accept_settings=tk.IntVar(self), out_dir=tk.StringVar(self),
+            extract_mode=tk.StringVar(self, "tags"), halo_map=self.active_map,
+            rename_string=tk.StringVar(self), newtype_string=tk.StringVar(self),
+            tagslist_path=tk.StringVar(self), allow_corrupt=tk.IntVar(self),
+            skip_seen_tags_during_queue_processing=tk.IntVar(self),
+            disable_safe_mode=tk.IntVar(self), disable_tag_cleaning=tk.IntVar(self),
+
+            bitmap_extract_format=tk.StringVar(self),
+            globals_overwrite_mode=tk.StringVar(self),
+            )
+
+        settings_vars['rename_string'].set(
+            defaults.pop('name_string', item_name))
+
+        for k in defaults:
+            if k in settings_vars:
+                settings_vars[k].set(defaults[k].get())
+
+        dir_type = defaults.get("extract_mode").get() + "_dir"
+        if dir_type in defaults:
+            settings_vars["out_dir"].set(defaults[dir_type].get())
+
+        w = RefineryActionsWindow(self, settings=settings_vars, **kwargs)
+        original_name, title = str(w.original_name), w.title()
+
+        # make the tree freeze until the settings ask window is done
+        self.wait_window(w)
+
+        return settings_vars, original_name, title
 
     def rename_tag_index_refs(self, index_refs, old_basename,
                               new_basename, new_cls, rename_other_trees=True):
@@ -301,7 +304,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                     new_cls = None
 
             # when renaming only one tag, the basenames COULD BE the full names
-            old_name = sanitize_path(index_ref.path.lower())
+            old_name = str(PureWindowsPath(index_ref.path.lower()))
             new_name = old_name.replace(old_basename, new_basename, 1)
             if not old_name.startswith(old_basename):
                 # tag_path doesnt have the base_name in it
@@ -381,118 +384,119 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tree.rename_tag_index_refs(renamed_index_refs, old_basename,
                                            new_basename, new_cls, False)
 
-    def add_tag_index_refs(self, index_refs, presorted=False):
-        if self.active_map is None: return
+    def get_tag_tree_key(self, tag_index_ref):
+        if (hasattr(self.valid_classes, "__iter__") and
+            int_to_fourcc(tag_index_ref.class_1.data) not in self.valid_classes):
+            return None
 
-        map_magic = self.active_map.map_magic
-        tags_tree = self.tags_tree
-        tree_id_to_index_ref = self.tree_id_to_index_ref
-
-        if presorted:
-            sorted_index_refs = index_refs
+        if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
+            ext = ".%s" % tag_index_ref.class_1.enum_name
         else:
-            sorted_index_refs = []
-            # sort the index_refs
-            if isinstance(index_refs, dict):
-                index_refs = index_refs.values()
+            ext = ".INVALID"
 
-            check_classes = hasattr(self.valid_classes, "__iter__")
-            for b in index_refs:
-                if check_classes:
-                    if int_to_fourcc(b.class_1.data) not in self.valid_classes:
-                        continue
+        return str(PureWindowsPath(tag_index_ref.path.lower())) + ext
 
-                if b.class_1.enum_name not in BAD_CLASSES:
-                    ext = ".%s" % b.class_1.enum_name
-                else:
-                    ext = ".INVALID"
+    def add_tag_index_refs(self, index_refs):
+        if self.active_map is None:
+            return
 
-                tag_path = b.path.lower()
-                if PATHDIV == "/":
-                    tag_path = sanitize_path(tag_path)
-                sorted_index_refs.append((tag_path + ext, b))
-
-            sorted_index_refs = self.sort_index_refs(sorted_index_refs)
+        sorted_index_refs = self.sort_index_refs(index_refs)
 
         # add all the directories before files
         # put the directories in sorted by name
-        indices_by_dirpath = {os.path.dirname(sorted_index_refs[i][0]): i
-                              for i in range(len(sorted_index_refs))}
+        indices_by_dirpath = {
+            os.path.dirname(block[0]): i
+            for i, block in enumerate(sorted_index_refs)
+            }
         for dir_path in sorted(indices_by_dirpath):
             b = sorted_index_refs[indices_by_dirpath[dir_path]][1]
-            if is_reserved_tag(b): continue
-            if dir_path: dir_path += PATHDIV
+            if not is_reserved_tag(b):
+                self.add_folder_path(PureWindowsPath(dir_path).parts)
 
-            try:
-                if not tags_tree.exists(dir_path):
-                    self.add_folder_path(dir_path.split(PATHDIV))
-            except Exception:
-                print(format_exc())
+        for tag_path, tag_index_ref in sorted_index_refs:
+            if is_reserved_tag(tag_index_ref):
+                continue
 
-        halo_map = self.active_map
-        is_h1_rsrc_map = (halo_map.is_resource and halo_map.engine in (
-            "halo1pcdemo", "halo1pc", "halo1ce", "halo1yelo"))
-        for index_ref in sorted_index_refs:
-            tag_path, b = index_ref
-            if is_reserved_tag(b): continue
+            tag_path = PureWindowsPath(tag_path)
+            self.add_tag_index_ref(
+                tag_path.parent.parts, tag_path.name, tag_index_ref)
 
-            dir_path = os.path.dirname(tag_path)
-            if dir_path:
-                dir_path += PATHDIV
+    def add_tag_index_ref(self, parent_dir_parts, tag_path, tag_index_ref):
+        tag_id = tag_index_ref.id & 0xFFff
+        if not self.active_map.map_magic:
+            # resource cache tag
+            tag_id = tag_index_ref.id
 
-            tag_name = os.path.basename(tag_path)
-            tag_id = b.id & 0xFFff
-            pointer_converter = halo_map.map_pointer_converter
-            if hasattr(halo_map, "bsp_pointer_converters"):
-                pointer_converter = halo_map.bsp_pointer_converters.get(
-                    tag_id, pointer_converter)
+        pointer_converter = self.active_map.map_pointer_converter
+        if hasattr(self.active_map, "bsp_pointer_converters"):
+            pointer_converter = self.active_map.bsp_pointer_converters.get(
+                tag_id, pointer_converter)
 
-            if b.indexed and pointer_converter and not is_h1_rsrc_map:
-                pointer = "not in map"
-            elif pointer_converter is not None:
-                pointer = pointer_converter.v_ptr_to_f_ptr(b.meta_offset)
-            else:
-                pointer = 0
+        is_h1_rsrc_map = (self.active_map.is_resource and
+                          self.active_map.engine in (
+                              "halo1pcdemo", "halo1pc",
+                              "halo1ce", "halo1yelo"))
 
-            if not halo_map.map_magic:
-                # resource cache tag
-                tag_id = b.id
+        if tag_index_ref.indexed and pointer_converter and not is_h1_rsrc_map:
+            pointer = "not in map"
+        elif pointer_converter is not None:
+            pointer = pointer_converter.v_ptr_to_f_ptr(
+                tag_index_ref.meta_offset)
+        else:
+            pointer = 0
 
-            try:
-                cls1 = cls2 = cls3 = ""
-                if b.class_1.enum_name not in BAD_CLASSES:
-                    cls1 = int_to_fourcc(b.class_1.data)
-                if b.class_2.enum_name not in BAD_CLASSES:
-                    cls2 = int_to_fourcc(b.class_2.data)
-                if b.class_3.enum_name not in BAD_CLASSES:
-                    cls3 = int_to_fourcc(b.class_3.data)
-                tags_tree.insert(
-                    # NEED TO DO str OR ELSE THE SCENARIO TAG'S ID WILL
-                    # BE INTERPRETED AS NOTHING AND BE CHANGED TO 'I001'
-                    dir_path, 'end', iid=str(tag_id), text=tag_name, tags=("item", ),
-                    values=(cls1, cls2, cls3, b.meta_offset, pointer, tag_id))
-                tree_id_to_index_ref[tag_id] = b
-            except Exception:
-                print(format_exc())
+        try:
+            cls1 = cls2 = cls3 = ""
+            if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
+                cls1 = int_to_fourcc(tag_index_ref.class_1.data)
+            if tag_index_ref.class_2.enum_name not in BAD_CLASSES:
+                cls2 = int_to_fourcc(tag_index_ref.class_2.data)
+            if tag_index_ref.class_3.enum_name not in BAD_CLASSES:
+                cls3 = int_to_fourcc(tag_index_ref.class_3.data)
 
-    def add_folder_path(self, dir_paths=(), parent_dir=''):
-        if not dir_paths:
-            return
+            parent_iid = self.add_folder_path(parent_dir_parts)
+            self.tags_tree.insert(
+                # NEED TO DO str OR ELSE THE SCENARIO TAG'S ID WILL
+                # BE INTERPRETED AS NOTHING AND BE CHANGED TO 'I001'
+                parent_iid, 'end', iid=str(tag_id),
+                tags=("item", ), text=tag_path,
+                values=(cls1, cls2, cls3,
+                        tag_index_ref.meta_offset, pointer, tag_id))
+            self.tree_id_to_index_ref[tag_id] = tag_index_ref
+        except Exception:
+            print(format_exc())
 
-        this_dir = dir_paths.pop(0)
+    def add_folder_path(self, dir_parts):
+        abs_dir_path = str(PureWindowsPath(*dir_parts))
+        if abs_dir_path:
+            abs_dir_path += "\\"  # directories must end with a backslash.
+            #                       this is how we distinguish dirs from files
+
+        if self.tags_tree.exists(abs_dir_path):
+            return abs_dir_path
+
+        return self._add_folder_path(list(dir_parts), '')
+
+    def _add_folder_path(self, dir_parts, parent_dir):
+        if not dir_parts:
+            return parent_dir
+
+        this_dir = dir_parts.pop(0)
         if not this_dir:
-            return
+            return parent_dir
 
         abs_dir_path = parent_dir + this_dir
         if abs_dir_path:
-            abs_dir_path += PATHDIV
+            abs_dir_path += "\\"  # directories must end with a backslash.
+            #                       this is how we distinguish dirs from files
 
         if not self.tags_tree.exists(abs_dir_path):
             # add the directory to the treeview
             self.tags_tree.insert(
-                parent_dir, 'end', iid=abs_dir_path, tags=("item", ), text=this_dir)
+                parent_dir, 'end', iid=abs_dir_path,
+                tags=("item", ), text=this_dir)
 
-        self.add_folder_path(dir_paths, abs_dir_path)
+        return self._add_folder_path(dir_parts, abs_dir_path)
 
     open_selected = close_selected = no_op
 
