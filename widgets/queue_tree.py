@@ -38,8 +38,8 @@ class QueueTree(ExplorerHierarchyTree):
             settings = self.queue_info[iids[0]]
             w = RefineryEditActionsWindow(
                 self, settings=settings, title=settings.get('title'))
-            # make the parent freeze what it's doing until we're destroyed
-            w.master.wait_window(self)
+            # make the queue freeze until the settings ask window is done
+            self.wait_window(w)
 
     def add_to_queue(self, item_name, new_queue_info):
         self.queue_info[item_name] = new_queue_info
