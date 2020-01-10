@@ -43,6 +43,7 @@ from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 from refinery.constants import INF, ACTIVE_INDEX, MAP_TYPE_ANY,\
      MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
 from refinery import crc_functions
+from refinery import editor_constants as e_c
 from refinery.exceptions import RefineryError, MapNotLoadedError,\
      EngineDetectionError, MapAlreadyLoadedError, CouldNotGetMetaError,\
      InvalidTagIdError, InvalidClassError, MetaConversionError,\
@@ -672,7 +673,7 @@ class RefineryCore:
                 print(format_exc())
 
         tag_paths_to_not_rename = set()
-        ignore_filepath = Path(__file__).parent.joinpath(
+        ignore_filepath = e_c.REFINERYLIB_DIR.joinpath(
             "tag_paths_to_never_rename.txt")
         try:
             with ignore_filepath.open("r") as file:
@@ -1624,7 +1625,7 @@ class RefineryCore:
                 "Refinery does not have permission to save here. "
                 "Running Refinery as admin could potentially fix this.")
         except FileNotFoundError:
-            if sys.platform.lower() != "win32" or len(str(filepath)) < 256:
+            if not e_c.IS_WIN or len(str(filepath)) < 260:
                 raise
             raise RefineryError("Filepath is over the Windows 260 character limit.")
 
