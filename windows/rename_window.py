@@ -1,3 +1,12 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 import os
 import refinery
 import tkinter as tk
@@ -19,7 +28,7 @@ class RefineryRenameWindow(tk.Toplevel, BinillaWidget):
         self.active_map = kwargs.pop('active_map', None)
         BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
-        
+
         try:
             self.iconbitmap(e_c.REFINERY_ICON_PATH)
         except Exception:
