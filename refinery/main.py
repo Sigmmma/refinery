@@ -564,10 +564,10 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if len(paths.NAME_MAP) > len(paths):
             paths.extend(len(paths.NAME_MAP) - len(paths))
 
-        paths.tagslist.path = str(self.tagslist_path).lstrip(".")
-        paths.tags_dir.path = str(self.tags_dir).lstrip(".")
-        paths.data_dir.path = str(self.data_dir).lstrip(".")
-        paths.last_dir.path = str(self.last_dir).lstrip(".")
+        paths.tagslist.path = "" if is_path_empty(self.tagslist_path) else str(self.tagslist_path)
+        paths.tags_dir.path = "" if is_path_empty(self.tags_dir) else str(self.tags_dir)
+        paths.data_dir.path = "" if is_path_empty(self.data_dir) else str(self.data_dir)
+        paths.last_dir.path = "" if is_path_empty(self.last_dir) else str(self.last_dir)
 
         header.flags.display_mode.set_to(self._display_mode)
         for attr_name in ("do_printout", "autoload_resources"):
