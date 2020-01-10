@@ -11,6 +11,7 @@ from traceback import format_exc
 from supyr_struct.buffer import get_rawdata_context, PeekableMmap
 from supyr_struct.defs import constants as supyr_constants
 from supyr_struct.field_types import FieldType
+from supyr_struct.util import path_normalize
 
 
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
@@ -1342,7 +1343,7 @@ class RefineryCore:
                 for curr_map_name in sorted(maps):
                     curr_halo_map = maps[curr_map_name]
                     map_filepath = Path(getattr(curr_halo_map, "filepath", ""))
-                    if filepath == map_filepath:
+                    if path_normalize(filepath) == path_normalize(map_filepath):
                         engine = curr_engine
                         map_name = curr_map_name
                         break
