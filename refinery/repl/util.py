@@ -1,3 +1,12 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 def convert_arg_line_to_args(arg_line):
     arg_line = arg_line.strip()
     args = []

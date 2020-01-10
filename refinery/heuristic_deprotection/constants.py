@@ -1,3 +1,12 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 from refinery.constants import INF, MAX_TAG_NAME_LEN, ACTIVE_INDEX,\
      MAP_TYPE_ANY, MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE, BAD_CLASSES,\
      INVALID, UNPRINTABLE
