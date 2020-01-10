@@ -20,6 +20,7 @@ from traceback import format_exc
 from supyr_struct.buffer import get_rawdata_context, PeekableMmap
 from supyr_struct.defs import constants as supyr_constants
 from supyr_struct.field_types import FieldType
+from supyr_struct.util import path_normalize
 
 
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
@@ -51,6 +52,7 @@ from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 from refinery.constants import INF, ACTIVE_INDEX, MAP_TYPE_ANY,\
      MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
 from refinery import crc_functions
+from refinery import editor_constants as e_c
 from refinery.exceptions import RefineryError, MapNotLoadedError,\
      EngineDetectionError, MapAlreadyLoadedError, CouldNotGetMetaError,\
      InvalidTagIdError, InvalidClassError, MetaConversionError,\
@@ -680,7 +682,7 @@ class RefineryCore:
                 print(format_exc())
 
         tag_paths_to_not_rename = set()
-        ignore_filepath = Path(__file__).parent.joinpath(
+        ignore_filepath = e_c.REFINERYLIB_DIR.joinpath(
             "tag_paths_to_never_rename.txt")
         try:
             with ignore_filepath.open("r") as file:
@@ -1351,7 +1353,7 @@ class RefineryCore:
                 for curr_map_name in sorted(maps):
                     curr_halo_map = maps[curr_map_name]
                     map_filepath = Path(getattr(curr_halo_map, "filepath", ""))
-                    if filepath == map_filepath:
+                    if path_normalize(filepath) == path_normalize(map_filepath):
                         engine = curr_engine
                         map_name = curr_map_name
                         break
@@ -1494,7 +1496,7 @@ class RefineryCore:
             raise InvalidTagIdError('tag_id "%s" is not in the tag index.' % tag_id)
 
         tag_index_ref = tag_index_array[tag_id]
-        tag_path = PureWindowsPath(tag_index_ref.path)
+        tag_path = Path(PureWindowsPath(tag_index_ref.path))
         if tag_index_ref.class_1.enum_name in (supyr_constants.INVALID,
                                                "NONE"):
             raise InvalidClassError(
@@ -1632,7 +1634,7 @@ class RefineryCore:
                 "Refinery does not have permission to save here. "
                 "Running Refinery as admin could potentially fix this.")
         except FileNotFoundError:
-            if sys.platform.lower() != "win32" or len(str(filepath)) < 256:
+            if not e_c.IS_WIN or len(str(filepath)) < 260:
                 raise
             raise RefineryError("Filepath is over the Windows 260 character limit.")
 
