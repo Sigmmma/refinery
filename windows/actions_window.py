@@ -206,6 +206,8 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
 
         # make the window not show up on the start bar
         self.transient(self.master)
+        self.wait_visibility()
+        self.lift()
         self.grab_set()
         self.apply_style()
 
