@@ -21,6 +21,7 @@ Something that is very important to us is collaboration and the ability to share
  - Fix tag class deprotection failing on scenario tag.
  - Fix valid classes for explorers being set wrong if not in data extraction mode.
  - Make numerous path handling changes to support POSIX systems.
+ - Refactor a bunch of the Refinery core.
  - Use kdialog whenever available instead of default tkinter filepicker.
  - Use pathlib Path objects where applicable to ease compatibility with multiple operating systems.
  - Various changes to work with new reclaimer codebase.
