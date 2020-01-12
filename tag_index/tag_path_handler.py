@@ -1,5 +1,15 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 import os
 
+from pathlib import PureWindowsPath
 from refinery.constants import INF
 from refinery.util import sanitize_win32_path, get_unique_name
 from supyr_struct.util import str_to_identifier
@@ -120,8 +130,8 @@ class TagPathHandler():
         tag_ref = self.get_index_ref(index)
         if not tag_ref:
             return ""
-        root_dirs = root.split("\\")
-        dirs = tag_ref.path.split("\\")[: -1]
+        root_dirs = PureWindowsPath(root).parts
+        dirs = PureWindowsPath(tag_ref.path).parts[: -1]
         while (dirs and root_dirs) and dirs[0] == root_dirs[0]:
             dirs.pop(0)
             root_dirs.pop(0)
@@ -129,13 +139,13 @@ class TagPathHandler():
         if not dirs:
             return ""
 
-        return '\\'.join(dirs) + "\\"
+        return str(PureWindowsPath(*dirs)) + "\\"
 
     def get_basename(self, index):
         tag_ref = self.get_index_ref(index)
         if not tag_ref:
             return ""
-        return tag_ref.path.split("\\")[-1]
+        return PureWindowsPath(tag_ref.path).name
 
     def get_will_overwrite(self, index, priority, override=False):
         if index is None:
@@ -165,10 +175,10 @@ class TagPathHandler():
             new_path_no_ext += "protected %s" % index
 
         ext = "." + tag_ref.class_1.enum_name.lower()
-        new_path_no_ext = sanitize_win32_path(new_path_no_ext).strip()
+        new_path_no_ext = str(sanitize_win32_path(new_path_no_ext.lower())).strip()
 
         if ensure_unique_name and self._path_map.get(new_path_no_ext + ext) not in (None, index):
-            path_pieces = new_path_no_ext.split("\\")
+            path_pieces = PureWindowsPath(new_path_no_ext).parts
             path_basename = path_pieces[-1]
             try:
                 path_basename_pieces = path_basename.split("#")
@@ -179,7 +189,7 @@ class TagPathHandler():
 
             path_pieces = tuple(path_pieces[: -1]) + (path_basename, )
             new_path_no_ext = get_unique_name(
-                self._path_map, "\\".join(path_pieces), ext, index)
+                self._path_map, str(PureWindowsPath(*path_pieces)), ext, index)
 
         old_path = tag_ref.path.lower() + ext
         new_path = new_path_no_ext + ext
@@ -243,13 +253,13 @@ class TagPathHandler():
         print_errors = kw.pop("print_errors", False)
 
         for tag_path, index in self._path_map.items():
-            tag_path = sanitize_win32_path(tag_path)
-            if len(os.path.splitext(tag_path)[0]) < max_len:
+            tag_path = sanitize_win32_path(tag_path.lower())
+            if len(str(tag_path.with_suffix(""))) < max_len:
                 # don't rename tags below the limit. use None as the key so
                 # the tag path is still considered when chosing unique names
                 index = None
 
-            tag_path_pieces = tag_path.split("\\")
+            tag_path_pieces = tag_path.parts
             curr_dir = paths
             # 1 char for \, 1 for potential ~, 1 for potential number,
             # and 1 for at least one name character
@@ -367,7 +377,8 @@ class TagPathHandler():
 
                 # reached a filename that needs to be renamed. rename the item and continue.
                 tag_path = val.path
-                new_tag_path = "\\".join(path_pieces + os.path.splitext(name)[: 1])
+                new_tag_path = PureWindowsPath(
+                    *path_pieces).with_suffix(PureWindowsPath(name).suffix)
                 if do_printout:
                     print("%s char filepath shortened to %s chars:\n\t%s\n\t%s\n"%
                           (len(tag_path), len(new_tag_path), tag_path, new_tag_path))

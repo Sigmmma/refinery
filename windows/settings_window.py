@@ -1,22 +1,29 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 import os
 import refinery
 import tkinter.font
 import tkinter as tk
 
-from tkinter.filedialog import asksaveasfilename, askdirectory
+from pathlib import Path
+from binilla.windows.filedialog import asksaveasfilename, askdirectory
 from tkinter import ttk
 from traceback import format_exc
 
 from binilla.widgets.binilla_widget import BinillaWidget
 from binilla.widgets.scroll_menu import ScrollMenu
 from binilla import editor_constants as e_c
+
+from refinery import editor_constants as e_c
 from refinery.defs.config_def import bitmap_file_formats, \
      globals_overwrite_gui_names
-from refinery.util import get_cwd, sanitize_path
-from supyr_struct.defs.constants import PATHDIV
-
-
-curr_dir = get_cwd(refinery.__file__)
 
 
 class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
@@ -27,10 +34,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
         try:
-            try:
-                self.iconbitmap(os.path.join(curr_dir, 'refinery.ico'))
-            except Exception:
-                self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
+            self.iconbitmap(e_c.REFINERY_ICON_PATH)
         except Exception:
             if not e_c.IS_LNX:
                 print("Could not load window icon.")
@@ -127,7 +131,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         self.generate_uncomp_verts_cbtn = tk.Checkbutton(
             self.tag_fixup_frame, text="Generate uncompressed lightmap vertices",
             variable=self.generate_uncomp_verts)
-        
+
         self.dont_touch_frame = tk.LabelFrame(
             self.tag_fixup_frame,
             text="ONLY CHECK THESE IF YOU ARE NOT DEALING WITH PROTECTED MAPS")
@@ -236,7 +240,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         self.print_heuristic_progress_cbtn = tk.Checkbutton(
             self.heuristics_frame, text=("Print heuristic tag path changes"),
             variable=self.print_heuristic_name_changes, justify='left')
-        
+
 
         font_frame_widgets = {}
         for font_type in sorted(self.font_settings):
@@ -406,11 +410,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         if not dirpath:
             return
 
-        dirpath = sanitize_path(dirpath)
-        if not dirpath.endswith(PATHDIV):
-            dirpath += PATHDIV
-
-        self.tags_dir.set(dirpath)
+        self.tags_dir.set(str(Path(dirpath)))
 
     def data_dir_browse(self):
         dirpath = askdirectory(initialdir=self.data_dir.get(), parent=self,
@@ -419,11 +419,7 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         if not dirpath:
             return
 
-        dirpath = sanitize_path(dirpath)
-        if not dirpath.endswith(PATHDIV):
-            dirpath += PATHDIV
-
-        self.data_dir.set(dirpath)
+        self.data_dir.set(str(Path(dirpath)))
 
     def tags_list_browse(self):
         try:
@@ -438,4 +434,4 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         if not dirpath:
             return
 
-        self.tagslist_path.set(sanitize_path(dirpath))
+        self.tagslist_path.set(str(Path(dirpath)))

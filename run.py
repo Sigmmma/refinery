@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-import os, sys
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
+import sys
 
 info = sys.version_info
 
@@ -16,7 +25,7 @@ try:
     from refinery.main import Refinery
     main_window = Refinery()
     main_window.mainloop()
-    
+
 except Exception:
     exception = format_exc()
     try:
