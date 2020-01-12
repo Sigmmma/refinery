@@ -98,7 +98,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     about_messages = ()
     tk_vars = ()
 
-    issue_tracker_url = "https://github.com/MosesofEgypt/refinery/issues"
+    issue_tracker_url = refinery.__website__ + "/issues"
 
     def __init__(self, *args, **kwargs):
         self.app_name = str(kwargs.pop('app_name', self.app_name))
