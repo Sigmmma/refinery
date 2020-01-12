@@ -1,8 +1,18 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 import os
 import shutil
 import sys
 import zlib
 
+from pathlib import Path, PureWindowsPath
 from struct import unpack
 from time import time
 from traceback import format_exc
@@ -10,6 +20,7 @@ from traceback import format_exc
 from supyr_struct.buffer import get_rawdata_context, PeekableMmap
 from supyr_struct.defs import constants as supyr_constants
 from supyr_struct.field_types import FieldType
+from supyr_struct.util import path_normalize
 
 
 from reclaimer.constants import GEN_1_HALO_ENGINES, GEN_2_ENGINES
@@ -41,6 +52,7 @@ from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 from refinery.constants import INF, ACTIVE_INDEX, MAP_TYPE_ANY,\
      MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
 from refinery import crc_functions
+from refinery import editor_constants as e_c
 from refinery.exceptions import RefineryError, MapNotLoadedError,\
      EngineDetectionError, MapAlreadyLoadedError, CouldNotGetMetaError,\
      InvalidTagIdError, InvalidClassError, MetaConversionError,\
@@ -50,11 +62,10 @@ from refinery.heuristic_deprotection.constants import VERY_HIGH_PRIORITY
 from refinery.heuristic_deprotection.functions import heuristic_deprotect
 from refinery.tag_index.tag_path_handler import TagPathHandler
 from refinery.tag_index.tag_path_detokenizer import TagPathDetokenizer
-from refinery.util import inject_file_padding, sanitize_path, get_cwd,\
-     int_to_fourcc
+from refinery.util import inject_file_padding, int_to_fourcc
 
+from supyr_struct.util import is_path_empty
 
-curr_dir = get_cwd(__file__)
 
 halo_map_wrappers_by_engine = {
     "stubbs":          StubbsMap,
@@ -136,12 +147,12 @@ class RefineryCore:
     # active map settings
     active_engine_name = ""
     active_map_name = ""
-    active_map_path = ""
+    _active_map_path = ""
 
     # default directories and tagslist path
-    tags_dir = ""
-    data_dir = ""
-    tagslist_path = ""
+    _tags_dir = Path("")
+    _data_dir = Path("")
+    _tagslist_path = Path("")
 
     # settings
     autoload_resources = True
@@ -183,23 +194,47 @@ class RefineryCore:
     _extract_queue = ()
 
     def __init__(self, *args, **kwargs):
-        self.tags_dir = os.path.join(curr_dir, "tags", "")
-        self.data_dir = os.path.join(curr_dir, "data", "")
-        self.tagslist_path = os.path.join(self.tags_dir, "tagslist.txt")
+        self.tags_dir = Path.cwd().joinpath("tags")
+        self.data_dir = Path.cwd().joinpath("data")
+        self.tagslist_path = self.tags_dir.joinpath("tagslist.txt")
         self._maps_by_engine = {}
         self._extract_queue = []
 
-    def enqueue(self, operation="extract_tags", **kwargs):
-        if isinstance(operation, RefineryQueueItem):
-            self._extract_queue.append(operation)
-            return
-        kwargs.setdefault("engine", ACTIVE_INDEX)
-        kwargs.setdefault("map_name", ACTIVE_INDEX)
-        self._extract_queue.append(RefineryQueueItem(operation, **kwargs))
+    @property
+    def active_map_path(self):
+        return self._active_map_path
+    @active_map_path.setter
+    def active_map_path(self, new_val):
+        if not isinstance(new_val, Path):
+            new_val = Path(new_val)
+        self._active_map_path = new_val
 
-    def dequeue(self, index=0):
-        if index in range(len(self._extract_queue)):
-            return self._extract_queue.pop(index)
+    @property
+    def tags_dir(self):
+        return self._tags_dir
+    @tags_dir.setter
+    def tags_dir(self, new_val):
+        if not isinstance(new_val, Path):
+            new_val = Path(new_val)
+        self._tags_dir = new_val
+
+    @property
+    def data_dir(self):
+        return self._data_dir
+    @data_dir.setter
+    def data_dir(self, new_val):
+        if not isinstance(new_val, Path):
+            new_val = Path(new_val)
+        self._data_dir = new_val
+
+    @property
+    def tagslist_path(self):
+        return self._tagslist_path
+    @tagslist_path.setter
+    def tagslist_path(self, new_val):
+        if not isinstance(new_val, Path):
+            new_val = Path(new_val)
+        self._tagslist_path = new_val
 
     @property
     def maps_by_engine(self): return self._maps_by_engine
@@ -212,6 +247,18 @@ class RefineryCore:
     def active_maps(self): return self.maps_by_engine.get(ACTIVE_INDEX, {})
     @property
     def active_map(self):  return self.active_maps.get(ACTIVE_INDEX)
+
+    def enqueue(self, operation="extract_tags", **kwargs):
+        if isinstance(operation, RefineryQueueItem):
+            self._extract_queue.append(operation)
+            return
+        kwargs.setdefault("engine", ACTIVE_INDEX)
+        kwargs.setdefault("map_name", ACTIVE_INDEX)
+        self._extract_queue.append(RefineryQueueItem(operation, **kwargs))
+
+    def dequeue(self, index=0):
+        if index in range(len(self._extract_queue)):
+            return self._extract_queue.pop(index)
 
     def set_active_engine(self, name=None, map_name=None):
         if name == ACTIVE_INDEX and map_name == ACTIVE_INDEX:
@@ -329,28 +376,30 @@ class RefineryCore:
         elif halo_map.engine not in ("halo1ce", "halo1yelo",
                                      "halo1pc", "halo1vap"):
             raise TypeError("Cannot save this kind of map.")
-        elif not save_path:
+        elif is_path_empty(save_path):
             save_path = halo_map.filepath
 
-        save_dir  = os.path.dirname(save_path)
-        save_path, ext = os.path.splitext(save_path)
-        save_path = sanitize_path(save_path + (ext if ext else (
-            '.yelo' if 'yelo' in halo_map.engine else '.map')))
-        os.makedirs(save_dir, exist_ok=True)
+        save_path = Path(save_path)
+        if not save_path.suffix:
+            save_path = save_path.with_suffix(
+                '.yelo' if 'yelo' in halo_map.engine else '.map')
+
+        save_dir = save_path.parent
+        save_dir.mkdir(exist_ok=True, parents=True)
 
         try:
             map_file = halo_map.map_data
-            if save_path.lower() == sanitize_path(halo_map.filepath).lower():
+            if save_path == halo_map.filepath:
                 out_file = map_file = halo_map.get_writable_map_data()
             else:
                 # use r+ mode rather than w if the file os.path.exists
                 # since it might be hidden. apparently on windows
                 # the w mode will fail to open hidden files.
-                if os.path.isfile(save_path):
-                    tmp_file = open(save_path, 'r+b')
+                if save_path.is_file():
+                    tmp_file = save_path.open('r+b')
                     tmp_file.truncate(0)
                 else:
-                    tmp_file = open(save_path, 'w+b')
+                    tmp_file = save_path.open('w+b')
 
                 map_file.seek(0) # need to seek to 0 as shutil.copyfileobj uses
                 tmp_file.seek(0) # the current file offsets for copying to/from
@@ -359,7 +408,7 @@ class RefineryCore:
                 os.fsync(tmp_file.fileno())
                 tmp_file.close()
 
-                with open(save_path, 'r+b') as f:
+                with save_path.open('r+b') as f:
                     out_file = PeekableMmap(f.fileno(), 0)
 
             map_header = halo_map.map_header
@@ -475,7 +524,7 @@ class RefineryCore:
         autoload_resources = kw.pop("autoload_resources", self.autoload_resources)
 
         if do_printout:
-            print("Loading %s..." % os.path.basename(map_path))
+            print("Loading %s..." % map_path.name)
 
         with get_rawdata_context(filepath=map_path, writable=False) as f:
             head_sig   = unpack("<I", f.peek(4))[0]
@@ -554,8 +603,10 @@ class RefineryCore:
             maps = self.maps_by_engine[engine]
             for map_name in sorted(maps):
                 try:
-                    if map_name != ACTIVE_INDEX and not maps[map_name].is_resource:
-                        self.deprotect(None, engine, map_name, **kw)
+                    halo_map = maps.get(map_name)
+                    if halo_map is not None and (map_name != ACTIVE_INDEX and
+                                                 not halo_map.is_resource):
+                        self.deprotect(halo_map.filepath, map_name, engine, **kw)
                 except Exception:
                     print(format_exc())
 
@@ -571,8 +622,10 @@ class RefineryCore:
                                      "halo1pc", "halo1vap"):
             raise TypeError("Cannot deprotect this kind of map.")
 
-        if not save_path:
+        if is_path_empty(save_path):
             save_path = halo_map.filepath
+
+        save_path = Path(save_path)
 
         do_printout  = kw.pop("do_printout", self.do_printout)
         print_errors = kw.pop("print_errors", self.print_errors)
@@ -590,9 +643,10 @@ class RefineryCore:
         valid_tag_paths_are_accurate = kw.pop(
             "valid_tag_paths_are_accurate", self.valid_tag_paths_are_accurate)
         spoof_checksum = halo_map.force_checksum
-        if not self.save_map(save_path, map_name, engine,
-                             prompt_strings_expand=False,
-                             prompt_internal_rename=False):
+        if is_path_empty(self.save_map(
+                save_path, map_name, engine,
+                prompt_strings_expand=False,
+                prompt_internal_rename=False)):
             return
 
         # get the active map AFTER saving because it WILL have changed
@@ -628,11 +682,12 @@ class RefineryCore:
                 print(format_exc())
 
         tag_paths_to_not_rename = set()
-        ignore_filepath = os.path.join(curr_dir, "tag_paths_to_never_rename.txt")
+        ignore_filepath = e_c.REFINERYLIB_DIR.joinpath(
+            "tag_paths_to_never_rename.txt")
         try:
-            with open(ignore_filepath) as file:
+            with ignore_filepath.open("r") as file:
                 for line in file:
-                    line = line.split(";")[0].strip().lower().replace("/", "\\")
+                    line = str(PureWindowsPath(line.split(";")[0])).lower()
                     if line:
                         tag_paths_to_not_rename.add(line)
         except Exception:
@@ -715,7 +770,8 @@ class RefineryCore:
                 halo_map.get_writable_map_data(), halo_map.index_magic)
 
         self.save_map(save_path, map_name, engine,
-                      prompt_strings_expand=False, prompt_internal_rename=False)
+                      prompt_strings_expand=False,
+                      prompt_internal_rename=False)
 
         # record the original tag_paths so we know if any were changed
         halo_map.cache_original_tag_paths()
@@ -814,16 +870,15 @@ class RefineryCore:
         # locate the tags to start deprotecting with
         repair = {}
         for b in tag_index_array:
-            if b.indexed or b.class_1.enum_name in (
+            if b.id == halo_map.tag_index.scenario_tag_id:
+                tag_cls = "scnr"
+            elif b.indexed or b.class_1.enum_name in (
                     supyr_constants.INVALID, "NONE"):
                 continue
-
-            tag_id = b.id & 0xFFff
-            if tag_id == halo_map.tag_index.scenario_tag_id & 0xFFff:
-                tag_cls = "scnr"
             else:
                 tag_cls = int_to_fourcc(b.class_1.data)
 
+            tag_id = b.id & 0xFFff
             if tag_cls in ("scnr", "DeLa"):
                 repair[tag_id] = tag_cls
             elif tag_cls == "matg" and b.path == "globals\\globals":
@@ -849,7 +904,8 @@ class RefineryCore:
                     if tag_cls != "sbsp":
                         class_repair_functions[tag_cls](
                             tag_id, tag_index_array, halo_map.get_writable_map_data(),
-                            halo_map.map_magic, next_repair, halo_map.engine)
+                            halo_map.map_magic, next_repair, halo_map.engine,
+                            not self.disable_safe_mode)
 
                         # replace meta with the deprotected one
                         if tag_cls == "matg":
@@ -861,7 +917,8 @@ class RefineryCore:
                             halo_map.bsp_headers[tag_id].meta_pointer,
                             tag_index_array, halo_map.get_writable_map_data(),
                             halo_map.bsp_magics[tag_id] - halo_map.bsp_header_offsets[tag_id],
-                            next_repair, halo_map.engine, halo_map.map_magic)
+                            next_repair, halo_map.engine, halo_map.map_magic,
+                            not self.disable_safe_mode)
                 except Exception:
                     print(format_exc())
 
@@ -1099,18 +1156,18 @@ class RefineryCore:
                     raise
                 print(format_exc())
 
-    def extract_cheape(self, filepath="", map_name=ACTIVE_INDEX,
+    def extract_cheape(self, filepath=Path(""), map_name=ACTIVE_INDEX,
                        engine=ACTIVE_INDEX):
         halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         if not halo_map or halo_map.engine != "halo1yelo":
-            return ""
+            return Path("")
 
-        if not filepath:
-            filepath = sanitize_path(
-                os.path.join(self.tags_dir,
-                     halo_map.map_header.map_name + "_cheape.map"))
+        filepath = Path(filepath)
+        if is_path_empty(filepath):
+            filepath = self.tags_dir.joinpath(
+                halo_map.map_header.map_name + "_cheape.map")
 
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        filepath.parent.mkdir(exist_ok=True, parents=True)
 
         cheape = halo_map.map_header.yelo_header.cheape_definitions
         size        = cheape.size
@@ -1118,8 +1175,8 @@ class RefineryCore:
 
         halo_map.map_data.seek(cheape.offset)
         cheape_data = halo_map.map_data.read(size)
-        mode = 'r+b' if os.path.isfile(filepath) else 'w+b'
-        with open(filepath, mode) as f:
+        mode = 'r+b' if filepath.is_file() else 'w+b'
+        with filepath.open(mode) as f:
             f.truncate(0)
             if decomp_size and decomp_size != size:
                 cheape_data = zlib.decompress(cheape_data)
@@ -1189,8 +1246,9 @@ class RefineryCore:
         map_name = kw.pop("map_name", ACTIVE_INDEX)
         tag_ids = kw.pop("tag_ids", ())
         tag_id = kw.pop("tag_id", 0xFFff)
-        dir_path = kw.get("dir_path", "")
-        filepath = sanitize_path(kw.pop("filepath", ""))
+
+        dir_path = Path(kw.get("dir_path", ""))
+        filepath = Path(kw.pop("filepath", ""))
 
         halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
         engine = getattr(halo_map, "engine", None)
@@ -1230,9 +1288,8 @@ class RefineryCore:
                 ignore.add(tag_ids[0])
         elif op == "extract_cheape":
             if map_name not in cheapes_extracted:
-                if not filepath:
-                    filepath = os.path.join(
-                        sanitize_path(kw.pop("out_dir", self.tags_dir)),
+                if is_path_empty(filepath):
+                    filepath = Path(kw.pop("out_dir", self.tags_dir)).joinpath(
                         map_name + "_cheape.map")
 
                 cheapes_extracted.add(map_name)
@@ -1295,8 +1352,8 @@ class RefineryCore:
                 maps = self.maps_by_engine[curr_engine]
                 for curr_map_name in sorted(maps):
                     curr_halo_map = maps[curr_map_name]
-                    map_filepath = getattr(curr_halo_map, "filepath", "")
-                    if filepath.lower() == map_filepath.lower():
+                    map_filepath = Path(getattr(curr_halo_map, "filepath", ""))
+                    if path_normalize(filepath) == path_normalize(map_filepath):
                         engine = curr_engine
                         map_name = curr_map_name
                         break
@@ -1323,16 +1380,16 @@ class RefineryCore:
 
         tags_to_ignore = set(kw.pop("tags_to_ignore", ()))
         recursive     = kw.pop("recursive", self.recursive)
-        tagslist_path = kw.pop("tagslist_path", self.tagslist_path)
-        do_printout = kw.get("do_printout", self.do_printout)
+        do_printout   = kw.get("do_printout", self.do_printout)
+        tagslist_path = Path(kw.pop("tagslist_path", self.tagslist_path))
 
         if isinstance(tag_ids, int):
             tag_ids = (tag_ids, )
 
         if extract_mode == "tags":
-            out_dir = kw.setdefault("out_dir", self.tags_dir)
+            out_dir = Path(kw.setdefault("out_dir", self.tags_dir))
         else:
-            out_dir = kw.setdefault("out_dir", self.data_dir)
+            out_dir = Path(kw.setdefault("out_dir", self.data_dir))
 
         extracted = set()
         tagslist = ""
@@ -1363,11 +1420,11 @@ class RefineryCore:
                 try:
                     if self.extract_tag(tag_id, map_name, engine, **kw):
                         extracted.add(tag_id)
-                        if not tagslist_path:
+                        if is_path_empty(tagslist_path):
                             continue
 
                         tag_index_ref = halo_map.tag_index.tag_index[tag_id]
-                        tag_path = "%s.%s" % (sanitize_path(tag_index_ref.path),
+                        tag_path = "%s.%s" % (PureWindowsPath(tag_index_ref.path),
                                               tag_index_ref.class_1.enum_name)
                         tagslist += "%s: %s\n" % (extract_mode, tag_path)
                 except RefineryError:
@@ -1382,7 +1439,7 @@ class RefineryCore:
             if rsrc_map.is_resource or rsrc_map is halo_map:
                 rsrc_map.clear_map_cache()
 
-        if tagslist_path:
+        if not is_path_empty(tagslist_path):
             tagslist = "%s tags in: %s\n%s" % (
                 len(extracted), out_dir, tagslist)
             if self.write_tagslist(tagslist, tagslist_path):
@@ -1439,7 +1496,7 @@ class RefineryCore:
             raise InvalidTagIdError('tag_id "%s" is not in the tag index.' % tag_id)
 
         tag_index_ref = tag_index_array[tag_id]
-        tag_path = sanitize_path(tag_index_ref.path)
+        tag_path = Path(PureWindowsPath(tag_index_ref.path))
         if tag_index_ref.class_1.enum_name in (supyr_constants.INVALID,
                                                "NONE"):
             raise InvalidClassError(
@@ -1449,31 +1506,31 @@ class RefineryCore:
             return False
 
         full_tag_class = tag_index_ref.class_1.enum_name
-        tag_path += "." + full_tag_class
+        tag_path = str(tag_path) + "." + full_tag_class
         if force_lower_case_paths:
             tag_path = tag_path.lower()
 
         tag_cls = int_to_fourcc(tag_index_ref.class_1.data)
         if extract_mode == "tags":
-            out_dir = kw.get("out_dir", self.tags_dir)
-            filepath = kw.pop("filepath", os.path.join(out_dir, tag_path))
-            do_extract = ((overwrite or not os.path.isfile(filepath))
+            out_dir = Path(kw.get("out_dir", self.tags_dir))
+            filepath = Path(kw.pop("filepath", out_dir.joinpath(tag_path)))
+            do_extract = ((overwrite or not filepath.is_file())
                           and tag_cls in halo_map.tag_headers)
 
             if not(do_extract or get_dependencies):
                 return False
         else:
-            out_dir = kw.get("out_dir", self.data_dir)
+            out_dir = Path(kw.get("out_dir", self.data_dir))
+            filepath = Path("")
             do_extract = True
             get_dependencies = False # it makes no sense to fill out
             #                          dependencies in data extraction
-
 
         is_gen1 = ("halo1" in halo_map.engine or
                    "stubbs" in halo_map.engine or
                    "shadowrun" in halo_map.engine)
 
-        if tag_cls == "matg" and os.path.isfile(filepath) and is_gen1:
+        if tag_cls == "matg" and filepath.is_file() and is_gen1:
             # determine if we should overwrite the globals tag
             mode = self.globals_overwrite_mode
             prompt = (mode == 0)
@@ -1517,9 +1574,9 @@ class RefineryCore:
 
             if use_tag_index_for_script_names:
                 bipeds = meta.bipeds_palette.STEPTREE
-                actors = {i: bipeds[i].name.filepath.split("/")[-1].split("\\")[-1]
+                actors = {i: PureWindowsPath(bipeds[i].name.filepath).stem
                           for i in range(len(bipeds))}
-                strings = {i: tag_index_array[i].path.lower()
+                strings = {i: tag_index_array[i].path
                            for i in range(len(tag_index_array))}
 
                 if force_lower_case_paths:
@@ -1562,9 +1619,8 @@ class RefineryCore:
             return True
 
         try:
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            mode = 'r+b' if os.path.isfile(filepath) else 'w+b'
-            with open(filepath, mode) as f:
+            filepath.parent.mkdir(exist_ok=True, parents=True)
+            with filepath.open('r+b' if filepath.is_file() else 'w+b') as f:
                 f.truncate(0)
                 f.write(halo_map.tag_headers[tag_cls])
                 if is_gen1:
@@ -1578,7 +1634,7 @@ class RefineryCore:
                 "Refinery does not have permission to save here. "
                 "Running Refinery as admin could potentially fix this.")
         except FileNotFoundError:
-            if sys.platform.lower() != "win32" or len(filepath) < 256:
+            if not e_c.IS_WIN or len(str(filepath)) < 260:
                 raise
             raise RefineryError("Filepath is over the Windows 260 character limit.")
 
@@ -1595,14 +1651,15 @@ class RefineryCore:
             ).lower().strip() == "y"
 
     def write_tagslist(self, tagslist, tagslist_path):
+        tagslist_path = Path(tagslist_path)
         try:
-            f = open(tagslist_path, 'a')
+            f = tagslist_path.open('a')
         except Exception:
             try:
-                f = open(tagslist_path, 'w')
+                f = tagslist_path.open('w')
             except Exception:
                 try:
-                    f = open(tagslist_path, 'r+')
+                    f = tagslist_path.open('r+')
                 except Exception:
                     f = None
 

@@ -1,43 +1,33 @@
-import tkinter as tk
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
+from pathlib import PureWindowsPath
 
 from refinery.constants import BAD_CLASSES
-from refinery.util import sanitize_path, int_to_fourcc
+from refinery.util import int_to_fourcc
 from refinery.widgets.explorer_class_tree import ExplorerClassTree
 from refinery.widgets.explorer_hierarchy_tree import ExplorerHierarchyTree
 
-from supyr_struct.defs.constants import PATHDIV, INVALID
+from supyr_struct.defs.constants import INVALID
 
 
 class ExplorerHybridTree(ExplorerHierarchyTree):
 
-    def add_tag_index_refs(self, index_refs, presorted=False):
-        if presorted:
-            ExplorerHierarchyTree.add_tag_index_refs(self, index_refs, True)
-            
-        sorted_index_refs = []
+    def get_tag_tree_key(self, tag_index_ref):
+        tag_path_key = ExplorerHierarchyTree.get_tag_tree_key(self, tag_index_ref)
+        if tag_path_key is None:
+            return None
 
-        check_classes = hasattr(self.valid_classes, "__iter__")
-        for b in index_refs:
-            if check_classes:
-                if int_to_fourcc(b.class_1.data) not in self.valid_classes:
-                    continue
+        tag_cls = INVALID
+        if tag_index_ref.class_1.enum_name not in BAD_CLASSES:
+            tag_cls = int_to_fourcc(tag_index_ref.class_1.data)
 
-            if b.class_1.enum_name not in BAD_CLASSES:
-                ext = ".%s" % b.class_1.enum_name
-            else:
-                ext = ".INVALID"
+        return str(PureWindowsPath(tag_cls, tag_path_key))
 
-            tag_cls = INVALID
-            if b.class_1.enum_name not in BAD_CLASSES:
-                tag_cls = int_to_fourcc(b.class_1.data)
-
-            tag_path = b.path.lower()
-            if PATHDIV == "/":
-                tag_path = sanitize_path(tag_path)
-            sorted_index_refs.append(
-                (tag_cls + PATHDIV + tag_path + ext, b))
-
-        sorted_index_refs = self.sort_index_refs(sorted_index_refs)
-        ExplorerHierarchyTree.add_tag_index_refs(self, sorted_index_refs, True)
-
-    activate_item = ExplorerClassTree.activate_item
+    show_actions_dialog = ExplorerClassTree.show_actions_dialog

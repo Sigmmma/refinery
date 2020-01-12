@@ -1,4 +1,11 @@
-import os
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
 
 from reclaimer.enums import materials_list, material_effect_types
 from refinery.heuristic_deprotection.constants import *

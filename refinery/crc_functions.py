@@ -1,7 +1,14 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 import refinery, zlib, gc
 
-from os import walk
-from os.path import splitext, dirname, join
 from random import seed as P, getrandbits as Q
 from traceback import format_exc
 

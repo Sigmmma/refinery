@@ -1,3 +1,12 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 import os
 import refinery
 import tkinter as tk
@@ -8,10 +17,8 @@ from traceback import format_exc
 from binilla import editor_constants as e_c
 from binilla.widgets.binilla_widget import BinillaWidget
 
-from refinery.util import get_cwd, is_protected_tag as is_protected_filename
-
-
-curr_dir = get_cwd(refinery.__file__)
+from refinery import editor_constants as e_c
+from refinery.util import is_protected_tag as is_protected_filename
 
 
 class RefineryRenameWindow(tk.Toplevel, BinillaWidget):
@@ -21,12 +28,9 @@ class RefineryRenameWindow(tk.Toplevel, BinillaWidget):
         self.active_map = kwargs.pop('active_map', None)
         BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
-        
+
         try:
-            try:
-                self.iconbitmap(os.path.join(curr_dir, 'refinery.ico'))
-            except Exception:
-                self.iconbitmap(os.path.join(curr_dir, 'icons', 'refinery.ico'))
+            self.iconbitmap(e_c.REFINERY_ICON_PATH)
         except Exception:
             if not e_c.IS_LNX:
                 print("Could not load window icon.")

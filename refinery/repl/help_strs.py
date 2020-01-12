@@ -1,3 +1,12 @@
+#
+# This file is part of Mozzarilla.
+#
+# For authors and copyright check AUTHORS.TXT
+#
+# Mozzarilla is free software under the GNU General Public License v3.0.
+# See LICENSE for more information.
+#
+
 from refinery.tag_index.tag_path_tokens import tokens_to_tag_paths,\
      TOKEN_PC_SCNR_MAP_TYPE_TAGC, TOKEN_PC_SCNR_ALL_TYPE_TAGC,\
      TOKEN_ALL, TOKEN_SCNR, TOKEN_MATG, TOKEN_XBOX_SOUL
