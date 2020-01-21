@@ -24,6 +24,11 @@ setup(
     long_description_content_type='text/markdown',
     version='%s.%s.%s' % refinery.__version__,
     url=refinery.__website__,
+    project_urls={
+        #"Documentation": <Need a string entry here>,
+        "Source": refinery.__website__,
+        "Funding": "https://liberapay.com/MEK/",
+    },
     author=refinery.__author__,
     author_email='MosesBobadilla@gmail.com',
     license='GPLv3',
