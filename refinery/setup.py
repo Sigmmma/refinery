@@ -8,20 +8,14 @@
 # See LICENSE for more information.
 #
 
-from os.path import dirname, join
 try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
 
-curr_dir = dirname(__file__)
-
 import refinery
 
-try:
-    long_desc = open(join(curr_dir, "README.md")).read()
-except Exception:
-    long_desc = 'Could not read long description from readme.'
+long_desc = open("README.MD").read()
 
 setup(
     name='refinery',
@@ -43,19 +37,27 @@ setup(
         'refinery.windows',
         ],
     package_data={
-        '': ['*.txt', '*.md', '*.rst', '*.ico', '*.png', 'msg.dat']
+        'mozzarilla': [
+            'styles/*.*', '*.[tT][xX][tT]', '*.MD', '*.pyw', '*.ico', '*.png',
+            ]
         },
     platforms=['POSIX', 'Windows'],
-    keywords='refinery, halo',
+    keywords=["refinery", "halo", "extraction"],
     install_requires=['mozzarilla', 'supyr_struct', 'reclaimer', 'binilla'],
     requires=['mozzarilla', 'supyr_struct', 'reclaimer', 'binilla'],
     provides=['refinery'],
+    python_requires=">=3.5",
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: End Users/Desktop",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3 :: Only",
         ],
     zip_safe=False,
     )
