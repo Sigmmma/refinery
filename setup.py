@@ -42,7 +42,7 @@ setup(
         'refinery.windows',
         ],
     package_data={
-        'mozzarilla': [
+        'refinery': [
             'styles/*.*', '*.[tT][xX][tT]', '*.MD', '*.pyw', '*.ico', '*.png',
             ]
         },
