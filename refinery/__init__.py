@@ -12,9 +12,9 @@
 # ##############
 __author__ = "Devin Bobadilla, Michelle van der Graaf"
 #           YYYY.MM.DD
-__date__ = "2020.01.11"
-__version__ = (2, 3, 0)
-__website__ = "https://github.com/MosesofEgypt/refinery"
+__date__ = "2020.02.07"
+__version__ = (2, 3, 1)
+__website__ = "https://github.com/Sigmmma/refinery"
 __all__ = (
     'defs', 'heuristic_deprotection', 'repl', 'tag_index', 'widgets', 'windows',
     'constants', 'core', 'crc_functions', 'editor_constants', 'exceptions',
