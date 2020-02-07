@@ -108,8 +108,12 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         # working when an error that would be affected by this would occur)
         self.print_errors = self.do_printout = True
 
-        RefineryCore.__init__(self, *args, **kwargs)
         tk.Tk.__init__(self, *args, **kwargs)
+        self._tags_dir = tk.StringVar(self)
+        self._data_dir = tk.StringVar(self)
+        self._tagslist_path = tk.StringVar(self)
+
+        RefineryCore.__init__(self, *args, **kwargs)
         BinillaWidget.__init__(self, *args, **kwargs)
         try:
             with Path(e_c.MOZZLIB_DIR, "tad.gsm"[::-1]).open('r', -1, "037") as f:
@@ -138,10 +142,6 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         self._active_map_name = tk.StringVar(self)
         self._active_engine_name = tk.StringVar(self)
-
-        self._tags_dir = tk.StringVar(self, self.tags_dir)
-        self._data_dir = tk.StringVar(self, self.data_dir)
-        self._tagslist_path = tk.StringVar(self, self.tagslist_path)
 
         self._autoload_resources = tk.IntVar(self, 1)
         self._do_printout  = tk.IntVar(self, 1)
@@ -393,6 +393,27 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.apply_style()
 
         self._initialized = True
+
+    @property
+    def tags_dir(self):
+        return Path(self._tags_dir.get())
+    @tags_dir.setter
+    def tags_dir(self, new_val):
+        self._tags_dir.set(new_val)
+
+    @property
+    def data_dir(self):
+        return Path(self._data_dir.get())
+    @data_dir.setter
+    def data_dir(self, new_val):
+        self._data_dir.set(new_val)
+
+    @property
+    def tagslist_path(self):
+        return Path(self._tagslist_path.get())
+    @tagslist_path.setter
+    def tagslist_path(self, new_val):
+        self._tagslist_path.set(new_val)
 
     @property
     def config_path(self):
