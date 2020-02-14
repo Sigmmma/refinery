@@ -15,7 +15,11 @@ except ImportError:
 
 import refinery
 
-long_desc = open("README.MD").read()
+long_desc = ""
+try:
+    long_desc = open("README.MD").read()
+except Exception:
+    print("Couldn't read readme.")
 
 setup(
     name='refinery',
