@@ -12,8 +12,8 @@
 # ##############
 __author__ = "Devin Bobadilla, Michelle van der Graaf"
 #           YYYY.MM.DD
-__date__ = "2020.02.07"
-__version__ = (2, 3, 1)
+__date__ = "2020.02.14"
+__version__ = (2, 3, 2)
 __website__ = "https://github.com/Sigmmma/refinery"
 __all__ = (
     'defs', 'heuristic_deprotection', 'repl', 'tag_index', 'widgets', 'windows',
