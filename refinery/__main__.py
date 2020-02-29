@@ -4,7 +4,7 @@
 #
 # For authors and copyright check AUTHORS.TXT
 #
-# Mozzarilla is free software under the GNU General Public License v3.0.
+# Refinery is free software under the GNU General Public License v3.0.
 # See LICENSE for more information.
 #
 
@@ -13,9 +13,9 @@ import sys
 def main():
     info = sys.version_info
 
-    if info[0] < 3:
+    if info[0] < 3 or (info[0] == 3 and info[1] < 5):
         input(
-            "You must have python 3 or higher installed to run Binilla.\n" +
+            "You must have python 3.5 or higher installed to run Refinery.\n"
             "You currently have %s.%s.%s installed instead." % info[:3])
         raise SystemExit(0)
 
