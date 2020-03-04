@@ -34,7 +34,7 @@ setup(
         "Funding": "https://liberapay.com/MEK/",
     },
     author=refinery.__author__,
-    author_email='MosesBobadilla@gmail.com',
+    author_email='MoeMakesStuff@gmail.com',
     license='GPLv3',
     packages=[
         'refinery',
