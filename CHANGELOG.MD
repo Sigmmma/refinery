@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.4.1]
 ### Changed
+ - (Linux) Fix directories not being sorted separately from tags.
  - Don't tell people to run as admin when no tags were extracted.
  - Hopefully sped up tag sorting.
  - Name first column in hierarchy view 'name'

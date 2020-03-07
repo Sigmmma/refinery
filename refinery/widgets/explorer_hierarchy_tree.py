@@ -8,6 +8,7 @@
 #
 
 import os
+import ntpath
 import refinery
 import tkinter as tk
 
@@ -412,7 +413,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
         # add all the directories before files
         # put the directories in sorted by name
         indices_by_dirpath = {
-            os.path.dirname(block[0]): i
+            ntpath.dirname(block[0]): i
             for i, block in enumerate(sorted_index_refs)
             }
         for dir_path in sorted(indices_by_dirpath):
