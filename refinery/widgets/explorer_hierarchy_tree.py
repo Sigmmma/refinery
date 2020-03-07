@@ -476,8 +476,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
     def add_folder_path(self, dir_parts):
         abs_dir_path = str(PureWindowsPath(*dir_parts))
         if abs_dir_path:
-            abs_dir_path += "\\"  # directories must end with a backslash.
-            #                       this is how we distinguish dirs from files
+            # directories must end with a backslash.
+            # this is how we distinguish dirs from files inside of maps.
+            abs_dir_path = abs_dir_path.rstrip('\\') + '\\'
 
         if self.tags_tree.exists(abs_dir_path):
             return abs_dir_path
@@ -494,8 +495,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         abs_dir_path = parent_dir + this_dir
         if abs_dir_path:
-            abs_dir_path += "\\"  # directories must end with a backslash.
-            #                       this is how we distinguish dirs from files
+            # directories must end with a backslash.
+            # this is how we distinguish dirs from files inside of maps.
+            abs_dir_path = abs_dir_path.rstrip('\\') + "\\"
 
         if not self.tags_tree.exists(abs_dir_path):
             # add the directory to the treeview
