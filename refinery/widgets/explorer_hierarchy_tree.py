@@ -91,11 +91,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
                     index_ref[0], []).append(index_ref)
 
         sorted_index_refs = [None]*len(sortable_index_refs)
-        i = 0
-        for key in sorted(new_sorting):
+        for i, key in enumerate(sorted(new_sorting)):
             for index_ref in new_sorting[key]:
                 sorted_index_refs[i] = index_ref
-                i += 1
 
         if self.reverse_sorted:
             return list(reversed(sorted_index_refs[:i]))
