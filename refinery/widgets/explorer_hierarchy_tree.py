@@ -106,7 +106,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
             # dont want to do this more than once
             tags_tree['columns'] = ('class1', 'class2', 'class3',
                                     'magic', 'pointer', 'index_id')
-            tags_tree.heading("#0", text='')
+            tags_tree.heading("#0", text='name')
             tags_tree.heading("class1", text='class 1')
             tags_tree.heading("class2", text='class 2')
             tags_tree.heading("class3", text='class 3')
