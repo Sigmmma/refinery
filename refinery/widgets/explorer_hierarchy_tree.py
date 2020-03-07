@@ -110,8 +110,8 @@ class ExplorerHierarchyTree(HierarchyFrame):
             tags_tree.heading("class1", text='class 1')
             tags_tree.heading("class2", text='class 2')
             tags_tree.heading("class3", text='class 3')
-            tags_tree.heading("magic",  text='pointer(memory)')
-            tags_tree.heading("pointer", text='pointer(file)')
+            tags_tree.heading("magic",  text='pointer(MEM)')
+            tags_tree.heading("pointer", text='pointer(FILE)')
             tags_tree.heading("index_id",  text='index id')
 
             tags_tree.column("#0", minwidth=100, width=200)
@@ -447,10 +447,12 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if tag_index_ref.indexed and pointer_converter and not is_h1_rsrc_map:
             pointer = "not in map"
         elif pointer_converter is not None:
-            pointer = pointer_converter.v_ptr_to_f_ptr(
+            pointer = '%08X' % pointer_converter.v_ptr_to_f_ptr(
                 tag_index_ref.meta_offset)
         else:
             pointer = 0
+
+        meta_offset = '%08X' % tag_index_ref.meta_offset
 
         try:
             cls1 = cls2 = cls3 = ""
@@ -468,7 +470,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 parent_iid, 'end', iid=str(tag_id),
                 tags=("item", ), text=tag_path,
                 values=(cls1, cls2, cls3,
-                        tag_index_ref.meta_offset, pointer, tag_id))
+                        meta_offset, pointer, '%04X' % tag_id))
             self.tree_id_to_index_ref[tag_id] = tag_index_ref
         except Exception:
             print(format_exc())
