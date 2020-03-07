@@ -90,17 +90,15 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 new_sorting.setdefault(
                     index_ref[0], []).append(index_ref)
 
-        sorted_index_refs = [None]*len(sortable_index_refs)
-        i = 0
+        sorted_index_refs = []
         for key in sorted(new_sorting):
             for index_ref in new_sorting[key]:
-                sorted_index_refs[i] = index_ref
-                i += 1
+                sorted_index_refs.append(index_ref)
 
         if self.reverse_sorted:
-            return list(reversed(sorted_index_refs[:i]))
+            return list(reversed(sorted_index_refs))
 
-        return sorted_index_refs[:i]
+        return sorted_index_refs
 
     def setup_columns(self):
         tags_tree = self.tags_tree
