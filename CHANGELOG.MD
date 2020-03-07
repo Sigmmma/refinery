@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1]
+### Changed
+ - Don't tell people to run as admin when no tags were extracted.
+ - Hopefully sped up tag sorting.
+
 ## [2.4.0]
 ### Added
  - Added \_\_main\_\_ so Refinery can be executed using `python -m refinery` or just `refinery` on some systems.
