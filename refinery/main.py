@@ -1395,8 +1395,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                           sum(len(item) for item in data_by_map.values())
 
         if not items_extracted:
-            print("Nothing was extracted. This might be a permissions issue.\n"
-                  "Close Refinery and run it as admin to potentially fix this.")
+            print("Nothing was extracted. This might be a permissions issue.")
 
     def prompt_globals_overwrite(self, halo_map, tag_id):
         map_name = halo_map.map_name
