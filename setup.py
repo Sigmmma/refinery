@@ -48,6 +48,7 @@ setup(
     package_data={
         'refinery': [
             'styles/*.*', '*.[tT][xX][tT]', '*.MD', '*.pyw', '*.ico', '*.png',
+            'LICENSE',
             ]
         },
     platforms=['POSIX', 'Windows'],

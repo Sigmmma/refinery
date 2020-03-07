@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Hopefully sped up tag sorting.
  - Name first column in hierarchy view 'name'.
  - Remove fallback icon and about image locations.
+ - Fix missing license in distributions.
 
 ## [2.4.0]
 ### Added
