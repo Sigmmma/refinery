@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Display pointers as HEX.
  - Don't tell people to run as admin when no tags were extracted.
  - Hopefully sped up tag sorting.
- - Name first column in hierarchy view 'name'
+ - Name first column in hierarchy view 'name'.
+ - Remove fallback icon and about image locations.
 
 ## [2.4.0]
 ### Added
