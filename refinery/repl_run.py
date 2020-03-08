@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 #
-# This file is part of Mozzarilla.
+# This file is part of Refinery.
 #
 # For authors and copyright check AUTHORS.TXT
 #
-# Mozzarilla is free software under the GNU General Public License v3.0.
+# Refinery is free software under the GNU General Public License v3.0.
 # See LICENSE for more information.
 #
 
