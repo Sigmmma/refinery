@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Name first column in hierarchy view 'name'.
  - Remove fallback icon and about image locations.
  - Fix missing license in distributions.
+ - Default setting for generating compressed vertices is now True.
 
 ## [2.4.0]
 ### Added
