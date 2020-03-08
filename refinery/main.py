@@ -853,17 +853,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
                 continue
 
             self.set_active_map(name_or_index=map)
-
-            if self._display_mode == "hierarchy":
-                tree_frame = self.hierarchy_tree
-            elif self._display_mode == "class":
-                tree_frame = self.class_tree
-            elif self._display_mode == "hybrid":
-                tree_frame = self.hybrid_tree
-            else:
-                continue
-
-            tree_frame.activate_all()
+            self.queue_add_all(e=e)
 
         self.set_active_map(name_or_index=starting_map)
 
