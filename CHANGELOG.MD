@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0]
+### Added
+ - Add button to queue all maps for extraction.
+ - Add button to deprotect all loaded maps.
+
+### Changed
+ - Changed some action button names to be shorter and hopefully more clear.
+
 ## [Unreleased]
 ### Changed
  - Fix missing license in distributions.
