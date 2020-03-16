@@ -25,6 +25,9 @@ from supyr_struct.defs.frozen_dict import FrozenDict
 
 no_op = lambda *a, **kw: None
 
+def _ensure_backslash_for_folder(folder_path):
+    return str(folder_path).rstrip('\\') + '\\'
+
 TREE_SORT_METHODS = FrozenDict(
     {0: "name", 4:"pointer", 5:"pointer", 6:"index_id"})
 
@@ -481,7 +484,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if abs_dir_path:
             # directories must end with a backslash.
             # this is how we distinguish dirs from files inside of maps.
-            abs_dir_path = abs_dir_path.rstrip('\\') + '\\'
+            abs_dir_path = _ensure_backslash_for_folder(abs_dir_path)
 
         if self.tags_tree.exists(abs_dir_path):
             return abs_dir_path
@@ -500,7 +503,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if abs_dir_path:
             # directories must end with a backslash.
             # this is how we distinguish dirs from files inside of maps.
-            abs_dir_path = abs_dir_path.rstrip('\\') + "\\"
+            abs_dir_path = _ensure_backslash_for_folder(abs_dir_path)
 
         if not self.tags_tree.exists(abs_dir_path):
             # add the directory to the treeview
