@@ -12,9 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
  - Changed some action button names to be shorter and hopefully more clear.
 
-## [Unreleased]
+## [2.4.1]
 ### Changed
+ - (Linux) Fix directories not being sorted separately from tags.
+ - Display pointers as HEX.
+ - Don't tell people to run as admin when no tags were extracted.
+ - Hopefully sped up tag sorting.
+ - Name first column in hierarchy view 'name'.
+ - Remove fallback icon and about image locations.
  - Fix missing license in distributions.
+ - Default setting for generating compressed vertices is now True.
 
 ## [2.4.0]
 ### Added

@@ -1,13 +1,14 @@
 #
-# This file is part of Mozzarilla.
+# This file is part of Refinery.
 #
 # For authors and copyright check AUTHORS.TXT
 #
-# Mozzarilla is free software under the GNU General Public License v3.0.
+# Refinery is free software under the GNU General Public License v3.0.
 # See LICENSE for more information.
 #
 
 import os
+import ntpath
 import refinery
 import tkinter as tk
 
@@ -23,6 +24,13 @@ from refinery.windows.actions_window import RefineryActionsWindow
 from supyr_struct.defs.frozen_dict import FrozenDict
 
 no_op = lambda *a, **kw: None
+
+def _ensure_backslash_for_folder(folder_path):
+    '''
+    Directories must end with a backslash for them to be identified as
+    directories in the ExplorerHierarchyTree.
+    '''
+    return str(folder_path).rstrip('\\') + '\\'
 
 TREE_SORT_METHODS = FrozenDict(
     {0: "name", 4:"pointer", 5:"pointer", 6:"index_id"})
@@ -90,17 +98,15 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 new_sorting.setdefault(
                     index_ref[0], []).append(index_ref)
 
-        sorted_index_refs = [None]*len(sortable_index_refs)
-        i = 0
+        sorted_index_refs = []
         for key in sorted(new_sorting):
             for index_ref in new_sorting[key]:
-                sorted_index_refs[i] = index_ref
-                i += 1
+                sorted_index_refs.append(index_ref)
 
         if self.reverse_sorted:
-            return list(reversed(sorted_index_refs[:i]))
+            return list(reversed(sorted_index_refs))
 
-        return sorted_index_refs[:i]
+        return sorted_index_refs
 
     def setup_columns(self):
         tags_tree = self.tags_tree
@@ -108,12 +114,12 @@ class ExplorerHierarchyTree(HierarchyFrame):
             # dont want to do this more than once
             tags_tree['columns'] = ('class1', 'class2', 'class3',
                                     'magic', 'pointer', 'index_id')
-            tags_tree.heading("#0", text='')
+            tags_tree.heading("#0", text='name')
             tags_tree.heading("class1", text='class 1')
             tags_tree.heading("class2", text='class 2')
             tags_tree.heading("class3", text='class 3')
-            tags_tree.heading("magic",  text='pointer(memory)')
-            tags_tree.heading("pointer", text='pointer(file)')
+            tags_tree.heading("magic",  text='pointer(MEM)')
+            tags_tree.heading("pointer", text='pointer(FILE)')
             tags_tree.heading("index_id",  text='index id')
 
             tags_tree.column("#0", minwidth=100, width=200)
@@ -414,7 +420,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
         # add all the directories before files
         # put the directories in sorted by name
         indices_by_dirpath = {
-            os.path.dirname(block[0]): i
+            ntpath.dirname(block[0]): i
             for i, block in enumerate(sorted_index_refs)
             }
         for dir_path in sorted(indices_by_dirpath):
@@ -449,10 +455,12 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if tag_index_ref.indexed and pointer_converter and not is_h1_rsrc_map:
             pointer = "not in map"
         elif pointer_converter is not None:
-            pointer = pointer_converter.v_ptr_to_f_ptr(
+            pointer = '%08X' % pointer_converter.v_ptr_to_f_ptr(
                 tag_index_ref.meta_offset)
         else:
             pointer = 0
+
+        meta_offset = '%08X' % tag_index_ref.meta_offset
 
         try:
             cls1 = cls2 = cls3 = ""
@@ -470,7 +478,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 parent_iid, 'end', iid=str(tag_id),
                 tags=("item", ), text=tag_path,
                 values=(cls1, cls2, cls3,
-                        tag_index_ref.meta_offset, pointer, tag_id))
+                        meta_offset, pointer, '%04X' % tag_id))
             self.tree_id_to_index_ref[tag_id] = tag_index_ref
         except Exception:
             print(format_exc())
@@ -478,8 +486,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
     def add_folder_path(self, dir_parts):
         abs_dir_path = str(PureWindowsPath(*dir_parts))
         if abs_dir_path:
-            abs_dir_path += "\\"  # directories must end with a backslash.
-            #                       this is how we distinguish dirs from files
+            abs_dir_path = _ensure_backslash_for_folder(abs_dir_path)
 
         if self.tags_tree.exists(abs_dir_path):
             return abs_dir_path
@@ -496,8 +503,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         abs_dir_path = parent_dir + this_dir
         if abs_dir_path:
-            abs_dir_path += "\\"  # directories must end with a backslash.
-            #                       this is how we distinguish dirs from files
+            abs_dir_path = _ensure_backslash_for_folder(abs_dir_path)
 
         if not self.tags_tree.exists(abs_dir_path):
             # add the directory to the treeview

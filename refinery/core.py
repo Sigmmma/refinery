@@ -1,9 +1,9 @@
 #
-# This file is part of Mozzarilla.
+# This file is part of Refinery.
 #
 # For authors and copyright check AUTHORS.TXT
 #
-# Mozzarilla is free software under the GNU General Public License v3.0.
+# Refinery is free software under the GNU General Public License v3.0.
 # See LICENSE for more information.
 #
 
@@ -166,7 +166,7 @@ class RefineryCore:
     recursive = False
     decode_adpcm = True
     generate_uncomp_verts = True
-    generate_comp_verts = False
+    generate_comp_verts = True
     use_tag_index_for_script_names = True
     use_scenario_names_for_script_names = True
     bitmap_extract_keep_alpha = True
