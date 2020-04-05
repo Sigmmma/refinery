@@ -325,11 +325,14 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self.map_info_scrollbar.config(command=self.map_info_text.yview)
 
         # make the buttons
+        self.add_all_maps_button = tk.Button(
+            self.map_action_frame, text="Queue all maps",
+            command=self.queue_add_all_maps)
         self.deprotect_all_button = tk.Button(
-            self.map_action_frame, text="Run mass deprotection",
+            self.map_action_frame, text="Deprotect all",
             command=self.deprotect_all)
         self.deprotect_button = tk.Button(
-            self.map_action_frame, text="Run deprotection",
+            self.map_action_frame, text="Deprotect current",
             command=self.deprotect)
         self.begin_button = tk.Button(
             self.map_action_frame, text="Run extraction",
@@ -361,7 +364,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         # pack everything
         self.begin_button.pack(side='right', padx=4, pady=4)
         self.deprotect_button.pack(side='right', padx=4, pady=4)
-        #self.deprotect_all_button.pack(side='right', padx=4, pady=4)
+        self.deprotect_all_button.pack(side='right', padx=4, pady=4)
+        self.add_all_maps_button.pack(side='right', padx=4, pady=4)
         self.engine_select_menu.pack(side='left', padx=4, pady=4, fill='x')
         self.map_select_menu.pack(side='left', padx=(4, 10), pady=4,
                                   fill='x', expand=True)
@@ -837,6 +841,28 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             return
 
         tree_frame.activate_all()
+
+    def queue_add_all_maps(self, e=None):
+        if not self.map_loaded:
+            return
+
+        # Store the current map for convinience.
+        starting_map = self.active_map
+
+        # Add all maps to the queue
+        for map in sorted(self.active_maps):
+            if map == ACTIVE_INDEX:
+                # The active index is already covered by the other maps in
+                # the list.
+                continue
+
+            # Set the map to active
+            self.set_active_map(name_or_index=map)
+            # Execute the function that adds it to queue.
+            self.queue_add_all(e=e)
+
+        # Set the map back to what it was.
+        self.set_active_map(name_or_index=starting_map)
 
     def queue_del_all(self, e=None):
         if not self.map_loaded:
