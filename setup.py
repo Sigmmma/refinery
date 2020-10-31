@@ -56,7 +56,7 @@ setup(
     install_requires=['mozzarilla', 'supyr_struct', 'reclaimer', 'binilla'],
     requires=['mozzarilla', 'supyr_struct', 'reclaimer', 'binilla'],
     provides=['refinery'],
-    python_requires=">=3.5",
+    python_requires=">=3.6",
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: End Users/Desktop",
@@ -67,6 +67,7 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3 :: Only",
         ],
     zip_safe=False,
