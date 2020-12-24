@@ -98,7 +98,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
     about_messages = ()
     tk_vars = ()
 
-    issue_tracker_url = refinery.__website__ + "/issues"
+    issue_tracker_url = "https://discord.reclaimers.net"
 
     def __init__(self, *args, **kwargs):
         self.app_name = str(kwargs.pop('app_name', self.app_name))
@@ -278,7 +278,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             label="Switch extract mode", command=self.toggle_extract_mode)
         self.menubar.add_command(
             label="About", command=self.show_about_window)
-        self.menubar.add_command(label="Report Bug", command=self.open_issue_tracker)
+        self.menubar.add_command(label="Discord", command=self.open_issue_tracker)
         self.config(menu=self.menubar)
 
         # make the window pane
