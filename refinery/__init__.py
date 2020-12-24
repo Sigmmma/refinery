@@ -12,7 +12,7 @@
 # ##############
 __author__ = "Sigmmma"
 #           YYYY.MM.DD
-__date__ = "2020.10.30"
+__date__ = "2020.12.24"
 __version__ = (2, 5, 2)
 __website__ = "https://github.com/Sigmmma/refinery"
 __all__ = (
