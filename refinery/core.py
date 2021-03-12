@@ -28,6 +28,7 @@ from reclaimer.halo_script.hsc import get_hsc_data_block, HSC_IS_GLOBAL,\
      get_h1_scenario_script_object_type_strings
 from reclaimer.hek import hardcoded_ce_tag_paths
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
+from reclaimer.meta.wrappers.halo1_yelo import Halo1YeloMap
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
 from reclaimer.meta.wrappers.halo2_map import Halo2Map
@@ -66,7 +67,9 @@ from refinery.util import inject_file_padding, int_to_fourcc
 
 from supyr_struct.util import is_path_empty
 
-
+# Map the different map wrappers that decide how to read the map
+# and what tag defintions to use
+# Note the loops after this that handle engines that use the same map format
 halo_map_wrappers_by_engine = {
     "stubbs":          StubbsMap,
     "stubbspc":        StubbsMap,
@@ -82,8 +85,12 @@ halo_map_wrappers_by_engine = {
     "halo4":           Halo4Map,
     "halo5":           Halo5Map,
     }
-halo_map_wrappers_by_engine.update({e: Halo1Map for e in GEN_1_HALO_ENGINES})
-halo_map_wrappers_by_engine.update({e: Halo2Map for e in GEN_2_ENGINES})
+for name in GEN_1_HALO_ENGINES:
+    halo_map_wrappers_by_engine[name] = Halo1Map
+for name in GEN_2_ENGINES:
+    halo_map_wrappers_by_engine[name] = Halo2Map
+# Use a different wrapper for this so we can use a different set of tag defs
+halo_map_wrappers_by_engine["halo1yelo"] = Halo1YeloMap
 
 
 def get_halo_map_section_ends(halo_map):
