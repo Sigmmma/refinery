@@ -129,6 +129,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         if is_path_empty(self.icon_filepath):
             print("Could not load window icon.")
+        # Zatarita added to store queue extraction settings between queue elements
+        self.queue_settings_memory = None
 
         self.title('%s v%s.%s.%s' % ((self.app_name,) + self.version))
         self.minsize(width=500, height=300)
@@ -151,6 +153,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self._rename_scnr_dups = tk.IntVar(self)
         self._overwrite = tk.IntVar(self)
         self._recursive = tk.IntVar(self)
+        # Zatarita: propagate_settings added to hold value of check box. linked below
+        self._propagate_settings = tk.IntVar(self)
         self._decode_adpcm = tk.IntVar(self, 1)
         self._generate_uncomp_verts = tk.IntVar(self, 1)
         self._generate_comp_verts = tk.IntVar(self)
@@ -194,6 +198,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             rename_scnr_dups=self._rename_scnr_dups,
             overwrite=self._overwrite,
             recursive=self._recursive,
+            # Zatarita, added propagate_settings to link ui element to value
+            propagate_settings=self._propagate_settings,
             decode_adpcm=self._decode_adpcm,
             generate_uncomp_verts=self._generate_uncomp_verts,
             generate_comp_verts=self._generate_comp_verts,
@@ -840,7 +846,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         else:
             return
 
-        tree_frame.activate_all()
+        # Zatarita - Changed to pass/return settings memory
+        self.queue_settings_memory = tree_frame.activate_all(reused_settings=self.queue_settings_memory)
 
     def queue_add_all_maps(self, e=None):
         if not self.map_loaded:
@@ -863,6 +870,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         # Set the map back to what it was.
         self.set_active_map(name_or_index=starting_map)
+        # Clear the previous setting memory
+        self.queue_settings_memory = None
 
     def queue_del_all(self, e=None):
         if not self.map_loaded:
