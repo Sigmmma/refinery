@@ -39,6 +39,7 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
     app_root = None
     settings = None
     renamable = True
+    propagatable = False
     accept_rename = None
     accept_settings = None
     tag_index_ref = None
@@ -54,6 +55,8 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         self.renamable = kwargs.pop('renamable', self.renamable)
         self.settings = settings = kwargs.pop('settings', {})
         self.tag_index_ref = kwargs.pop('tag_index_ref', self.tag_index_ref)
+        # Zatarita, added propagatable kwarg for displaying checkbox
+        self.propagatable = kwargs.pop('propagatable', self.propagatable)
         BinillaWidget.__init__(self, *args, **kwargs)
         tk.Toplevel.__init__(self, *args, **kwargs)
 
@@ -153,6 +156,10 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         self.do_printout_cbtn = tk.Checkbutton(
             self.settings_frame, text="Print extracted tag names",
             variable=settings.get("do_printout", tk.IntVar(self)))
+        # zatarita added do_propegate_settings to place the check box in frame, and link value to variable
+        self.do_propegate_settings = tk.Checkbutton(
+            self.settings_frame, text="Use these settings for each item",
+            variable=settings.get("propagate_settings", tk.IntVar(self)))
 
         # accept/cancel
         self.accept_button = tk.Button(
@@ -194,6 +201,9 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
         self.browse_tags_list_button.pack(padx=4, side='left', fill='x')
 
         # settings
+        # zatarita, added propagatable check box to top of settings frame. (if enabled)
+        if self.propagatable:
+            self.do_propegate_settings.pack(padx=4, anchor='w')
         self.recursive_cbtn.pack(padx=4, anchor='w')
         self.overwrite_cbtn.pack(padx=4, anchor='w')
         self.do_printout_cbtn.pack(padx=4, anchor='w')

@@ -163,7 +163,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         return selected
 
-    def activate_all(self, e=None):
+    # Zatarita added settings parameter for propagated settings
+    # Also returns the settings to be sent back since lifetime of settings var is local
+    def activate_all(self, e=None, reused_settings=None):
         tags_tree = self.tags_tree
         if self.active_map is None:
             return
@@ -183,9 +185,18 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         map_name = self.active_map.map_header.map_name
 
-        # ask for extraction settings
-        settings, _, __ = self.show_actions_dialog(
-            "", renamable=False, title=map_name, defaults=def_settings)
+        # Determine if we're reusing previous settings
+        reuse_settings_enabled = False
+        if reused_settings:
+            if reused_settings['propagate_settings']:
+                reuse_settings_enabled = True
+
+        # Either use previous settings, or get new settings.
+        if reuse_settings_enabled:
+            settings = reused_settings
+        else:
+            settings, _, __ = self.show_actions_dialog(
+                "", renamable=False, title=map_name, defaults=def_settings, propagatable=True)
 
         if settings['accept_settings'].get():
             settings['tag_index_refs'] = self._compile_list_of_selected("")
@@ -193,6 +204,9 @@ class ExplorerHierarchyTree(HierarchyFrame):
             self.queue_tree.add_to_queue("%s: %s: %s" % (
                 settings['extract_mode'].get(), self.active_map.engine,
                 map_name), settings)
+
+        # Zatarita Added return for setting memory to parent
+        return settings
 
     def activate_item(self, e=None):
         tags_tree = self.tags_tree
@@ -211,6 +225,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 return
 
         map_name = self.active_map.map_header.map_name
+        queue_settings_memory = None
         # add selection to queue
         for iid in tags_tree.selection():
             if len(tags_tree.item(iid, 'values')):
@@ -224,9 +239,16 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 tag_index_ref = None
                 tag_index_refs = self._compile_list_of_selected(iid)
 
-            # ask for extraction settings
-            settings, original_name, title = self.show_actions_dialog(
-                item_name, defaults=def_settings, tag_index_ref=tag_index_ref)
+            # Either use previous, or get new settings.
+            if queue_settings_memory:
+                settings = queue_settings_memory
+            else:
+                settings, original_name, title = self.show_actions_dialog(
+                    item_name, defaults=def_settings, tag_index_ref=tag_index_ref, propagatable=True)
+
+            # Store the settings if we're going to reuse them
+            if settings['propagate_settings']:
+                queue_settings_memory = settings
 
             if settings['accept_rename'].get():
                 item_name = str(PureWindowsPath(
@@ -250,9 +272,11 @@ class ExplorerHierarchyTree(HierarchyFrame):
 
         kwargs.setdefault('title', item_name)
 
+        # Zatarita - Added "same_settings_for_all=tk.IntVar(self)" for dialog option
         settings_vars = dict(
             recursive=tk.IntVar(self), overwrite=tk.IntVar(self),
-            do_printout=tk.IntVar(self), accept_rename=tk.IntVar(self),
+            do_printout=tk.IntVar(self), propagate_settings=tk.IntVar(self),
+            accept_rename=tk.IntVar(self),
             autoload_resources=tk.IntVar(self), decode_adpcm=tk.IntVar(self),
             bitmap_extract_keep_alpha=tk.IntVar(self),
             generate_comp_verts=tk.IntVar(self), generate_uncomp_verts=tk.IntVar(self),
