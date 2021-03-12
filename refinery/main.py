@@ -848,20 +848,22 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         # Store the current map for convinience.
         starting_map = self.active_map
+        starting_engine = self.active_engine_name
 
         # Add all maps to the queue
-        for map in sorted(self.active_maps):
-            if map == ACTIVE_INDEX:
-                # The active index is already covered by the other maps in
-                # the list.
-                continue
+        for engine in self.maps_by_engine:
+            if engine == ACTIVE_INDEX: continue
+            self.set_active_engine(engine)
+            for map in sorted(self.maps_by_engine[engine]):
+                if map == ACTIVE_INDEX: continue
 
-            # Set the map to active
-            self.set_active_map(name_or_index=map)
-            # Execute the function that adds it to queue.
-            self.queue_add_all(e=e)
+                # Set the map to active
+                self.set_active_map(name_or_index=map)
+                # Execute the function that adds it to queue.
+                self.queue_add_all(e=e)
 
         # Set the map back to what it was.
+        self.set_active_engine(starting_engine)
         self.set_active_map(name_or_index=starting_map)
 
     def queue_del_all(self, e=None):
