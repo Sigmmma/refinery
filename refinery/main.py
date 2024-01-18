@@ -1272,7 +1272,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
             return Path("")
-        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1mcc",
                                      "halo1pc", "halo1vap"):
             print("Cannot save this kind of map.")
             return Path("")
@@ -1317,7 +1317,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
             return Path("")
-        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1mcc",
                                      "halo1pc", "halo1vap"):
             print("Cannot save this kind of map.")
             return Path("")

@@ -30,6 +30,7 @@ from reclaimer.hek import hardcoded_ce_tag_paths
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_yelo import Halo1YeloMap
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
+from reclaimer.meta.wrappers.halo1_mcc_map import Halo1MccMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
 from reclaimer.meta.wrappers.halo2_map import Halo2Map
 from reclaimer.meta.wrappers.halo3_map import Halo3Map
@@ -91,6 +92,7 @@ for name in GEN_2_ENGINES:
     halo_map_wrappers_by_engine[name] = Halo2Map
 # Use a different wrapper for this so we can use a different set of tag defs
 halo_map_wrappers_by_engine["halo1yelo"] = Halo1YeloMap
+halo_map_wrappers_by_engine["halo1mcc"]  = Halo1MccMap
 
 
 def get_halo_map_section_ends(halo_map):
@@ -380,7 +382,7 @@ class RefineryCore:
             raise KeyError("No map loaded and none provided.")
         elif halo_map.is_resource:
             raise TypeError("Cannot save resource maps.")
-        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1mcc",
                                      "halo1pc", "halo1vap"):
             raise TypeError("Cannot save this kind of map.")
         elif is_path_empty(save_path):
@@ -604,7 +606,7 @@ class RefineryCore:
 
     def deprotect_all(self, **kw):
         for engine in self.maps_by_engine:
-            if engine not in ("halo1ce", "halo1yelo", "halo1pc", "halo1vap"):
+            if engine not in ("halo1ce", "halo1yelo", "halo1pc", "halo1vap", "halo1mcc"):
                 continue
 
             maps = self.maps_by_engine[engine]
@@ -625,7 +627,7 @@ class RefineryCore:
             raise KeyError("No map loaded.")
         elif halo_map.is_resource:
             raise TypeError("Cannot deprotect resource maps.")
-        elif halo_map.engine not in ("halo1ce", "halo1yelo",
+        elif halo_map.engine not in ("halo1ce", "halo1yelo", "halo1mcc",
                                      "halo1pc", "halo1vap"):
             raise TypeError("Cannot deprotect this kind of map.")
 
@@ -867,7 +869,7 @@ class RefineryCore:
         if not halo_map:
             return repaired
 
-        if halo_map.engine not in ("halo1ce", "halo1yelo",
+        if halo_map.engine not in ("halo1ce", "halo1yelo", "halo1mcc",
                                    "halo1pc", "halo1vap"):
             raise TypeError('Cannot repair tag classes in "%s" maps' %
                             halo_map.engine)
