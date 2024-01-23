@@ -72,27 +72,26 @@ from supyr_struct.util import is_path_empty
 # and what tag defintions to use
 # Note the loops after this that handle engines that use the same map format
 halo_map_wrappers_by_engine = {
-    "stubbs":          StubbsMap,
-    "stubbspc":        StubbsMap,
-    "shadowrun_proto": ShadowrunMap,
-    "halo1anni":       Halo1AnniMap,
-    "halo2":           Halo2Map,
-    "halo3beta":       Halo3BetaMap,
-    "halo3":           Halo3Map,
-    "halo3odst":       Halo3OdstMap,
-    "haloreachbeta":   HaloReachBetaMap,
-    "haloreach":       HaloReachMap,
-    "halo4beta":       Halo4BetaMap,
-    "halo4":           Halo4Map,
-    "halo5":           Halo5Map,
+    "stubbs":           StubbsMap,
+    "stubbspc":         StubbsMap,
+    "shadowrun_proto":  ShadowrunMap,
+    "halo1anni":        Halo1AnniMap,
+    "halo1yelo":        Halo1YeloMap,
+    "halo1mcc":         Halo1MccMap,
+    "halo2":            Halo2Map,
+    "halo3beta":        Halo3BetaMap,
+    "halo3":            Halo3Map,
+    "halo3odst":        Halo3OdstMap,
+    "haloreachbeta":    HaloReachBetaMap,
+    "haloreach":        HaloReachMap,
+    "halo4beta":        Halo4BetaMap,
+    "halo4":            Halo4Map,
+    "halo5":            Halo5Map,
     }
 for name in GEN_1_HALO_ENGINES:
-    halo_map_wrappers_by_engine[name] = Halo1Map
+    halo_map_wrappers_by_engine.setdefault(name, Halo1Map)
 for name in GEN_2_ENGINES:
-    halo_map_wrappers_by_engine[name] = Halo2Map
-# Use a different wrapper for this so we can use a different set of tag defs
-halo_map_wrappers_by_engine["halo1yelo"] = Halo1YeloMap
-halo_map_wrappers_by_engine["halo1mcc"]  = Halo1MccMap
+    halo_map_wrappers_by_engine.setdefault(name, Halo2Map)
 
 
 def get_halo_map_section_ends(halo_map):
