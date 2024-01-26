@@ -29,6 +29,7 @@ from reclaimer.halo_script.hsc import get_hsc_data_block, HSC_IS_GLOBAL,\
 from reclaimer.hek import hardcoded_ce_tag_paths
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_yelo import Halo1YeloMap
+from reclaimer.meta.wrappers.halo1_xbox_map import Halo1XboxMap
 from reclaimer.meta.wrappers.halo1_anni_map import Halo1AnniMap
 from reclaimer.meta.wrappers.halo1_mcc_map import Halo1MccMap
 from reclaimer.meta.wrappers.halo1_rsrc_map import Halo1RsrcMap
@@ -42,14 +43,16 @@ from reclaimer.meta.wrappers.halo4_map import Halo4Map
 from reclaimer.meta.wrappers.halo4_beta_map import Halo4BetaMap
 from reclaimer.meta.wrappers.halo5_map import Halo5Map
 from reclaimer.meta.wrappers.stubbs_map import StubbsMap
+from reclaimer.meta.wrappers.stubbs_map_64bit import StubbsMap64Bit
 from reclaimer.meta.wrappers.shadowrun_map import ShadowrunMap
 
-from reclaimer.meta.halo_map import get_map_header, get_map_version,\
+from reclaimer.meta.halo_map import get_map_header, get_engine_name,\
      get_tag_index, get_map_magic
 from reclaimer.meta.class_repair import class_repair_functions,\
      get_tagc_refs
 from reclaimer.meta.rawdata_ref_editing import rawdata_ref_move_functions
 from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
+from reclaimer.util import calc_halo_crc32
 
 from refinery.constants import INF, ACTIVE_INDEX, MAP_TYPE_ANY,\
      MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
@@ -74,7 +77,10 @@ from supyr_struct.util import is_path_empty
 halo_map_wrappers_by_engine = {
     "stubbs":           StubbsMap,
     "stubbspc":         StubbsMap,
+    "stubbspc64bit":    StubbsMap64Bit,
     "shadowrun_proto":  ShadowrunMap,
+    "halo1xbox":        Halo1XboxMap,
+    "halo1xboxdemo":    Halo1XboxMap,
     "halo1anni":        Halo1AnniMap,
     "halo1yelo":        Halo1YeloMap,
     "halo1mcc":         Halo1MccMap,
@@ -98,7 +104,7 @@ def get_halo_map_section_ends(halo_map):
     head  = halo_map.map_header
     index = halo_map.tag_index
     raw_data_end    = index.model_data_offset
-    vertex_data_end = index.vertex_data_size + raw_data_end
+    vertex_data_end = index.index_parts_offset + raw_data_end
     index_data_end  = index.model_data_size  + raw_data_end
     meta_data_end   = head.tag_data_size +  head.tag_index_header_offset
     return raw_data_end, vertex_data_end, index_data_end, meta_data_end
@@ -130,9 +136,9 @@ def expand_halo_map(halo_map, raw_data_expansion=0, vertex_data_expansion=0,
     meta_ptr_diff = diff - meta_data_expansion
 
     # update the map_header and tag_index_header's offsets and sizes
-    tag_index.model_data_offset += raw_data_expansion
-    tag_index.vertex_data_size  += vertex_data_expansion
-    tag_index.model_data_size   += vertex_data_expansion + triangle_data_expansion
+    tag_index.model_data_offset  += raw_data_expansion
+    tag_index.index_parts_offset += vertex_data_expansion
+    tag_index.model_data_size    += vertex_data_expansion + triangle_data_expansion
     halo_map.map_magic                 -= meta_ptr_diff
     map_header.tag_index_header_offset += meta_ptr_diff
     map_header.decomp_len = map_end
@@ -351,7 +357,8 @@ class RefineryCore:
             self.set_active_map()
 
     def unload_map(self, map_name=ACTIVE_INDEX, engine=ACTIVE_INDEX, **kw):
-        halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
+        maps = self.maps_by_engine.get(engine, {})
+        halo_map = maps.get(map_name)
         if halo_map is None:
             return
 
@@ -359,6 +366,12 @@ class RefineryCore:
             self.active_map_name = ""
 
         halo_map.unload_map()
+        # pop the map out in case the map uses its own separate maps dict
+        # due to conflicting resources being referenced. This can occur
+        # due to multiple yelo maps being loaded that each use different
+        # resource maps, or mcc maps that can do the same thing.
+        maps.pop(map_name, None)
+        maps.pop(halo_map.map_name, None)
 
     def save_map(self, save_path=None, map_name=ACTIVE_INDEX,
                  engine=ACTIVE_INDEX, **kw):
@@ -537,7 +550,7 @@ class RefineryCore:
         with get_rawdata_context(filepath=map_path, writable=False) as f:
             head_sig   = unpack("<I", f.peek(4))[0]
             map_header = get_map_header(f, True)
-            engine     = get_map_version(map_header)
+            engine     = get_engine_name(map_header, f)
 
         is_halo1_rsrc = False
         if engine is None and head_sig in (1, 2, 3):
@@ -1629,14 +1642,20 @@ class RefineryCore:
         try:
             filepath.parent.mkdir(exist_ok=True, parents=True)
             with filepath.open('r+b' if filepath.is_file() else 'w+b') as f:
+                # copy the header bytes to a bytearray so we can insert the crc
+                header_bytes = bytearray(halo_map.tag_headers[tag_cls])
+                with (FieldType.force_big if is_gen1 else FieldType.force_normal):
+                    data_bytes = meta.serialize(calc_pointers=False)
+
+                # calculate the tagdata crc and insert it in the header bytes
+                # NOTE: don't hate me shelly, but this is the easiest, least
+                #       offensive way to add the crc32 to the extracted tags
+                crc = calc_halo_crc32(data_bytes)
+                header_bytes[40:44] = crc.to_bytes(4, byteorder='big', signed=False)
+
                 f.truncate(0)
-                f.write(halo_map.tag_headers[tag_cls])
-                if is_gen1:
-                    with FieldType.force_big:
-                        f.write(meta.serialize(calc_pointers=False))
-                else:
-                    with FieldType.force_normal:
-                        f.write(meta.serialize(calc_pointers=False))
+                f.write(header_bytes)
+                f.write(data_bytes)
         except PermissionError:
             raise RefineryError(
                 "Refinery does not have permission to save here. "
