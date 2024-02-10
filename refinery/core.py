@@ -1234,8 +1234,9 @@ class RefineryCore:
                 self.process_queue_item(item, **extract_kw)
                 if kw.get("do_printout", self.do_printout):
                     print()  # print a new line to separate operations
-            except RefineryError:
-                print(format_exc(0)) # only last line for RefineryErrors
+            except RefineryError as e:
+                print("  Could not process queue item: %s" %
+                      (e.args[0] if e.args else "Unspecified reason."))
             except Exception:
                 print(format_exc())
 
@@ -1448,8 +1449,9 @@ class RefineryCore:
                         tag_path = "%s.%s" % (PureWindowsPath(tag_index_ref.path),
                                               tag_index_ref.class_1.enum_name)
                         tagslist += "%s: %s\n" % (extract_mode, tag_path)
-                except RefineryError:
-                    print(format_exc(0)) # only last line for RefineryErrors
+                except RefineryError as e:
+                    print("  Could not extract tag: %s" %
+                          (e.args[0] if e.args else "Unspecified reason."))
                 except Exception:
                     print(format_exc())
 
