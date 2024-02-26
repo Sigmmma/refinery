@@ -159,6 +159,9 @@ def expand_halo_map(halo_map, raw_data_expansion=0, vertex_data_expansion=0,
 
 
 class RefineryCore:
+    # enables more verbose error messages
+    debug = False
+
     # active map settings
     active_engine_name = ""
     active_map_name = ""
@@ -1276,11 +1279,12 @@ class RefineryCore:
                 self.process_queue_item(item, **extract_kw)
                 if kw.get("do_printout", self.do_printout):
                     print()  # print a new line to separate operations
-            except RefineryError as e:
+            except Exception as e:
+                if self.debug:
+                    print(format_exc())
+
                 print("  Could not process queue item: %s" %
                       (e.args[0] if e.args else "Unspecified reason."))
-            except Exception:
-                print(format_exc())
 
             item = self.dequeue(0)
 
@@ -1489,11 +1493,12 @@ class RefineryCore:
                         tag_path = "%s.%s" % (PureWindowsPath(tag_index_ref.path),
                                               tag_index_ref.class_1.enum_name)
                         tagslist += "%s: %s\n" % (extract_mode, tag_path)
-                except RefineryError as e:
+                except Exception as e:
+                    if self.debug:
+                        print(format_exc())
+
                     print("  Could not extract tag: %s" %
                           (e.args[0] if e.args else "Unspecified reason."))
-                except Exception:
-                    print(format_exc())
 
             tags_to_ignore.update(curr_tag_ids)
             curr_tag_ids = next_tag_ids
