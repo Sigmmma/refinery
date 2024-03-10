@@ -1211,7 +1211,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             filetypes = [("All", "*")]
             if halo_map.engine == "halo1vap":
                 filetypes.insert(0, ("Halo mapfile(chimerified)", "*.vap"))
-            elif halo_map.engine == "halo1yelo":
+            elif getattr(halo_map, "is_fully_yelo", False):
                 filetypes.insert(0, ("Halo mapfile(extra sauce)", "*.yelo"))
             else:
                 filetypes.insert(0, ("Halo mapfile", "*.map"))
@@ -1230,8 +1230,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self._running = True
         try:
             if not save_path.suffix:
-                save_path = save_path.with_suffix(
-                    '.yelo' if 'yelo' in halo_map.engine else '.map')
+                save_path = save_path.with_suffix(halo_map.decomp_file_ext)
 
             start = time()
 

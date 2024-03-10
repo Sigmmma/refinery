@@ -57,7 +57,7 @@ from reclaimer.meta.halo1_map_fast_functions import class_bytes_by_fcc
 from reclaimer.util import calc_halo_crc32
 
 from refinery.constants import INF, ACTIVE_INDEX, MAP_TYPE_ANY,\
-     MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE
+     MAP_TYPE_REGULAR, MAP_TYPE_RESOURCE, H1_SHADER_TAG_CLASSES
 from refinery import crc_functions
 from refinery import editor_constants as e_c
 from refinery.exceptions import RefineryError, MapNotLoadedError,\
@@ -500,7 +500,7 @@ class RefineryCore:
             expand_halo_map(halo_map, *expansions)
 
             # move the cheape.map pointer
-            if halo_map.engine == "halo1yelo":
+            if getattr(halo_map, "is_fully_yelo", False):
                 cheape = map_header.yelo_header.cheape_definitions
                 move_amount = 0
                 for end, exp in zip(section_ends, expansions):
@@ -706,6 +706,7 @@ class RefineryCore:
 
         tag_path_handler = TagPathHandler(tag_index_array)
         tag_path_handler.root_dir_prefix = self.root_dir_prefix
+        tag_path_handler.set_perm_suffixed_tag_classes(H1_SHADER_TAG_CLASSES)
 
         tag_path_handler.set_path_by_priority(
             halo_map.tag_index.scenario_tag_id & 0xFFff,
@@ -1225,7 +1226,7 @@ class RefineryCore:
     def extract_cheape(self, filepath=Path(""), map_name=ACTIVE_INDEX,
                        engine=ACTIVE_INDEX):
         halo_map = self.maps_by_engine.get(engine, {}).get(map_name)
-        if not halo_map or halo_map.engine != "halo1yelo":
+        if not getattr(halo_map, "is_fully_yelo", False):
             return Path("")
 
         filepath = Path(filepath)

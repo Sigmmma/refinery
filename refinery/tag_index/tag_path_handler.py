@@ -19,6 +19,8 @@ from queue import LifoQueue, Empty as EmptyQueueException
 
 BALL_MATCH_SUB = re.compile('\b(?:ball|skull|oddball)\b')
 FLAG_MATCH_SUB = re.compile('\b(?:flag)\b')
+DIGIT_CHARS    = "0123456789"
+DIGIT_US_CHARS = DIGIT_CHARS + "_"
 
 def str_to_identifier(string):
     '''
@@ -44,6 +46,7 @@ class TagPathHandler():
     _index_map = ()
     _priorities = ()
     _priority_mins = ()
+    _perm_suffixed_tag_classes = ()
 
     _icon_strings = ()
     _item_strings = ()
@@ -59,6 +62,7 @@ class TagPathHandler():
         self._priority_mins = dict(kwargs.get('priority_mins', {}))
         self._path_map = dict()
         self._overwritables = dict()
+        self._perm_suffixed_tag_classes = set(kwargs.get('perm_suffixed_tag_classes', ()))
 
         i = 0
         for ref in self._index_map:
@@ -125,6 +129,9 @@ class TagPathHandler():
             new_strings.append(string.strip())
 
         self._icon_strings = new_strings
+    
+    def set_perm_suffixed_tag_classes(self, tag_classes):
+        self._perm_suffixed_tag_classes = set(tag_classes)
 
     def get_index_ref(self, index):
         if index is None: return
@@ -215,23 +222,34 @@ class TagPathHandler():
         elif not new_path_no_ext or new_path_no_ext[-1] == "\\":
             new_path_no_ext += "protected_%s" % index
 
-        ext = "." + tag_ref.class_1.enum_name.lower()
+        ext = tag_ref.class_1.enum_name.lower()
+        can_be_digit_suffixed = ext not in self._perm_suffixed_tag_classes
+        ext = "." + ext
         new_path_no_ext = str(sanitize_win32_path(new_path_no_ext)).strip().lower()
 
-        if ensure_unique_name and self._path_map.get(new_path_no_ext + ext) not in (None, index):
+        unique_issue = self._path_map.get(new_path_no_ext + ext) not in (None, index)
+        suffix_issue = not can_be_digit_suffixed and new_path_no_ext[-1:] in set(DIGIT_CHARS)
+
+        if suffix_issue or (ensure_unique_name and unique_issue):
             path_pieces = list(PureWindowsPath(new_path_no_ext).parts)
             try:
                 # remove the digit suffix, but keep it if there's 
                 # more than digits on the end(its not one we made)
                 basename_pieces = path_pieces[-1].rsplit("#", 1)
-                if not basename_pieces[-1].strip("0123456789"):
+                if not basename_pieces[-1].strip(
+                        DIGIT_CHARS if can_be_digit_suffixed else 
+                        DIGIT_US_CHARS
+                        ):
                     path_pieces[-1] = basename_pieces[0]
             except Exception:
                 pass
 
             new_path_no_ext = get_unique_name(
-                self._path_map, str(PureWindowsPath(*path_pieces)), ext, index
+                self._path_map, str(PureWindowsPath(*path_pieces)), 
+                ("" if can_be_digit_suffixed else "_") + ext, index
                 )
+            if not can_be_digit_suffixed:
+                new_path_no_ext += "_"
 
         old_path = tag_ref.path.lower() + ext
         new_path = new_path_no_ext + ext

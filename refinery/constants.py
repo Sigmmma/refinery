@@ -24,35 +24,41 @@ BAD_CLASSES = frozenset(
     (INVALID, "NONE",)
     )
 
-H1_TAG_SUPERCLASSES = FrozenDict(
-    shader_environment=("shader", "NONE"),
-    shader_model=("shader", "NONE"),
-    shader_transparent_generic=("shader", "NONE"),
-    shader_transparent_chicago=("shader", "NONE"),
-    shader_transparent_chicago_extended=("shader", "NONE"),
-    shader_plasma=("shader", "NONE"),
-    shader_meter=("shader", "NONE"),
-    shader_water=("shader", "NONE"),
-    shader_glass=("shader", "NONE"),
+H1_SHADER_TAG_CLASSES = frozenset((
+    "shader_environment",
+    "shader_model",
+    "shader_transparent_generic",
+    "shader_transparent_chicago",
+    "shader_transparent_chicago_extended",
+    "shader_plasma",
+    "shader_meter",
+    "shader_water",
+    "shader_glass",
+    ))
+H1_UNIT_TAG_CLASSES = frozenset((
+    "biped", "vehicle"
+    ))
+H1_ITEM_TAG_CLASSES = frozenset((
+    "weapon", "equipment", "garbage"
+    ))
+H1_DEVICE_TAG_CLASSES = frozenset((
+    "device_machine", "device_control", "device_light_fixture"
+    ))
+H1_OBJECT_TAG_CLASSES = frozenset((
+    "projectile", "scenery", "placeholder", "sound_scenery"
+    ))
 
-    biped=("unit", "object"),
-    vehicle=("unit", "object"),
-
-    weapon=("item", "object"),
-    equipment=("item", "object"),
-    garbage=("item", "object"),
-
-    device_machine=("device", "object"),
-    device_control=("device", "object"),
-    device_light_fixture=("device", "object"),
-
-    projectile=("object", "NONE"),
-    scenery=("object", "NONE"),
-    placeholder=("object", "NONE"),
-    sound_scenery=("object", "NONE"),
-
+H1_TAG_SUPERCLASSES = dict(
     effect_postprocess_generic=("effect_postprocess", "NONE"),
     shader_postprocess_generic=("shader_postprocess", "NONE"),
+    **{cls: ("shader",  "NONE")     for cls in H1_SHADER_TAG_CLASSES},
+    **{cls: ("object",  "NONE")     for cls in H1_OBJECT_TAG_CLASSES},
     )
+    
+H1_TAG_SUPERCLASSES.update({cls: ("unit",    "object")   for cls in H1_UNIT_TAG_CLASSES})
+H1_TAG_SUPERCLASSES.update({cls: ("unit",    "object")   for cls in H1_ITEM_TAG_CLASSES})
+H1_TAG_SUPERCLASSES.update({cls: ("unit",    "object")   for cls in H1_DEVICE_TAG_CLASSES})
+
+H1_TAG_SUPERCLASSES = FrozenDict(H1_TAG_SUPERCLASSES)
 
 del FrozenDict
