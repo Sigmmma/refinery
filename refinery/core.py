@@ -1696,7 +1696,11 @@ class RefineryCore:
                 # calculate the tagdata crc and insert it in the header bytes
                 # NOTE: don't hate me shelly, but this is the easiest, least
                 #       offensive way to add the crc32 to the extracted tags
-                crc = calc_halo_crc32(data_bytes)
+                # NOTE: passing 0 for offset as the serialize method isn't
+                #       expected to reset the buffer's read/write position
+                #       when it finishes. the crc would then be calculated
+                #       starting at the wrong offset instead of the start.
+                crc = calc_halo_crc32(data_bytes, 0)
                 header_bytes[40:44] = crc.to_bytes(4, byteorder='big', signed=False)
 
                 f.truncate(0)
