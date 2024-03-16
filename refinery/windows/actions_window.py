@@ -284,15 +284,23 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
             init_dir = os.path.dirname(self.tagslist_path.get())
         except Exception:
             init_dir = None
-        dirpath = asksaveasfilename(
+        filepath = asksaveasfilename(
             initialdir=init_dir, parent=self,
             title="Select where to save the tag list log",
-            filetypes=(("text log", "*.txt"), ("All", "*")))
+            filetypes=(
+                ("text file", "*.txt"), 
+                ("text log", "*.log"), 
+                ("All", "*")
+                ))
 
-        if not dirpath:
+        if not filepath:
             return
 
-        self.tagslist_path.set(str(Path(dirpath)))
+        filepath = Path(filepath)
+        if not filepath.suffix:
+            filepath = filepath.with_suffix(".txt")
+
+        self.tagslist_path.set(str(filepath))
 
     def extract_to_browse(self):
         dirpath = askdirectory(
