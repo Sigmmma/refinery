@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0]
+### Changed
+ - exception thrown when extracting stubbs models
+ - reduced stacktrace output when tag extraction fails(unless RefineryCore.debug == True)
+ - Heuristic deprotection changes:
+  - better descriptions of what disabling safe-mode settings will do
+  - significant speed increase(most maps deprotect in 15 seconds or less)
+  - renaming logic improved to select better names
+  - added ability to configure a root directory to put all renamed tags in
+  - added ability to prioritize model names over names taken from weapon/vehicle strings
+  - underscore appended to shader names to allow permutations to be used
+  - spaces in tag names replaced with underscores in most cases
+
+### Added
+ - config setting to control using open-sauce definitions for regular CE maps
+ - config setting to control showing tag ids and metadata offsets in base 16 or base 10
+ - sound playback in tag window(requires pyogg and simpleaudio)
+
 ## [2.6.0]
 ### Changed
  - Only maps with opensauce headers will have their tags treated as OS_V4 on extraction now.
