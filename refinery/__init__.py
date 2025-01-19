@@ -12,8 +12,8 @@
 # ##############
 __author__ = "Sigmmma"
 #           YYYY.MM.DD
-__date__ = "2020.03.13"
-__version__ = (2, 6, 0)
+__date__ = "2025.01.18"
+__version__ = (2, 9, 0)
 __website__ = "https://github.com/Sigmmma/refinery"
 __all__ = (
     'defs', 'heuristic_deprotection', 'repl', 'tag_index', 'widgets', 'windows',

@@ -78,9 +78,10 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
                      "generate_comp_verts", "generate_uncomp_verts",
                      "force_lower_case_paths", "fix_tag_classes",
                      "autoload_resources", "extract_yelo_cheape",
+                     "base_10_ids", "base_10_offsets",
                      "use_minimum_priorities", "use_heuristics",
                      "rename_cached_tags", "show_all_fields",
-                     "show_structure_meta",
+                     "show_structure_meta", "disable_minimum_equal_priorities",
                      "edit_all_fields", "allow_corrupt",
                      "valid_tag_paths_are_accurate", "limit_tag_path_lengths",
                      "scrape_tag_paths_from_scripts", "shallow_ui_widget_nesting",
@@ -88,11 +89,15 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
                      "do_printout", "print_heuristic_name_changes",
                      "use_scenario_names_for_script_names",
                      "skip_seen_tags_during_queue_processing",
-                     "disable_safe_mode", "disable_tag_cleaning",):
+                     "prioritize_model_names_over_message_strings",
+                     "disable_safe_mode", "disable_tag_cleaning",
+                     "treat_ce_map_as_yelo",):
             object.__setattr__(self, attr, settings.get(attr, tk.IntVar(self)))
 
         for attr in ("bitmap_extract_format", "globals_overwrite_mode",
-                     "tags_dir", "data_dir", "tagslist_path"):
+                     "tags_dir", "data_dir", "tagslist_path",
+                     "root_dir_prefix"
+                     ):
             object.__setattr__(self, attr, settings.get(attr, tk.StringVar(self)))
 
 
@@ -119,6 +124,12 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
             self.tags_list_frame, text="Browse",
             command=self.tags_list_browse, width=6)
 
+        # root directory prefix
+        self.root_dir_frame = tk.LabelFrame(
+            self.heuristics_frame, text="Directory to prefix to all deprotected tag names")
+        self.root_dir_entry = tk.Entry(
+            self.root_dir_frame, textvariable=self.root_dir_prefix)
+
 
         self.rename_scnr_dups_cbtn = tk.Checkbutton(
             self.tag_fixup_frame, text=(
@@ -132,15 +143,26 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
             self.tag_fixup_frame, text="Generate uncompressed lightmap vertices",
             variable=self.generate_uncomp_verts)
 
-        self.dont_touch_frame = tk.LabelFrame(
-            self.tag_fixup_frame,
-            text="ONLY CHECK THESE IF YOU ARE NOT DEALING WITH PROTECTED MAPS")
+        self.dont_touch_frame = tk.LabelFrame(self.tag_fixup_frame)
+        self.dont_touch_label = tk.Label(
+            self.dont_touch_frame, justify="left", text=(
+            "\nThese settings change how Refinery reads tags from maps.\n"
+            "Use caution when changing these, as these settings can make Refinery\n"
+            "crash or freeze when reading from some heavily protected/corrupted maps.\n"
+            "They are safe to disable if you are certain the map isn't protected.\n"
+            ))
         self.disable_safe_mode_cbtn = tk.Checkbutton(
             self.dont_touch_frame, variable=self.disable_safe_mode, justify="left",
-            text="Disable safe-mode")
+            text="Disable bounds-checking while reading tags(i.e. safe-mode)")
         self.disable_tag_cleaning_cbtn = tk.Checkbutton(
             self.dont_touch_frame, variable=self.disable_tag_cleaning, justify="left",
-            text="Disable cleaning errors from tags when reading them.")
+            text=("Disable cleaning unused/invalid data from tags.\n"
+                  "Be aware that tag cleaning can cause unused tags to not be\n"
+                  "found when running deprotection or recursive extraction."
+             ))
+        self.treat_ce_map_as_yelo_cbtn = tk.Checkbutton(
+            self.dont_touch_frame, variable=self.treat_ce_map_as_yelo, justify="left",
+            text="Always use Open Sauce tag structures for CE maps(requires reload of map)")
 
 
         self.overwrite_cbtn = tk.Checkbutton(
@@ -228,18 +250,24 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
             variable=self.fix_tag_index_offset, justify='left')
 
 
+        self.print_heuristic_progress_cbtn = tk.Checkbutton(
+            self.heuristics_frame, text=("Print heuristic tag path changes"),
+            variable=self.print_heuristic_name_changes, justify='left')
         self.valid_tag_paths_are_accurate_cbtn = tk.Checkbutton(
             self.heuristics_frame, text="Do not rename non-protected tag paths",
             variable=self.valid_tag_paths_are_accurate)
         self.shallow_ui_widget_nesting_cbtn = tk.Checkbutton(
             self.heuristics_frame, text="Use shallow ui_widget_definition nesting",
             variable=self.shallow_ui_widget_nesting)
+        self.prioritize_model_names_cbtn = tk.Checkbutton(
+            self.heuristics_frame, text="Prioritize weapon/vehicle model names over message strings",
+            variable=self.prioritize_model_names_over_message_strings)
         self.use_fast_heuristics_cbtn = tk.Checkbutton(
             self.heuristics_frame, text="Use fast heuristics",
             variable=self.use_minimum_priorities)
-        self.print_heuristic_progress_cbtn = tk.Checkbutton(
-            self.heuristics_frame, text=("Print heuristic tag path changes"),
-            variable=self.print_heuristic_name_changes, justify='left')
+        self.use_fastest_heuristics_cbtn = tk.Checkbutton(
+            self.heuristics_frame, text="Use fastest heuristics(experimental)",
+            variable=self.disable_minimum_equal_priorities, onvalue=0, offvalue=1)
 
 
         font_frame_widgets = {}
@@ -313,7 +341,12 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         self.allow_corrupt_cbtn = tk.Checkbutton(
             self.other_frame, variable=self.allow_corrupt,
             text="Allow previewing corrupt tags")
-
+        self.base_10_ids_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.base_10_ids,
+            text="Show tag ids in base10 instead of base16")
+        self.base_10_offsets_cbtn = tk.Checkbutton(
+            self.other_frame, variable=self.base_10_offsets,
+            text="Show tag pointers in base10 instead of base16")
 
         # pack everything
         self.tabs.pack(fill="both", expand=True)
@@ -341,7 +374,8 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
             w.pack(padx=4, anchor='w')
 
         self.dont_touch_frame.pack(padx=4, anchor='w', expand=True, fill="both")
-        for w in (self.disable_safe_mode_cbtn, self.disable_tag_cleaning_cbtn):
+        for w in (self.dont_touch_label, self.disable_safe_mode_cbtn, 
+                  self.disable_tag_cleaning_cbtn, self.treat_ce_map_as_yelo_cbtn):
             w.pack(padx=4, anchor='w')
 
         for w in (self.fix_tag_classes_cbtn, self.use_heuristics_cbtn,
@@ -354,13 +388,17 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
         for w in (self.print_heuristic_progress_cbtn,
                   self.valid_tag_paths_are_accurate_cbtn,
                   self.shallow_ui_widget_nesting_cbtn,
+                  self.prioritize_model_names_cbtn,
                   self.use_fast_heuristics_cbtn,
+                  self.use_fastest_heuristics_cbtn,
+                  self.root_dir_frame
                   ):
             w.pack(padx=4, anchor='w')
 
         for w in (self.autoload_resources_cbtn, self.extract_yelo_cheape_cbtn,
                   self.show_all_fields_cbtn, self.show_structure_meta_cbtn,
                   self.edit_all_fields_cbtn, self.allow_corrupt_cbtn,
+                  self.base_10_ids_cbtn, self.base_10_offsets_cbtn,
                   ):
             w.pack(padx=4, anchor='w')
 
@@ -375,9 +413,11 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
 
         for w1, w2 in ((self.tags_dir_entry, self.tags_dir_browse_button),
                        (self.data_dir_entry, self.data_dir_browse_button),
-                       (self.tags_list_entry, self.browse_tags_list_button)):
+                       (self.tags_list_entry, self.browse_tags_list_button),
+                       (self.root_dir_entry, None)):
             w1.pack(padx=(4, 0), pady=2, side='left', expand=True, fill='x')
-            w2.pack(padx=(0, 4), pady=2, side='left')
+            if w2:
+                w2.pack(padx=(0, 4), pady=2, side='left')
 
         # make the window not show up on the start bar
         self.transient(self.master)

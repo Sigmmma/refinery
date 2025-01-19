@@ -25,9 +25,19 @@ DEFAULT_PRIORITY = 1.0
 LOW_PRIORITY = 0.5
 
 
-INVALID_MODEL_NAMES = frozenset(
-    ("", "base", "unnamed", "blur", "unnamed base",
-     "def", "default", "damaged"))
+INVALID_MODEL_NAMES = frozenset((
+    "", 
+    # common region names
+    "base", "unnamed", "unnamed_base", "hull", "body",
+    "def", "default", "damaged", "fp",
+    # common root node names
+    "frame", "pelvis", "root", "bone", 
+    "gun", "hand", "grip", "pole", # <-- flag
+    # common modeling software names
+    "box", "cube", "sphere", "cylinder", "geosphere",
+    # permutations
+    "blur", "damaged", "primary_blur", "secondary_blur"
+    ))
 
 
 # directories inside the root_dir

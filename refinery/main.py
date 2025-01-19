@@ -13,7 +13,7 @@ import os
 import sys
 import webbrowser
 
-from refinery.core import RefineryCore
+from refinery.core import RefineryCore, GEN_1_HALO_GBX_ENGINES
 
 from pathlib import Path
 from time import time
@@ -39,6 +39,11 @@ from refinery.windows.settings_window import RefinerySettingsWindow
 from refinery.windows.rename_window import RefineryRenameWindow
 from refinery.windows.crc_window import RefineryChecksumEditorWindow
 from refinery.util import is_path_empty
+
+try:
+    from refinery import arbytmap_ext
+except Exception:
+    pass
 
 from supyr_struct.defs import constants as supyr_constants
 from supyr_struct.field_types import FieldType
@@ -144,7 +149,9 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self._active_engine_name = tk.StringVar(self)
 
         self._autoload_resources = tk.IntVar(self, 1)
-        self._do_printout  = tk.IntVar(self, 1)
+        self._do_printout = tk.IntVar(self, 1)
+        self._base_10_ids = tk.IntVar(self, 1)
+        self._base_10_offsets = tk.IntVar(self, 1)
 
         self._force_lower_case_paths = tk.IntVar(self, 1)
         self._extract_yelo_cheape = tk.IntVar(self)
@@ -160,6 +167,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self._skip_seen_tags_during_queue_processing = tk.IntVar(self, 1)
         self._disable_safe_mode = tk.IntVar(self, 0)
         self._disable_tag_cleaning = tk.IntVar(self, 0)
+        self._treat_ce_map_as_yelo = tk.IntVar(self, 0)
         self._globals_overwrite_mode = tk.IntVar(self, 0)
 
         self._bitmap_extract_format = tk.StringVar(self)
@@ -167,7 +175,10 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self._fix_tag_classes = tk.IntVar(self, 1)
         self._fix_tag_index_offset = tk.IntVar(self)
         self._use_minimum_priorities = tk.IntVar(self, 1)
+        self._disable_minimum_equal_priorities = tk.IntVar(self, 1)
+        self._prioritize_model_names_over_message_strings = tk.IntVar(self, 1)
         self._use_heuristics = tk.IntVar(self, 1)
+        self._root_dir_prefix = tk.StringVar(self)
         self._valid_tag_paths_are_accurate = tk.IntVar(self, 1)
         self._scrape_tag_paths_from_scripts = tk.IntVar(self, 1)
         self._limit_tag_path_lengths = tk.IntVar(self, 1)
@@ -188,6 +199,8 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
             do_printout=self._do_printout,
             autoload_resources=self._autoload_resources,
+            base_10_ids=self._base_10_ids,
+            base_10_offsets=self._base_10_offsets,
 
             force_lower_case_paths=self._force_lower_case_paths,
             extract_yelo_cheape=self._extract_yelo_cheape,
@@ -203,6 +216,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             skip_seen_tags_during_queue_processing=self._skip_seen_tags_during_queue_processing,
             disable_safe_mode=self._disable_safe_mode,
             disable_tag_cleaning=self._disable_tag_cleaning,
+            treat_ce_map_as_yelo=self._treat_ce_map_as_yelo,
             globals_overwrite_mode=self._globals_overwrite_mode,
 
             bitmap_extract_format=self._bitmap_extract_format,
@@ -210,7 +224,10 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             fix_tag_classes=self._fix_tag_classes,
             fix_tag_index_offset=self._fix_tag_index_offset,
             use_minimum_priorities=self._use_minimum_priorities,
+            disable_minimum_equal_priorities=self._disable_minimum_equal_priorities,
+            prioritize_model_names_over_message_strings=self._prioritize_model_names_over_message_strings,
             use_heuristics=self._use_heuristics,
+            root_dir_prefix=self._root_dir_prefix,
             valid_tag_paths_are_accurate=self._valid_tag_paths_are_accurate,
             scrape_tag_paths_from_scripts=self._scrape_tag_paths_from_scripts,
             limit_tag_path_lengths=self._limit_tag_path_lengths,
@@ -438,6 +455,13 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self._last_dir = new_val
 
     @property
+    def root_dir_prefix(self):
+        return self._root_dir_prefix.get()
+    @root_dir_prefix.setter
+    def root_dir_prefix(self, new_val):
+        self._root_dir_prefix.set(new_val)
+
+    @property
     def running(self):
         return self._running
 
@@ -532,14 +556,16 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         paths      = self.config_file.data.paths
         app_window = self.config_file.data.app_window
         fonts      = self.config_file.data.fonts
-
-        self.tagslist_path = paths.tagslist.path
-        self.tags_dir = paths.tags_dir.path
-        self.data_dir = paths.data_dir.path
-        self.last_dir = paths.last_dir.path
+        for name in ("root_dir_prefix", "tagslist_path", 
+                     "tags_dir", "data_dir", "last_dir"):
+            try:
+                setattr(self, name, getattr(paths, name).path)
+            except (AttributeError, IndexError):
+                pass
 
         self._display_mode = header.flags.display_mode.enum_name
-        for name in ("do_printout", "autoload_resources"):
+        for name in ("do_printout", "autoload_resources", 
+                     "base_10_ids", "base_10_offsets"):
             setattr(self, name, bool(getattr(header.flags, name)))
 
         for attr_name in header.preview_flags.NAME_MAP:
@@ -598,13 +624,15 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         if len(paths.NAME_MAP) > len(paths):
             paths.extend(len(paths.NAME_MAP) - len(paths))
 
-        paths.tagslist.path = "" if is_path_empty(self.tagslist_path) else str(self.tagslist_path)
+        paths.root_dir_prefix.path = "" if is_path_empty(self.root_dir_prefix) else str(self.root_dir_prefix)
+        paths.tagslist_path.path = "" if is_path_empty(self.tagslist_path) else str(self.tagslist_path)
         paths.tags_dir.path = "" if is_path_empty(self.tags_dir) else str(self.tags_dir)
         paths.data_dir.path = "" if is_path_empty(self.data_dir) else str(self.data_dir)
         paths.last_dir.path = "" if is_path_empty(self.last_dir) else str(self.last_dir)
 
         header.flags.display_mode.set_to(self._display_mode)
-        for attr_name in ("do_printout", "autoload_resources"):
+        for attr_name in ("do_printout", "autoload_resources", 
+                          "base_10_ids", "base_10_offsets"):
             setattr(header.flags, attr_name, getattr(self, attr_name))
 
         for attr_name in header.preview_flags.NAME_MAP:
@@ -997,11 +1025,13 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
     def load_map(self, map_path, make_active=True, ask_close_open=False, **kw):
         autoload_resources = kw.pop("autoload_resources", self.autoload_resources)
+        unlink_mismatched = kw.pop("unlink_mismatched_resources", True)
         new_map = prev_active_engine = prev_active_map = None
         try:
             new_map = RefineryCore.load_map(
                 self, map_path, not ask_close_open, make_active=False,
-                autoload_resources=False, decompress_overwrite=True)
+                autoload_resources=False, decompress_overwrite=True,
+                unlink_mismatched_resources=unlink_mismatched)
         except MapAlreadyLoadedError:
             if not(ask_close_open and messagebox.askyesno(
                     "A map with that name is already loaded!",
@@ -1015,7 +1045,9 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             prev_active_map = self.active_map_name
             new_map = RefineryCore.load_map(
                 self, map_path, True, make_active=False,
-                autoload_resources=False)
+                autoload_resources=False,
+                unlink_mismatched_resources=unlink_mismatched
+                )
 
             if (new_map.engine == prev_active_engine and
                 new_map.map_name == prev_active_map):
@@ -1171,8 +1203,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         elif halo_map.is_resource:
             print("Cannot deprotect resource maps.")
             return
-        elif halo_map.engine not in ("halo1ce", "halo1yelo",
-                                     "halo1pc", "halo1vap"):
+        elif halo_map.engine not in GEN_1_HALO_GBX_ENGINES:
             print("Cannot deprotect this kind of map.")
             return
 
@@ -1180,7 +1211,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
             filetypes = [("All", "*")]
             if halo_map.engine == "halo1vap":
                 filetypes.insert(0, ("Halo mapfile(chimerified)", "*.vap"))
-            elif halo_map.engine == "halo1yelo":
+            elif getattr(halo_map, "is_fully_yelo", False):
                 filetypes.insert(0, ("Halo mapfile(extra sauce)", "*.yelo"))
             else:
                 filetypes.insert(0, ("Halo mapfile", "*.map"))
@@ -1199,8 +1230,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         self._running = True
         try:
             if not save_path.suffix:
-                save_path = save_path.with_suffix(
-                    '.yelo' if 'yelo' in halo_map.engine else '.map')
+                save_path = save_path.with_suffix(halo_map.decomp_file_ext)
 
             start = time()
 
@@ -1272,8 +1302,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
             return Path("")
-        elif halo_map.engine not in ("halo1ce", "halo1yelo",
-                                     "halo1pc", "halo1vap"):
+        elif halo_map.engine not in GEN_1_HALO_GBX_ENGINES:
             print("Cannot save this kind of map.")
             return Path("")
 
@@ -1317,8 +1346,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         elif halo_map.is_resource:
             print("Cannot save resource maps.")
             return Path("")
-        elif halo_map.engine not in ("halo1ce", "halo1yelo",
-                                     "halo1pc", "halo1vap"):
+        elif halo_map.engine not in GEN_1_HALO_GBX_ENGINES:
             print("Cannot save this kind of map.")
             return Path("")
         elif save_path is None or is_path_empty(save_path):
@@ -1365,7 +1393,10 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         if reload_window and not is_path_empty(save_path):
             print("Reloading map to apply changes...")
-            self.load_map(save_path, make_active=True, autoload_resources=False)
+            self.load_map(
+                save_path, make_active=True, autoload_resources=False,
+                unlink_mismatched_resources=False
+                )
 
         return save_path
 

@@ -8,20 +8,45 @@
 #
 
 import os
+import re
 
 from pathlib import PureWindowsPath
 from refinery.constants import INF
 from refinery.util import sanitize_win32_path, get_unique_name
-from supyr_struct.util import str_to_identifier
+from supyr_struct.util import str_to_identifier as orig_str_to_identifier
 
 from queue import LifoQueue, Empty as EmptyQueueException
 
+BALL_MATCH_SUB = re.compile('\b(?:ball|skull|oddball)\b')
+FLAG_MATCH_SUB = re.compile('\b(?:flag)\b')
+DIGIT_CHARS    = "0123456789"
+DIGIT_US_CHARS = DIGIT_CHARS + "_"
+
+def str_to_identifier(string):
+    '''
+    This version of str_to_identifier won't die if it fails
+    to sanitize the string to something useful, but will 
+    instead return a single underscore. Useful when dealing
+    with potentially completely invalid identifier strings.
+    '''
+    name = ""
+    try:
+        name = orig_str_to_identifier(string)
+    except (AssertionError, TypeError):
+        pass
+
+    return name or "_"
+
 
 class TagPathHandler():
+    # _root_dir_prefix is a directory name to prefix to
+    # all tags renamed through priority(i.e. deprotection)
+    _root_dir_prefix = ""
     _path_map = ()
     _index_map = ()
     _priorities = ()
     _priority_mins = ()
+    _perm_suffixed_tag_classes = ()
 
     _icon_strings = ()
     _item_strings = ()
@@ -37,6 +62,7 @@ class TagPathHandler():
         self._priority_mins = dict(kwargs.get('priority_mins', {}))
         self._path_map = dict()
         self._overwritables = dict()
+        self._perm_suffixed_tag_classes = set(kwargs.get('perm_suffixed_tag_classes', ()))
 
         i = 0
         for ref in self._index_map:
@@ -46,6 +72,14 @@ class TagPathHandler():
             self._priorities[i] = self._priority_mins[i] = priority
             self._overwritables[i] = False if ref.indexed else True
             i += 1
+
+    @property
+    def root_dir_prefix(self):
+        return self._root_dir_prefix or ""
+    @root_dir_prefix.setter
+    def root_dir_prefix(self, value): 
+        value = str(PureWindowsPath(value)).lower().rstrip("\\")
+        self._root_dir_prefix = value + "\\" if value else ""
 
     @property
     def def_priority(self):
@@ -63,14 +97,20 @@ class TagPathHandler():
 
     def set_item_strings(self, strings_body):
         new_strings = []
+
         for b in strings_body.strings.STEPTREE:
             string = str_to_identifier(b.data.lower()).\
                      replace("_", " ").replace(" d ", ' ').\
                      replace("picked up an ", '').replace("picked up a ", '').\
-                     replace("picked up the ", '').replace("picked up ", '')
+                     replace("picked up the ", '').replace("picked up ", '').\
+                     replace("powerup", '')
 
             if string == "need a string entry here":
                 string = ""
+            elif FLAG_MATCH_SUB.match(string):
+                string = "flag"
+            elif BALL_MATCH_SUB.match(string):
+                string = "ball"
             elif " for " in string:
                 string = string.split(" for ")[-1] + " ammo"
             elif string.startswith("for "):
@@ -89,6 +129,9 @@ class TagPathHandler():
             new_strings.append(string.strip())
 
         self._icon_strings = new_strings
+    
+    def set_perm_suffixed_tag_classes(self, tag_classes):
+        self._perm_suffixed_tag_classes = set(tag_classes)
 
     def get_index_ref(self, index):
         if index is None: return
@@ -164,32 +207,49 @@ class TagPathHandler():
             return False
         return True
 
-    def set_path(self, index, new_path_no_ext, do_printout=False, ensure_unique_name=True):
+    def set_path(self, index, new_path_no_ext, do_printout=False, 
+                 ensure_unique_name=True, ensure_root_prefixed=False):
         if index is None: return
         index &= 0xFFff
+
+        new_path_no_ext = (new_path_no_ext or "").lower()
+        if ensure_root_prefixed and not new_path_no_ext.startswith(self.root_dir_prefix):
+            new_path_no_ext = self.root_dir_prefix + new_path_no_ext
 
         tag_ref = self.get_index_ref(index)
         if tag_ref is None:
             return
         elif not new_path_no_ext or new_path_no_ext[-1] == "\\":
-            new_path_no_ext += "protected %s" % index
+            new_path_no_ext += "protected_%s" % index
 
-        ext = "." + tag_ref.class_1.enum_name.lower()
-        new_path_no_ext = str(sanitize_win32_path(new_path_no_ext.lower())).strip()
+        ext = tag_ref.class_1.enum_name.lower()
+        can_be_digit_suffixed = ext not in self._perm_suffixed_tag_classes
+        ext = "." + ext
+        new_path_no_ext = str(sanitize_win32_path(new_path_no_ext)).strip().lower()
 
-        if ensure_unique_name and self._path_map.get(new_path_no_ext + ext) not in (None, index):
-            path_pieces = PureWindowsPath(new_path_no_ext).parts
-            path_basename = path_pieces[-1]
+        unique_issue = self._path_map.get(new_path_no_ext + ext) not in (None, index)
+        suffix_issue = not can_be_digit_suffixed and new_path_no_ext[-1:] in set(DIGIT_CHARS)
+
+        if suffix_issue or (ensure_unique_name and unique_issue):
+            path_pieces = list(PureWindowsPath(new_path_no_ext).parts)
             try:
-                path_basename_pieces = path_basename.split("#")
-                if len(path_basename_pieces) > 1:
-                    path_basename = "#".join(path_basename_pieces[: -1])
+                # remove the digit suffix, but keep it if there's 
+                # more than digits on the end(its not one we made)
+                basename_pieces = path_pieces[-1].rsplit("#", 1)
+                if not basename_pieces[-1].strip(
+                        DIGIT_CHARS if can_be_digit_suffixed else 
+                        DIGIT_US_CHARS
+                        ):
+                    path_pieces[-1] = basename_pieces[0]
             except Exception:
                 pass
 
-            path_pieces = tuple(path_pieces[: -1]) + (path_basename, )
             new_path_no_ext = get_unique_name(
-                self._path_map, str(PureWindowsPath(*path_pieces)), ext, index)
+                self._path_map, str(PureWindowsPath(*path_pieces)), 
+                ("" if can_be_digit_suffixed else "_") + ext, index
+                )
+            if not can_be_digit_suffixed:
+                new_path_no_ext += "_"
 
         old_path = tag_ref.path.lower() + ext
         new_path = new_path_no_ext + ext
@@ -224,7 +284,7 @@ class TagPathHandler():
         if not self.get_will_overwrite(index, priority, override):
             return self.get_priority(index)
 
-        self.set_path(index, new_path_no_ext, do_printout)
+        self.set_path(index, new_path_no_ext, do_printout, ensure_root_prefixed=True)
         self.set_priority(index, priority)
         return priority
 

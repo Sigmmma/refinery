@@ -11,17 +11,13 @@ from reclaimer.enums import materials_list, material_effect_types
 from refinery.heuristic_deprotection.constants import *
 from refinery.heuristic_deprotection.util import MinPriority, sanitize_name,\
      sanitize_name_piece, get_tag_id, join_names, get_model_name,\
-     get_sound_sub_dir_and_name, get_sound_looping_name, get_sound_scenery_name
+     get_sound_sub_dir_and_name, get_sound_looping_name, get_sound_scenery_name,\
+     sanitize_model_or_sound_name
 from traceback import format_exc
 
 
 def heuristic_deprotect(tag_id, halo_map, tag_path_handler,
                         root_dir="", sub_dir="", name="", **kw):
-    # create a copy of this set for each recursion level to prevent
-    # infinite recursion, but NOT prevent revisiting the
-    seen = kw.setdefault("seen", set())
-    kw.setdefault("depth", INF)
-    priority = kw.get("priority")
     if tag_id is None:
         return INF
 
@@ -29,15 +25,24 @@ def heuristic_deprotect(tag_id, halo_map, tag_path_handler,
     if tag_index_id not in range(len(halo_map.tag_index.tag_index)):
         return INF
 
+    # create a copy of this set for each recursion level to prevent
+    # infinite recursion, but NOT prevent revisiting the
+    seen = kw.setdefault("seen", set())
+    kw.setdefault("depth", INF)
+    priority = kw.get("priority")
+
     min_priority = MinPriority()
     curr_min_prio = tag_path_handler.get_priority_min(tag_index_id)
     if tag_index_id in seen or kw["depth"] < 0:
         # do nothing if tag already seen or already at max depth
         return curr_min_prio
-    elif kw.get("use_minimum_priorities") and (priority is not None and
-                                               curr_min_prio > priority):
+    elif not kw.get("use_minimum_priorities") or priority is None or curr_min_prio < priority:
+        pass
+    elif curr_min_prio > priority or (kw.get("use_minimum_equal_priorities") and 
+                                      kw.get("return_on_equal_min_priority")):
         # do nothing if priority is lower than the lowest priority
-        # of any tag referenced by this tag or its dependencies
+        # of any tag referenced by this tag or its dependencies, or
+        # is equal and return_on_equal_min_priority is True
         return curr_min_prio
 
     kw.update(depth=kw["depth"] - 1, min_priority=min_priority)
@@ -70,7 +75,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
 
-    meta = halo_map.get_meta(tag_id)
+    meta = halo_map.get_meta(tag_id, reextract=True)
     if meta is None:
         return
     elif not name:
@@ -275,7 +280,7 @@ def rename_scnr(tag_id, halo_map, tag_path_handler,
         kw['priority'] = LOW_PRIORITY
         sub_id = get_tag_id(b.reference)
         tag_cls = b.reference.tag_class.enum_name
-        tag_name = "protected %s" % sub_id
+        tag_name = "protected_%s" % sub_id
 
         if tag_cls == "model_animations":
             ref_sub_dir = cinematic_anims_dir
@@ -330,7 +335,7 @@ def rename_matg(tag_id, halo_map, tag_path_handler,
     kwargs_no_priority = dict(kw)
     kwargs_no_priority.pop('priority')
 
-    meta = halo_map.get_meta(tag_id)
+    meta = halo_map.get_meta(tag_id, reextract=True)
     if meta is None:
         return
     elif not name:
@@ -566,7 +571,7 @@ def rename_hudg(tag_id, halo_map, tag_path_handler,
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
 
-    meta = halo_map.get_meta(tag_id)
+    meta = halo_map.get_meta(tag_id, reextract=True)
     if meta is None:
         return
 
@@ -645,7 +650,7 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
     for b in meta.collision_materials.STEPTREE:
         min_prio.val = heuristic_deprotect(
             get_tag_id(b.shader), sub_dir=coll_shdr_dir,
-            name="protected %s" % get_tag_id(b.shader),
+            name="protected_%s" % get_tag_id(b.shader),
             override=True, **kw)
 
     # lightmap materials(non-collidable)
@@ -654,18 +659,18 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
         for mat in lightmap.materials.STEPTREE:
             min_prio.val = heuristic_deprotect(
                 get_tag_id(mat.shader), sub_dir=non_coll_shdr_dir,
-                name="protected %s" % get_tag_id(mat.shader), **kw)
+                name="protected_%s" % get_tag_id(mat.shader), **kw)
 
     # lens flares
     for b in meta.lens_flares.STEPTREE:
         min_prio.val = heuristic_deprotect(
             get_tag_id(b.shader), sub_dir=sub_dir + "lens flares\\",
-            name="protected %s" % get_tag_id(b.shader), **kw)
+            name="protected_%s" % get_tag_id(b.shader), **kw)
 
     # fog palettes
     for b in meta.fog_palettes.STEPTREE:
         min_prio.val = heuristic_deprotect(get_tag_id(b.fog), sub_dir=sub_dir + weather_dir,
-                         name=sanitize_name_piece(b.name, "protected %s" %
+                         name=sanitize_name_piece(b.name, "protected_%s" %
                                                   get_tag_id(b.fog)), **kw)
 
     # weather palettes
@@ -673,11 +678,11 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
         min_prio.val = heuristic_deprotect(get_tag_id(b.particle_system),
                          sub_dir=sub_dir + weather_dir,
                          name=sanitize_name_piece(
-                             b.name, "protected weather %s" %
+                             b.name, "protected_weather_%s" %
                              get_tag_id(b.particle_system)), **kw)
         min_prio.val = heuristic_deprotect(get_tag_id(b.wind), sub_dir=sub_dir + weather_dir,
                          name=sanitize_name_piece(
-                             b.name, "protected wind %s" %
+                             b.name, "protected_wind_%s" %
                              get_tag_id(b.wind)), **kw)
 
     # background sounds
@@ -685,7 +690,7 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
         min_prio.val = heuristic_deprotect(get_tag_id(b.background_sound),
                          sub_dir=sub_dir + sounds_dir,
                          name=sanitize_name_piece(
-                             b.name, "protected bg sound %s" %
+                             b.name, "protected_bg_sound_%s" %
                              get_tag_id(b.background_sound)), **kw)
 
     # sound environments
@@ -693,7 +698,7 @@ def rename_sbsp(tag_id, halo_map, tag_path_handler,
         min_prio.val = heuristic_deprotect(get_tag_id(b.sound_environment),
                          sub_dir=snd_sound_env_dir,
                          name=sanitize_name_piece(
-                             b.name, "protected sound env %s" %
+                             b.name, "protected_sound_env_%s" %
                              get_tag_id(b.sound_environment)), **kw)
 
 
@@ -718,7 +723,9 @@ def rename_sky_(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault("priority", DEFAULT_PRIORITY)
 
-    min_prio.val = heuristic_deprotect(get_tag_id(meta.model), name=name, **kw)
+    for b in (meta.model, meta.animation_graph):
+        min_prio.val = heuristic_deprotect(get_tag_id(b), name=name, **kw)
+
     for b in meta.lights.STEPTREE:
         light_name = sanitize_name(b.global_function_name)
         if not light_name:
@@ -745,32 +752,40 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
                                  replace(" source", "").replace(" src", "")
         i += 1
 
-    if not name:
+    string_name = model_name = ""
+    if not name or name.startswith("protected"):
         if obje_type in ("weap", "eqip"):
-            name = tag_path_handler.get_item_string(
+            string_name = tag_path_handler.get_item_string(
                 meta.item_attrs.message_index)
             eqip_attrs = getattr(meta, "eqip_attrs", None)
             if eqip_attrs and eqip_attrs.powerup_type.data in (1, 4):
-                name = eqip_attrs.powerup_type.enum_name.replace("_", " ")
+                string_name = eqip_attrs.powerup_type.enum_name.replace("_", " ")
 
         elif obje_type == "vehi":
-            name = tag_path_handler.get_icon_string(
+            string_name = tag_path_handler.get_icon_string(
                 meta.obje_attrs.hud_text_message_index)
 
-        if name:
-            # up the priority if we could detect a name for
-            # this in the strings for the weapon or vehicles
-            kw.setdefault('priority', HIGH_PRIORITY)
-        else:
-            kw.setdefault('priority', MEDIUM_HIGH_PRIORITY)
-            name = tag_path_handler.get_basename(get_tag_id(obje_attrs.model))
-            if not name or name.startswith("protected"):
-                name = "protected %s" % tag_id
-                if obje_type == "ssce":
-                    name = get_sound_scenery_name(meta, halo_map, name)
-                else:
-                    name = get_model_name(
-                        halo_map, get_tag_id(obje_attrs.model), name)
+        model_tag_id = get_tag_id(obje_attrs.model)
+        model_name = tag_path_handler.get_basename(model_tag_id)
+        if not model_name or model_name.startswith("protected"):
+            if obje_type == "ssce":
+                model_name = get_sound_scenery_name(meta, halo_map, name)
+            else:
+                model_name = get_model_name(
+                    halo_map=halo_map, tag_id=model_tag_id, name=name
+                    )
+
+    if kw.get("prioritize_model_names") and model_name:
+        name = model_name
+        kw.setdefault('priority', HIGH_PRIORITY)
+    elif string_name:
+        # up the priority if we could detect a name for
+        # this in the strings for the weapon or vehicles
+        name = string_name
+        kw.setdefault('priority', HIGH_PRIORITY)
+    elif not name:
+        name = model_name or ("protected_%s" % tag_id)
+        kw.setdefault('priority', MEDIUM_HIGH_PRIORITY)
 
     if obje_type == "bipd":
         obje_dir = characters_dir
@@ -802,12 +817,24 @@ def rename_obje(tag_id, halo_map, tag_path_handler,
     if not sub_dir:
         sub_dir = obje_dir
 
-    if sub_dir.lower().endswith(obje_dir):
+    orig_sub_dir    = sub_dir
+    is_obje_sub_dir = sub_dir.lower().endswith(obje_dir)
+    if is_obje_sub_dir:
         sub_dir += name + "\\"
 
     min_prio.val = tag_path_handler.set_path_by_priority(
         tag_id, root_dir + sub_dir + name, kw.get('priority'), kw.get("override"),
         kw.get("do_printout"))
+
+    assigned_name = tag_path_handler.get_basename(tag_id)
+    if name != assigned_name:
+        name = assigned_name
+        if is_obje_sub_dir:
+            sub_dir = orig_sub_dir + name + "\\"
+
+        min_prio.val = tag_path_handler.set_path_by_priority(
+            tag_id, root_dir + sub_dir + name, kw.get('priority'), True,
+            kw.get("do_printout"))
 
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
@@ -930,62 +957,62 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
         senv_attrs = meta.senv_attrs
         min_prio.val = heuristic_deprotect(
             get_tag_id(senv_attrs.diffuse.base_map),
-            name="senv %s diffuse" % name, **kw)
+            name="%s_senv_diffuse" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(senv_attrs.diffuse.primary_detail_map),
-            name="senv %s pri detail" % name, **kw)
+            name="%s_senv_pri_detail" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(senv_attrs.diffuse.secondary_detail_map),
-            name="senv %s sec detail" % name, **kw)
+            name="%s_senv_sec_detail" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(senv_attrs.diffuse.micro_detail_map),
-            name="senv %s micro detail" % name, **kw)
+            name="%s_senv_micro_detail" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(senv_attrs.bump_properties.map),
-            name="senv %s bump" % name, **kw)
+            name="%s_senv_bump" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(senv_attrs.self_illumination.map),
-            name="senv %s self illum" % name, **kw)
+            name="%s_senv_self_illum" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(senv_attrs.reflection.cube_map),
-            name="senv %s reflection" % name, **kw)
+            name="%s_senv_reflection" % name, **kw)
 
         senv_ext = getattr(getattr(senv_attrs, "os_shader_environment_ext", ()),
                            "STEPTREE", ())
         for b in senv_ext:
             min_prio.val = heuristic_deprotect(get_tag_id(b.specular_color_map),
-                             name="senv %s spec color" % name, **kw)
+                             name="%s_senv_spec_color" % name, **kw)
 
 
     elif shdr_type == "soso":
         soso_attrs = meta.soso_attrs
         min_prio.val = heuristic_deprotect(
             get_tag_id(soso_attrs.maps.diffuse_map),
-            name="soso %s diffuse" % name, **kw)
+            name="%s_soso_diffuse" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(soso_attrs.maps.multipurpose_map),
-            name="soso %s multi" % name, **kw)
+            name="%s_soso_multi" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(soso_attrs.maps.detail_map),
-            name="soso %s detail" % name, **kw)
+            name="%s_soso_detail" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(soso_attrs.reflection.cube_map),
-            name="soso %s reflection" % name, **kw)
+            name="%s_soso_reflection" % name, **kw)
         soso_ext = getattr(getattr(soso_attrs, "os_shader_model_ext", ()),
                            "STEPTREE", ())
         for b in soso_ext:
             min_prio.val = heuristic_deprotect(
                 get_tag_id(b.specular_color_map),
-                name="soso %s spec color" % name, **kw)
+                name="%s_soso_spec_color" % name, **kw)
             min_prio.val = heuristic_deprotect(
                 get_tag_id(b.base_normal_map),
-                name="soso %s normal" % name, **kw)
+                name="%s_soso_normal" % name, **kw)
             min_prio.val = heuristic_deprotect(
                 get_tag_id(b.detail_normal_1_map),
-                name="soso %s normal detail 1" % name, **kw)
+                name="%s_soso_normal_detail_1" % name, **kw)
             min_prio.val = heuristic_deprotect(
                 get_tag_id(b.detail_normal_2_map),
-                name="soso %s normal detail 2" % name, **kw)
+                name="%s_soso_normal_detail_2" % name, **kw)
 
     elif shdr_type in ("sotr", "schi", "scex"):
         if shdr_type == "scex":
@@ -1001,17 +1028,17 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
 
         for maps in maps_list:
             for map in maps.STEPTREE:
-                min_prio.val = heuristic_deprotect(get_tag_id(map.bitmap), name="%s %s" %
-                                 (shdr_type, name), **kw)
+                min_prio.val = heuristic_deprotect(get_tag_id(map.bitmap), name="%s_%s" %
+                                 (name, shdr_type), **kw)
 
         kw.update(sub_dir=sub_dir)
         i = 0
         for extra_layer in extra_layers.STEPTREE:
             ex_layer_name = name
             if len(extra_layers.STEPTREE) == 1:
-                ex_layer_name += " ex "
+                ex_layer_name += "_ex_"
             else:
-                ex_layer_name += " ex %s" % i
+                ex_layer_name += "_ex_%s" % i
             min_prio.val = heuristic_deprotect(
                 get_tag_id(extra_layer), name=ex_layer_name, **kw)
             i += 1
@@ -1020,40 +1047,40 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
         water_shader = meta.swat_attrs.water_shader
         min_prio.val = heuristic_deprotect(
             get_tag_id(water_shader.base_map),
-            name="swat %s base" % name, **kw)
+            name="%s_swat_base" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(water_shader.reflection_map),
-            name="swat %s reflection" % name, **kw)
+            name="%s_swat_reflection" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(water_shader.ripple_maps),
-            name="swat %s ripples" % name, **kw)
+            name="%s_swat_ripples" % name, **kw)
 
     elif shdr_type == "sgla":
         sgla_attrs = meta.sgla_attrs
         min_prio.val = heuristic_deprotect(
             get_tag_id(sgla_attrs.background_tint_properties.map),
-            name="sgla %s background tint" % name, **kw)
+            name="%s_sgla_background_tint" % name, **kw)
 
         min_prio.val = heuristic_deprotect(
             get_tag_id(sgla_attrs.reflection_properties.map),
-            name="sgla %s reflection" % name, **kw)
+            name="%s_sgla_reflection" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(sgla_attrs.reflection_properties.bump_map),
-            name="sgla %s bump" % name, **kw)
+            name="%s_sgla_bump" % name, **kw)
 
         min_prio.val = heuristic_deprotect(
             get_tag_id(sgla_attrs.diffuse_properties.map),
-            name="sgla %s diffuse" % name, **kw)
+            name="%s_sgla_diffuse" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(sgla_attrs.diffuse_properties.detail_map),
-            name="sgla %s diffuse detail" % name, **kw)
+            name="%s_sgla_diffuse_detail" % name, **kw)
 
         min_prio.val = heuristic_deprotect(
             get_tag_id(sgla_attrs.specular_properties.map),
-            name="sgla %s specular" % name, **kw)
+            name="%s_sgla_specular" % name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(sgla_attrs.specular_properties.detail_map),
-            name="sgla %s specular detail" % name, **kw)
+            name="%s_sgla_specular_detail" % name, **kw)
 
     elif shdr_type == "smet":
         smet_attrs = meta.smet_attrs
@@ -1065,10 +1092,10 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
                 meter_name = func_name
 
         if not meter_name:
-            meter_name = name if  "meter" in name else name + " meter"
+            meter_name = name if "meter" in name else name + " meter"
 
         min_prio.val = heuristic_deprotect(get_tag_id(smet_attrs.meter_shader.map),
-                         name="smet %s" % name, **kw)
+                         name="%s_smet" % name, **kw)
 
     elif shdr_type == "spla":
         spla_attrs = meta.spla_attrs
@@ -1080,10 +1107,10 @@ def rename_shdr(tag_id, halo_map, tag_path_handler,
 
         min_prio.val = heuristic_deprotect(
             get_tag_id(spla_attrs.primary_noise_map.noise_map),
-            name="spla %s noise" % plasma_name, **kw)
+            name="%s_spla_noise" % plasma_name, **kw)
         min_prio.val = heuristic_deprotect(
             get_tag_id(spla_attrs.primary_noise_map.noise_map),
-            name="spla %s noise sec" % plasma_name, **kw)
+            name="%s_spla_noise_sec" % plasma_name, **kw)
 
 
 def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
@@ -1093,7 +1120,8 @@ def rename_item_attrs(meta, tag_id, halo_map, tag_path_handler,
         return
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
-              tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler,
+              return_on_equal_min_priority=True)
 
     item_attrs = meta.item_attrs
     eqip_attrs = getattr(meta, "eqip_attrs", None)
@@ -1233,7 +1261,8 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
         return
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
-              tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler,
+              return_on_equal_min_priority=True)
 
     unit_attrs = meta.unit_attrs
     bipd_attrs = getattr(meta, "bipd_attrs", None)
@@ -1329,7 +1358,7 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
                 min_prio.val = heuristic_deprotect(get_tag_id(b.melee_damage.damage_effect),
                                  sub_dir=boarding_dir,
                                  name=seat_name + " melee damage", **kw)
-                min_prio.val = heuristic_deprotect(get_tag_id(b.region_damage.damage_effect),
+                min_prio.val = heuristic_deprotect(get_tag_id(b.region_targeting.damage_effect),
                                  sub_dir=boarding_dir,
                                  name=seat_name + " region damage", **kw)
 
@@ -1407,7 +1436,7 @@ def rename_actv(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
     if not name:
-        name = "protected %s" % tag_id
+        name = "protected_%s" % tag_id
     if not sub_dir:
         sub_dir = characters_dir + name + "\\"
 
@@ -1505,16 +1534,27 @@ def rename_mode(tag_id, halo_map, tag_path_handler,
     if meta is None:
         return
 
+    if not name or name.startswith("protected"):
+        name = tag_path_handler.get_basename(tag_id)
+
+    model_name = get_model_name(meta=meta)
+    if (not name or name.startswith("protected")) and model_name:
+        name = model_name
+        kw.setdefault('priority',
+            MEDIUM_HIGH_PRIORITY if kw.get("prioritize_model_names") else 
+            MEDIUM_PRIORITY
+            )
+
     min_prio.val = tag_path_handler.set_path_by_priority(
         tag_id, root_dir + sub_dir + name, kw.get('priority'),
         kw.get("override"), kw.get("do_printout"))
+
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
               sub_dir=sub_dir + shaders_dir,
               tag_path_handler=tag_path_handler)
-
 
     shader_names = {}
     for i in range(len(meta.regions.STEPTREE)):
@@ -1526,7 +1566,9 @@ def rename_mode(tag_id, halo_map, tag_path_handler,
 
         for j in range(len(region.permutations.STEPTREE)):
             perm = region.permutations.STEPTREE[j]
-            shader_name = region_name + perm.name.replace(' ', '').strip("_")
+            shader_name = sanitize_model_or_sound_name(
+                region_name + "_" + perm.name
+                ) or model_name
 
             for lod in ("superhigh", "high", "medium", "low", "superlow"):
                 geom_index = getattr(perm, lod + "_geometry_block")
@@ -1538,17 +1580,15 @@ def rename_mode(tag_id, halo_map, tag_path_handler,
                 for part_i in range(len(parts)):
                     final_shader_name = shader_name
                     if len(parts) > 1:
-                        final_shader_name += " part%s" % part_i
+                        final_shader_name += "_part%s" % part_i
                     if lod != "superhigh":
-                        final_shader_name += " " + lod
+                        final_shader_name += "_" + lod
                     shader_names.setdefault(parts[part_i].shader_index,
                                             final_shader_name)
 
     for i in range(len(meta.shaders.STEPTREE)):
-        shader_name = shader_names.get(i, "").replace("_", " ").\
-                      replace(".", "_").strip()
         min_prio.val = heuristic_deprotect(get_tag_id(meta.shaders.STEPTREE[i].shader),
-                         name=shader_name.strip(), **kw)
+                         name=shader_names.get(i, ""), **kw)
 
 
 def rename_coll(tag_id, halo_map, tag_path_handler,
@@ -1733,7 +1773,8 @@ def rename_deca(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
     kw.update(halo_map=halo_map, root_dir=root_dir,
-                  tag_path_handler=tag_path_handler)
+              tag_path_handler=tag_path_handler,
+              return_on_equal_min_priority=True)
 
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -1747,10 +1788,10 @@ def rename_deca(tag_id, halo_map, tag_path_handler,
     sub_dir = tag_path_handler.get_sub_dir(tag_id, root_dir)
     name = tag_path_handler.get_basename(tag_id)
 
-    min_prio.val = heuristic_deprotect(get_tag_id(meta.next_decal_in_chain), name=name + " next",
-                     sub_dir=sub_dir, **kw)
     min_prio.val = heuristic_deprotect(get_tag_id(meta.shader.shader_map), name=name + " bitmaps",
                      sub_dir=sub_dir + bitmaps_dir, **kw)
+    min_prio.val = heuristic_deprotect(get_tag_id(meta.next_decal_in_chain), name=name + " next",
+                     sub_dir=sub_dir, **kw)
 
 
 def rename_ant_(tag_id, halo_map, tag_path_handler,
@@ -1854,7 +1895,7 @@ def rename_DeLa(tag_id, halo_map, tag_path_handler,
     seen = kw.get("seen", set())
 
     if not name:
-        name = "protected %s" % tag_id
+        name = "protected_%s" % tag_id
 
     kw["priority"] = (MEDIUM_HIGH_PRIORITY if
                       kw.get("priority", 0) < MEDIUM_HIGH_PRIORITY
@@ -1917,12 +1958,12 @@ def rename_lsnd(tag_id, halo_map, tag_path_handler,
     if not sub_dir:
         sub_dir = snd_music_dir
 
-    meta = halo_map.get_meta(tag_id)
+    meta = halo_map.get_meta(tag_id, recache=True)
     if meta is None:
         return
 
-    if not name:
-        name = get_sound_looping_name(meta, halo_map, "protected %s" % tag_id)
+    if not name or name.startswith("protected"):
+        name = get_sound_looping_name(meta, halo_map, "protected_%s" % tag_id)
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
               tag_path_handler=tag_path_handler)
@@ -1940,21 +1981,17 @@ def rename_lsnd(tag_id, halo_map, tag_path_handler,
     i = 0
     tracks_dir = sub_dir + name + " tracks & details\\"
     for b in meta.tracks.STEPTREE:
-        min_prio.val = heuristic_deprotect(
-            get_tag_id(b.start), name="track %s start" % i,
-            sub_dir=tracks_dir, **kw)
-        min_prio.val = heuristic_deprotect(
-            get_tag_id(b.loop), name="track %s loop" % i,
-            sub_dir=tracks_dir, **kw)
-        min_prio.val = heuristic_deprotect(
-            get_tag_id(b.end), name="track %s end" % i,
-            sub_dir=tracks_dir, **kw)
-        min_prio.val = heuristic_deprotect(
-            get_tag_id(b.alternate_loop), name="track %s alt loop" % i,
-            sub_dir=tracks_dir, **kw)
-        min_prio.val = heuristic_deprotect(
-            get_tag_id(b.alternate_end), name="track %s alt end" % i,
-            sub_dir=tracks_dir, **kw)
+        for tag_ref, sub_name in ((
+            [b.start,           "track %s start"    % i],
+            [b.loop,            "track %s loop"     % i],
+            [b.end,             "track %s end"      % i],
+            [b.alternate_loop,  "track %s alt loop" % i],
+            [b.alternate_end,   "track %s alt end"  % i],
+            )):
+            min_prio.val = heuristic_deprotect(
+                get_tag_id(tag_ref), name=sub_name,
+                sub_dir=tracks_dir, **kw)
+
         i += 1
 
     i = 0
@@ -2038,7 +2075,7 @@ def rename_soul(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
     if not sub_dir: sub_dir = ui_shell_dir
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
 
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2060,7 +2097,7 @@ def rename_soul(tag_id, halo_map, tag_path_handler,
 def rename_tagc(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
 
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2118,7 +2155,7 @@ def rename_devc(tag_id, halo_map, tag_path_handler,
 def rename_ligh(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effect_lights_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -2147,7 +2184,7 @@ def rename_ligh(tag_id, halo_map, tag_path_handler,
 def rename_glw_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effect_lights_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -2170,7 +2207,7 @@ def rename_glw_(tag_id, halo_map, tag_path_handler,
 def rename_lens(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effect_lens_flares_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -2194,7 +2231,7 @@ def rename_lens(tag_id, halo_map, tag_path_handler,
 def rename_mgs2(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effect_lens_flares_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -2217,7 +2254,7 @@ def rename_mgs2(tag_id, halo_map, tag_path_handler,
 def rename_elec(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effect_lens_flares_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -2240,7 +2277,7 @@ def rename_elec(tag_id, halo_map, tag_path_handler,
 def rename_part(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effect_particles_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -2279,7 +2316,7 @@ def rename_part(tag_id, halo_map, tag_path_handler,
 def rename_pctl(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effect_contrails_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -2321,7 +2358,7 @@ def rename_pctl(tag_id, halo_map, tag_path_handler,
 def rename_cont(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effect_contrails_dir
 
     meta = halo_map.get_meta(tag_id)
@@ -2352,7 +2389,7 @@ def rename_cont(tag_id, halo_map, tag_path_handler,
 def rename_jpt_(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effects_dir + "damage\\"
 
     meta = halo_map.get_meta(tag_id)
@@ -2375,7 +2412,7 @@ def rename_jpt_(tag_id, halo_map, tag_path_handler,
 def rename_effe(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = effects_dir
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2389,7 +2426,8 @@ def rename_effe(tag_id, halo_map, tag_path_handler,
     name = tag_path_handler.get_basename(tag_id)
 
     kw.update(halo_map=halo_map, sub_dir=sub_dir + name + " events\\",
-                  root_dir=root_dir, tag_path_handler=tag_path_handler)
+              root_dir=root_dir, tag_path_handler=tag_path_handler,
+              return_on_equal_min_priority=True)
 
     i = 0
     event_name = ""
@@ -2445,7 +2483,7 @@ def rename_hud_background(block, name, background_name="", **kw):
 def rename_grhi(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = ui_hud_dir
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2482,7 +2520,7 @@ def rename_grhi(tag_id, halo_map, tag_path_handler,
 def rename_unhi(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = ui_hud_dir
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2534,7 +2572,7 @@ def rename_unhi(tag_id, halo_map, tag_path_handler,
 def rename_wphi(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = ui_hud_dir
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2611,7 +2649,7 @@ def rename_ngpr(tag_id, halo_map, tag_path_handler,
         return
 
     meta_name = sanitize_name(meta.name)
-    if not name: name = meta_name if meta_name else "protected %s" % tag_id
+    if not name: name = meta_name if meta_name else "protected_%s" % tag_id
     if not sub_dir: sub_dir = ui_shell_dir + "netgame_prefs\\"
 
     kw.update(halo_map=halo_map, root_dir=root_dir,
@@ -2665,7 +2703,7 @@ def rename_yelo(tag_id, halo_map, tag_path_handler,
               tag_path_handler=tag_path_handler)
     kw.setdefault('priority', INF)
 
-    meta = halo_map.get_meta(tag_id)
+    meta = halo_map.get_meta(tag_id, reextract=True)
     if meta is None:
         return
 
@@ -2712,7 +2750,7 @@ def rename_gelo(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', INF)
 
-    meta = halo_map.get_meta(tag_id)
+    meta = halo_map.get_meta(tag_id, reextract=True)
     if meta is None:
         return
     elif not name:
@@ -2757,7 +2795,7 @@ def rename_gelc(tag_id, halo_map, tag_path_handler,
                   tag_path_handler=tag_path_handler)
     kw.setdefault('priority', INF)
 
-    meta = halo_map.get_meta(tag_id)
+    meta = halo_map.get_meta(tag_id, reextract=True)
     if meta is None:
         return
     elif not name:
@@ -2799,7 +2837,7 @@ def rename_efpc(tag_id, halo_map, tag_path_handler,
 def rename_efpg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     sub_dir = "postprocess\\"
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2822,7 +2860,7 @@ def rename_efpg(tag_id, halo_map, tag_path_handler,
 def rename_shpg(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = "postprocess\\"
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2865,7 +2903,7 @@ def rename_sppg(tag_id, halo_map, tag_path_handler,
 def rename_efpp(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     meta = halo_map.get_meta(tag_id)
     if meta is not None:
         min_prio.val = tag_path_handler.set_path_by_priority(
@@ -2877,7 +2915,7 @@ def rename_efpp(tag_id, halo_map, tag_path_handler,
 def rename_sily(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = ui_dir
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2913,7 +2951,7 @@ def rename_sily(tag_id, halo_map, tag_path_handler,
 def rename_unic(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     if not sub_dir: sub_dir = ui_dir
     meta = halo_map.get_meta(tag_id)
     if meta is None:
@@ -2980,7 +3018,7 @@ def rename_keyframe_action(b, name, **kw):
 def rename_atvi(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
@@ -3016,7 +3054,7 @@ def rename_atvi(tag_id, halo_map, tag_path_handler,
 def rename_atvo(tag_id, halo_map, tag_path_handler,
                 root_dir="", sub_dir="", name="", **kw):
     min_prio = kw.get("min_priority", MinPriority())
-    if not name: name = "protected %s" % tag_id
+    if not name: name = "protected_%s" % tag_id
     meta = halo_map.get_meta(tag_id)
     if meta is None:
         return
