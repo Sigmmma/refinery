@@ -99,10 +99,8 @@ def intra_file_move(file, dstoff_cpysize_by_srcoff, padchar=b'\xCA'):
                 del chunk
 
         file.seek(srcoff)
-        if padsize >= 1024**2:
-            # default to writing padding in 1MB chunks
-            padding = padchar * 1024**2
-
+        # default to writing padding in 1MB chunks
+        padding = padchar * min(padsize, 1024**2)
         while padsize > 0:
             if padsize < 1024**2:
                 padding = padchar * padsize

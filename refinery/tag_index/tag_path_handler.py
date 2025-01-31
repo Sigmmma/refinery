@@ -70,7 +70,7 @@ class TagPathHandler():
             self._path_map[path] = i
             priority = INF if ref.indexed else self._def_priority
             self._priorities[i] = self._priority_mins[i] = priority
-            self._overwritables[i] = False if ref.indexed else True
+            self._overwritables[i] = not ref.indexed
             i += 1
 
     @property
@@ -409,9 +409,9 @@ class TagPathHandler():
             for name in curr_reparent:
                 for item in curr_reparent[name]:
                     no_ext_name, ext = os.path.splitext(name)
-                    curr_new_paths[
-                        self.get_unique_name(
-                            curr_new_paths, no_ext_name, ext) + ext] = item
+                    curr_new_paths[get_unique_name(
+                        curr_new_paths, no_ext_name, ext
+                        ) + ext] = item
 
             curr_reparent.clear()
 

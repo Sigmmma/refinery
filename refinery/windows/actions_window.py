@@ -122,7 +122,7 @@ class RefineryActionsWindow(tk.Toplevel, BinillaWidget):
 
         if self.tag_index_ref:
             # populate the class_scroll_menu options
-            opts = sorted([n for n in self.tag_index_ref.class_1.NAME_MAP])
+            opts = sorted(self.tag_index_ref.class_1.NAME_MAP)
             self.class_scroll_menu.set_options(opts)
             try:
                 self.class_scroll_menu.sel_index = opts.index(

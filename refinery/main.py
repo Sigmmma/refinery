@@ -466,7 +466,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         return self._running
 
     def apply_style(self, seen=None):
-        super(Refinery, self).apply_style(seen)
+        super().apply_style(seen)
         if not self._window_geometry_initialized:
             app_window = self.config_file.data.app_window
             self._window_geometry_initialized = True
@@ -1185,7 +1185,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
 
         self._running = True
         try:
-            RefineryCore.deprotect_all(self)
+            super().deprotect_all()
         except Exception:
             print(format_exc())
 
@@ -1196,7 +1196,7 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         halo_map = self._maps_by_engine.get(engine, {}).get(map_name)
 
         if halo_map is None:
-            if engine != ACTIVE_INDEX and map_name != ACTIVE_INDEX:
+            if ACTIVE_INDEX not in (engine, map_name):
                 print('No map named "%s" under engine "%s" is loaded.' %
                       (map_name, engine))
             return
@@ -1282,16 +1282,16 @@ class Refinery(tk.Tk, BinillaWidget, RefineryCore):
         RefineryCore.sanitize_resource_tag_paths(self, path_handler,
                                                  map_name, engine)
 
-    def _script_scrape_deprotect(self, tag_path_handler, map_name=ACTIVE_INDEX,
+    def _script_scrape_deprotect(self, path_handler, map_name=ACTIVE_INDEX,
                                  engine=ACTIVE_INDEX, **kw):
         print("Renaming tags using script strings...")
-        RefineryCore._script_scrape_deprotect(self, tag_path_handler,
+        RefineryCore._script_scrape_deprotect(self, path_handler,
                                               map_name, engine, **kw)
 
-    def _heuristics_deprotect(self, tag_path_handler, map_name=ACTIVE_INDEX,
+    def _heuristics_deprotect(self, path_handler, map_name=ACTIVE_INDEX,
                               engine=ACTIVE_INDEX, **kw):
         print("Renaming tags using heuristics...")
-        RefineryCore._heuristics_deprotect(self, tag_path_handler,
+        RefineryCore._heuristics_deprotect(self, path_handler,
                                            map_name, engine, **kw)
     def save_map_as(self, e=None):
         # NOTE: This function now returns a Path instead of a string

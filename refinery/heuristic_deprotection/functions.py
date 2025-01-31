@@ -1309,17 +1309,17 @@ def rename_unit_attrs(meta, tag_id, halo_map, tag_path_handler,
     # there should only ever be 1 unit_ext and 1 mounted_state, so iterating
     # over them should really just collapse to a single iteration.
     for unit_ext in unit_ext_array:
-      for mounted_state in unit_ext.mounted_states.STEPTREE:
-        i = 0
-        for b in mounted_state.camera_tracks.STEPTREE:
-            min_prio.val = heuristic_deprotect(get_tag_id(b.track), sub_dir=sub_dir,
-                             name={0:"mounted loose",
-                                   1:"mounted tight"}.get(i, "unknown"), **kw)
-            i += 1
+        for mounted_state in unit_ext.mounted_states.STEPTREE:
+            i = 0
+            for b in mounted_state.camera_tracks.STEPTREE:
+                min_prio.val = heuristic_deprotect(get_tag_id(b.track), sub_dir=sub_dir,
+                                 name={0:"mounted loose",
+                                       1:"mounted tight"}.get(i, "unknown"), **kw)
+                i += 1
 
-        for b in mounted_state.keyframe_actions.STEPTREE:
-            rename_keyframe_action(
-                b, name, sub_dir=sub_dir + "mounted effects\\", **kw)
+            for b in mounted_state.keyframe_actions.STEPTREE:
+                rename_keyframe_action(
+                    b, name, sub_dir=sub_dir + "mounted effects\\", **kw)
 
     trak_kwargs = dict(kw)
     trak_kwargs["priority"] = (DEFAULT_PRIORITY if

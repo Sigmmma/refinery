@@ -20,7 +20,7 @@ from refinery import repl
 from refinery.tag_index import tag_path_tokens
 
 
-def queue_action(unparsed_command):
+def queue_action(refinery_inst, unparsed_command):
     command_args = repl.util.convert_arg_line_to_args(unparsed_command.strip())
     if not command_args:
         return None, None
@@ -35,11 +35,11 @@ def queue_action(unparsed_command):
         return op, args
     elif op in ("engines", "maps"):
         if op == "engines":
-            keys = set(refinery_instance.maps_by_engine)
+            keys = set(refinery_inst.maps_by_engine)
         elif args.engine:
-            keys = set(refinery_instance.maps_by_engine.get(args.engine, {}))
+            keys = set(refinery_inst.maps_by_engine.get(args.engine, {}))
         else:
-            keys = set(refinery_instance.active_maps)
+            keys = set(refinery_inst.active_maps)
 
         try: keys.remove(core.ACTIVE_INDEX)
         except Exception: pass
@@ -56,7 +56,7 @@ def queue_action(unparsed_command):
         for name in sorted(print_flags):
             if not print_flags[name]: continue
 
-            val = getattr(refinery_instance, name)
+            val = getattr(refinery_inst, name)
             name = "--" + name.replace("_", "-")
             if isinstance(val, str):
                 print('%s "%s"' % (name, val))
@@ -169,25 +169,25 @@ def queue_action(unparsed_command):
 
         kw["tag_ids"] = all_tag_ids
 
-    refinery_instance.enqueue(op, **kw)
+    refinery_inst.enqueue(op, **kw)
     return None, None
 
 
-def main_loop():
+def main_loop(refinery_inst):
     prompt_level = 1
     verbose_level = 10
     while True:
-        if prompt_level == 0 or not refinery_instance.active_map_name:
+        if prompt_level == 0 or not refinery_inst.active_map_name:
             prompt = "Refinery: "
-        elif refinery_instance.maps_by_engine:
+        elif refinery_inst.maps_by_engine:
             prompt = ""
-            if prompt_level == 2 and refinery_instance.active_engine_name:
-                prompt = "%s: " % refinery_instance.active_engine_name
-            prompt = "%s%s: " % (prompt, refinery_instance.active_map_name)
+            if prompt_level == 2 and refinery_inst.active_engine_name:
+                prompt = "%s: " % refinery_inst.active_engine_name
+            prompt = "%s%s: " % (prompt, refinery_inst.active_map_name)
 
         try:
-            op, args = queue_action(input(prompt))
-            queue_item = refinery_instance.dequeue(0)
+            op, args = queue_action(refinery_inst,input(prompt))
+            queue_item = refinery_inst.dequeue(0)
             if op == "quit":
                 break
             elif op == "prompt":
@@ -201,12 +201,11 @@ def main_loop():
                 else:
                     verbose_level = args.level
             elif queue_item is not None:
-                refinery_instance.process_queue_item(queue_item)
+                refinery_inst.process_queue_item(queue_item)
         except Exception:
             print(format_exc(verbose_level))
 
-
-if __name__ == '__main__':
+def run():
     start = time()
     init_arg_parser = argparse.ArgumentParser(
         description=repl.help_strs.refinery_desc_string,
@@ -235,21 +234,24 @@ if __name__ == '__main__':
     except Exception:
         pass
 
-    refinery_instance = core.RefineryCore()
+    refinery_inst = core.RefineryCore()
 
     if refinery_actions:
         for unparsed_action in refinery_actions:
             try:
-                queue_action(unparsed_action)
+                queue_action(refinery_inst, unparsed_action)
             except Exception:
                 print(format_exc())
 
         try:
-            refinery_instance.process_queue()
+            refinery_inst.process_queue()
         except Exception:
             print(format_exc())
 
         print("Finished. Took %s seconds." % round(time() - start, 1))
 
     if not args.batch_mode:
-        main_loop()
+        main_loop(refinery_inst)
+
+if __name__ == '__main__':
+    run()

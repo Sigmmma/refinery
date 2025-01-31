@@ -23,7 +23,7 @@ from refinery.windows.actions_window import RefineryActionsWindow
 
 from supyr_struct.defs.frozen_dict import FrozenDict
 
-no_op = lambda *a, **kw: None
+def no_op(*a, **kw): pass
 
 def _ensure_backslash_for_folder(folder_path):
     '''

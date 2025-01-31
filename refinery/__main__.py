@@ -40,7 +40,7 @@ def main():
             except Exception:
                 pass
         print(exception, file=sys.stderr)
-        return 1;
+        return 1
 
 if __name__ == "__main__":
     main()

@@ -201,6 +201,7 @@ class RefineryCore:
     fix_tag_index_offset = False
     use_minimum_priorities = True
     disable_minimum_equal_priorities = False
+    prioritize_model_names_over_message_strings = False
     use_heuristics = True
     root_dir_prefix = ""
     valid_tag_paths_are_accurate = True
