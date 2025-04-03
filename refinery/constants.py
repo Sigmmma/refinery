@@ -30,10 +30,10 @@ H1_SHADER_TAG_CLASSES = frozenset((
     "shader_transparent_generic",
     "shader_transparent_chicago",
     "shader_transparent_chicago_extended",
-    "shader_plasma",
-    "shader_meter",
-    "shader_water",
-    "shader_glass",
+    "shader_transparent_plasma",
+    "shader_transparent_meter",
+    "shader_transparent_water",
+    "shader_transparent_glass",
     ))
 H1_UNIT_TAG_CLASSES = frozenset((
     "biped", "vehicle"

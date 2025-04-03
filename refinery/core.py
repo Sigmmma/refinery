@@ -27,7 +27,8 @@ from reclaimer.constants import GEN_1_HALO_GBX_ENGINES, GEN_1_HALO_XBOX_ENGINES,
     GEN_1_STUBBS_ENGINES, GEN_1_SHADOWRUN_ENGINES, GEN_1_HALO_CUSTOM_ENGINES,\
     GEN_1_HALO_ENGINES, GEN_1_ENGINES, GEN_2_ENGINES, GEN_3_ENGINES
 from reclaimer.halo_script.hsc import get_hsc_data_block, HSC_IS_GLOBAL,\
-     get_h1_scenario_script_object_type_strings
+     get_h1_scenario_script_object_type_strings,\
+     get_script_syntax_node_tag_refs
 from reclaimer.hek import hardcoded_ce_tag_paths
 from reclaimer.meta.wrappers.halo1_map import Halo1Map
 from reclaimer.meta.wrappers.halo1_yelo import Halo1YeloMap
@@ -1077,12 +1078,7 @@ class RefineryCore:
         syntax_data = get_hsc_data_block(raw_syntax_data=scnr_meta.script_syntax_data.data)
 
         seen = set()
-        for node in syntax_data.nodes:
-            if node.type not in range(24, 32) or (node.flags & HSC_IS_GLOBAL):
-                # node does NOT reference a tag. if HSC_IS_GLOBAL is set, the
-                # node actually refers to a tag stored in a script globals.
-                continue
-
+        for node in get_script_syntax_node_tag_refs(syntax_data):
             # make sure the tag id points to a valid tag
             tag_id = node.data & 0xFFff
             if tag_id in seen or path_handler.get_index_ref(tag_id) is None:
@@ -1121,6 +1117,11 @@ class RefineryCore:
             "shallow_ui_widget_nesting", self.shallow_ui_widget_nesting)
         print_name_changes = do_printout and kw.pop(
             "print_heuristic_name_changes", self.print_heuristic_name_changes)
+
+        # NOTE: these optimizations have been proven to be very stable, so
+        #       the default will be to have them on, with no way to disable
+        use_minimum_priorities = True
+        use_minimum_equal_priorities = False
 
         if halo_map is None:
             halo_map = self.active_map

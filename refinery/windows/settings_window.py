@@ -389,8 +389,9 @@ class RefinerySettingsWindow(tk.Toplevel, BinillaWidget):
                   self.valid_tag_paths_are_accurate_cbtn,
                   self.shallow_ui_widget_nesting_cbtn,
                   self.prioritize_model_names_cbtn,
-                  self.use_fast_heuristics_cbtn,
-                  self.use_fastest_heuristics_cbtn,
+                  # don't need these things anymore. ON BY DEFAULT BABY
+                  #self.use_fast_heuristics_cbtn,
+                  #self.use_fastest_heuristics_cbtn,
                   self.root_dir_frame
                   ):
             w.pack(padx=4, anchor='w')
