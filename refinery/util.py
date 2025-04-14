@@ -99,10 +99,8 @@ def intra_file_move(file, dstoff_cpysize_by_srcoff, padchar=b'\xCA'):
                 del chunk
 
         file.seek(srcoff)
-        if padsize >= 1024**2:
-            # default to writing padding in 1MB chunks
-            padding = padchar * 1024**2
-
+        # default to writing padding in 1MB chunks
+        padding = padchar * min(padsize, 1024**2)
         while padsize > 0:
             if padsize < 1024**2:
                 padding = padchar * padsize
@@ -117,10 +115,17 @@ def sanitize_win32_path(name):
 
 
 def get_unique_name(collection, name="", ext="", curr_value=object()):
-    final_name = name
-    i = 1
-    while collection.get(final_name + ext) not in (None, curr_value):
-        final_name = "%s #%s" % (name, i)
-        i += 1
+    name_parts = name.split("\\")
+    basename   = name_parts[-1]
+    # if the folder name is the same as the file name, update it too
+    update_folder_name = len(name_parts) > 1 and name_parts[-2] == basename
 
-    return final_name
+    i = 0
+    while collection.get("\\".join(name_parts) + ext) not in (None, curr_value):
+        i += 1
+        new_basename = "%s#%s" % (basename, i)
+        name_parts[-1] = new_basename
+        if update_folder_name:
+            name_parts[-2] = new_basename
+
+    return "\\".join(name_parts)

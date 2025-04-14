@@ -23,7 +23,7 @@ from refinery.windows.actions_window import RefineryActionsWindow
 
 from supyr_struct.defs.frozen_dict import FrozenDict
 
-no_op = lambda *a, **kw: None
+def no_op(*a, **kw): pass
 
 def _ensure_backslash_for_folder(folder_path):
     '''
@@ -57,6 +57,13 @@ class ExplorerHierarchyTree(HierarchyFrame):
         HierarchyFrame.__init__(self, *args, **kwargs)
         self.tags_tree.bind('<Return>', self.activate_item)
         self.tags_tree.bind('<Button-1>', self.set_sort_mode)
+
+    @property
+    def id_format_str(self):
+        return '%d' if getattr(self.app_root, 'base_10_ids', False) else '%04X'
+    @property
+    def pointer_format_str(self):
+        return '%d' if getattr(self.app_root, 'base_10_offsets', False) else '%08X'
 
     def set_sort_mode(self, event):
         if self.tags_tree.identify_region(event.x, event.y) != "heading":
@@ -455,12 +462,12 @@ class ExplorerHierarchyTree(HierarchyFrame):
         if tag_index_ref.indexed and pointer_converter and not is_h1_rsrc_map:
             pointer = "not in map"
         elif pointer_converter is not None:
-            pointer = '%08X' % pointer_converter.v_ptr_to_f_ptr(
+            pointer = self.pointer_format_str % pointer_converter.v_ptr_to_f_ptr(
                 tag_index_ref.meta_offset)
         else:
             pointer = 0
 
-        meta_offset = '%08X' % tag_index_ref.meta_offset
+        meta_offset = self.pointer_format_str % tag_index_ref.meta_offset
 
         try:
             cls1 = cls2 = cls3 = ""
@@ -478,7 +485,7 @@ class ExplorerHierarchyTree(HierarchyFrame):
                 parent_iid, 'end', iid=str(tag_id),
                 tags=("item", ), text=tag_path,
                 values=(cls1, cls2, cls3,
-                        meta_offset, pointer, '%04X' % tag_id))
+                        meta_offset, pointer, self.id_format_str % tag_id))
             self.tree_id_to_index_ref[tag_id] = tag_index_ref
         except Exception:
             print(format_exc())

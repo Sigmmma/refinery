@@ -14,20 +14,30 @@ from refinery.constants import INF, MAX_TAG_NAME_LEN, ACTIVE_INDEX,\
 Some of these are here for shorthand, but they are mainly here as
 a reminder to me of what types of folders are expected to be where.
 """
-VERY_HIGH_PRIORITY = 10.0
-VEHICLE_WEAP_PRIORITY = 5.0
-HIGH_PRIORITY = 4.0
-UNIT_WEAPON_PRIORITY = 3.0
-SCNR_BSPS_PRIORITY = 2.5
-MEDIUM_HIGH_PRIORITY = 2.0
-MEDIUM_PRIORITY = 1.5
-DEFAULT_PRIORITY = 1.0
-LOW_PRIORITY = 0.5
+VERY_HIGH_PRIORITY      = 10.0
+VEHICLE_WEAP_PRIORITY   = 5.0
+HIGH_PRIORITY           = 4.0
+UNIT_WEAPON_PRIORITY    = 3.0
+SCNR_BSPS_PRIORITY      = 2.5
+MEDIUM_HIGH_PRIORITY    = 2.0
+MEDIUM_PRIORITY         = 1.5
+DEFAULT_PRIORITY        = 1.0
+LOW_PRIORITY            = 0.5
 
 
-INVALID_MODEL_NAMES = frozenset(
-    ("", "base", "unnamed", "blur", "unnamed base",
-     "def", "default", "damaged"))
+INVALID_MODEL_NAMES = frozenset((
+    "", 
+    # common region names
+    "base", "unnamed", "unnamed_base", "hull", "body",
+    "def", "default", "damaged", "fp",
+    # common root node names
+    "frame", "pelvis", "root", "bone", 
+    "gun", "hand", "grip", "pole", # <-- flag
+    # common modeling software names
+    "box", "cube", "sphere", "cylinder", "geosphere",
+    # permutations
+    "blur", "damaged", "primary_blur", "secondary_blur"
+    ))
 
 
 # directories inside the root_dir

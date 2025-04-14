@@ -7,8 +7,14 @@
 # See LICENSE for more information.
 #
 
+import re
 from refinery.util import sanitize_win32_path
 from refinery.heuristic_deprotection import constants as const
+
+
+INVALID_NAME_CHAR_SUB       = re.compile(r'[~\\/]')
+REDUCE_ID_DIV_NAME_SUB      = re.compile(r'[-_\s.<>{};:\'"|=+`!@#$%^&*()[\]]+')
+REMOVE_PERM_AND_TRAIL_SUB   = re.compile(r'^_|[\d_]+$')
 
 
 class MinPriority:
@@ -20,8 +26,9 @@ class MinPriority:
 
 
 def sanitize_name(name):
-    return str(sanitize_win32_path(name)).lower()\
-           .replace("~", "").replace("\\", " ").strip()
+    return INVALID_NAME_CHAR_SUB.sub(
+        '', str(sanitize_win32_path(name))
+        ).lower().strip()
 
 
 def sanitize_name_piece(name, default_name):
@@ -47,40 +54,52 @@ def join_names(names, max_len=100):
     return name
 
 
-def sanitize_tag_name(name, def_name):
-    name = sanitize_name(name).replace("_", " ").replace("-", " ").strip()
-    name = " ".join(s for s in name.split(" ") if s)
-    while name and name[-1] in "0123456789":
-        name = name[: -1].strip()
-
-    if name not in const.INVALID_MODEL_NAMES:
-        return name
-
-    return def_name
+def sanitize_model_or_sound_name(name, def_name=''):
+    name = REMOVE_PERM_AND_TRAIL_SUB.sub('', 
+        REDUCE_ID_DIV_NAME_SUB.sub('_', sanitize_name(name)
+        ))
+    return def_name if name in const.INVALID_MODEL_NAMES else name
 
 
-def get_model_name(halo_map, tag_id, model_name=""):
-    meta = halo_map.get_meta(tag_id)
-    if not(hasattr(meta, "regions") and meta.regions.STEPTREE):
-        return model_name
+def get_model_name(meta=None, halo_map=None, tag_id=None, name=""):
+    if meta is None:
+        meta = halo_map.get_meta(tag_id)
 
-    names = []
-    for region in meta.regions.STEPTREE:
-        for perm in region.permutations.STEPTREE:
-            names.append(sanitize_tag_name(perm.name, ""))
+    regions = getattr(meta, "regions", None)
+    nodes   = getattr(meta, "nodes", None)
+    node_name = perm_name = region_name = ""
+    if regions and regions.STEPTREE:
+        names = []
+        for region in regions.STEPTREE:
+            for perm in region.permutations.STEPTREE:
+                perm_name = sanitize_model_or_sound_name(perm.name, perm_name)
+                if perm_name: break
 
-    name = "" if not names else names.pop()
-    if not names and name not in const.INVALID_MODEL_NAMES:
-        # just one single valid name was found amidst the permutations
-        return name
+        if len(regions.STEPTREE) == 1:
+            # couldn't find a valid name amidst the permutations, or there is
+            # more than 1 permutation. try to get a valid name from the regions
+            region_name = sanitize_model_or_sound_name(regions.STEPTREE[0].name, "")
 
-    if len(meta.regions.STEPTREE) == 1:
-        # more than 1 perm name found. try to get a valid name from the regions
-        name = sanitize_tag_name(meta.regions.STEPTREE[0].name, "")
-        if name not in const.INVALID_MODEL_NAMES:
-            return name
+    if nodes and nodes.STEPTREE:
+        for node in nodes.STEPTREE:
+            node_name = sanitize_model_or_sound_name(
+                node.name.split("frame", 1)[-1].split("bip01", 1)[-1].
+                split("bone24", 1)[-1].strip(" \r\n\t-_")
+                )
+            break
 
-    return model_name
+    if len(region_name) <= 2: region_name   = ""
+    if len(perm_name)   <= 2: perm_name     = ""
+    if len(node_name)   <= 2: node_name     = ""
+
+    #print("%s '%s' '%s' '%s' '%s'" % (tag_id, perm_name, region_name, node_name, name))
+
+    return (
+        perm_name   if perm_name    not in const.INVALID_MODEL_NAMES else
+        region_name if region_name  not in const.INVALID_MODEL_NAMES else
+        node_name   if node_name    not in const.INVALID_MODEL_NAMES else
+        name
+        )
 
 
 def get_sound_sub_dir_and_name(snd_meta, sub_dir="", snd_name=""):
@@ -113,7 +132,7 @@ def get_sound_sub_dir_and_name(snd_meta, sub_dir="", snd_name=""):
 
     for pr in snd_meta.pitch_ranges.STEPTREE:
         for perm in pr.permutations.STEPTREE:
-            perm_name = sanitize_tag_name(perm.name, "")
+            perm_name = sanitize_model_or_sound_name(perm.name)
             if perm_name:
                 snd_name = perm_name
                 break
@@ -129,9 +148,11 @@ def get_sound_looping_name(meta, halo_map, def_name=""):
 
     # try and determine a name for this sound_looping from its sound tags
     for b in meta.tracks.STEPTREE:
-        for snd_id in (get_tag_id(b.start), get_tag_id(b.loop), get_tag_id(b.end)):
+        for tag_ref in (
+                b.start, b.loop, b.end, b.alternate_loop, b.alternate_end
+                ):
             _, snd_name = get_sound_sub_dir_and_name(
-                halo_map.get_meta(snd_id, ignore_rawdata=True))
+                halo_map.get_meta(get_tag_id(tag_ref), ignore_rawdata=True))
             snd_name = snd_name.lower()
             if snd_name not in ("", "in", "start", "begin", "loops", "loop",
                                 "lp", "lps", "out", "stop", "end"):
